@@ -8,7 +8,7 @@ const FOLDER_TYPES = ['pasta', 'manuscrito', 'personagens', 'mundo', 'pesquisa',
 const KINDS = ['texto', 'hq', 'hibrida'];
 const MANUAL_STATUS = ['rascunho', 'em_revisao', 'arquivado']; // os demais so pela publicacao
 // body: 400 mil caracteres (~65 mil palavras) mantem cada salvamento dentro dos 10 ms de CPU do plano gratuito do Workers
-const LIM = { works: 30, docs: 2000, body: 400000, title: 200, meta: 20000, request: 520000, tags: 20, links: 100 };
+const LIM = { works: 30, docs: 2000, body: 400000, title: 200, meta: 20000, request: 520000, tags: 20, links: 96 };
 const ID_RE = /^[a-f0-9]{12}$/;
 const SNAPSHOT_EVERY = 600; // segundos entre snapshots automaticos
 const KEEP_VERSIONS = 50;
@@ -36,14 +36,25 @@ export const extractLinks = (body) => {
 };
 
 async function reindex(env, workId, docId, title, body) {
+  // No plano gratuito cada consulta conta no limite por requisicao (50), entao o indice usa INSERTs de varias linhas:
+  // no maximo ~6 comandos por salvamento, nao importa quantas tags e links o texto tenha. (D1: ate 100 parametros por comando.)
+  const tags = extractTags(body).slice(0, LIM.tags);
+  const links = extractLinks(body);
   const stmts = [
     env.DB.prepare('INSERT INTO studio_search (doc_id, work_id, norm_title, norm_body) VALUES (?, ?, ?, ?) ON CONFLICT(doc_id) DO UPDATE SET norm_title = excluded.norm_title, norm_body = excluded.norm_body')
       .bind(docId, workId, norm(title), norm(body)),
     env.DB.prepare("DELETE FROM studio_doc_tags WHERE doc_id = ? AND origem = 'texto'").bind(docId),
-    ...extractTags(body).map((t) => env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) VALUES (?, ?, ?, 'texto')").bind(docId, workId, t)),
     env.DB.prepare('DELETE FROM studio_links WHERE from_doc = ?').bind(docId),
-    ...extractLinks(body).map(([n, t]) => env.DB.prepare('INSERT OR IGNORE INTO studio_links (work_id, from_doc, to_norm, to_title) VALUES (?, ?, ?, ?)').bind(workId, docId, n, t)),
   ];
+  if (tags.length) {
+    stmts.push(env.DB.prepare('INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) VALUES ' + tags.map(() => "(?, ?, ?, 'texto')").join(', '))
+      .bind(...tags.flatMap((t) => [docId, workId, t])));
+  }
+  for (let i = 0; i < links.length; i += 24) {
+    const lote = links.slice(i, i + 24);
+    stmts.push(env.DB.prepare('INSERT OR IGNORE INTO studio_links (work_id, from_doc, to_norm, to_title) VALUES ' + lote.map(() => '(?, ?, ?, ?)').join(', '))
+      .bind(...lote.flatMap(([n, t]) => [workId, docId, n, t])));
+  }
   await env.DB.batch(stmts);
 }
 

@@ -115,3 +115,22 @@ test('titulos repetidos: o link usa o documento mais recente e nada quebra', asy
   assert.ok(lk.saem[0].destino);
   void segundo;
 });
+
+test('um documento com muitas tags e links nao passa de 6 comandos SQL por salvamento (limite do plano gratuito)', async () => {
+  const { app, a, w, doc } = await cenario();
+  const d = await doc('Denso', '');
+  const corpo = Array.from({ length: 90 }, (_, i) => `[[Alvo ${i}]]`).join(' ') + ' ' + Array.from({ length: 30 }, (_, i) => `#tag${i}`).join(' ');
+  let comandos = 0;
+  const prepare = app.env.DB.prepare;
+  app.env.DB.prepare = (sql) => { comandos++; return prepare(sql); };
+  const g = (await app.call('GET', `${base}/${w}/docs/${d}`, { tok: a.tok })).j;
+  comandos = 0;
+  const r = await app.call('PUT', `${base}/${w}/docs/${d}`, { tok: a.tok, body: { versao_base: g.versao, corpo } });
+  app.env.DB.prepare = prepare;
+  assert.equal(r.s, 200);
+  assert.ok(comandos <= 16, `salvar usou ${comandos} comandos SQL (limite pratico: 50 por requisicao)`);
+  const lk = await app.call('GET', `${base}/${w}/docs/${d}/links`, { tok: a.tok });
+  assert.equal(lk.j.saem.length, 90, 'todos os links foram indexados');
+  const tags = (await app.call('GET', `${base}/${w}`, { tok: a.tok })).j.itens.find((i) => i.id === d).tags;
+  assert.equal(tags.length, 20, 'tags do texto limitadas a 20');
+});
