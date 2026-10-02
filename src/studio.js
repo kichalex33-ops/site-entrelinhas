@@ -52,7 +52,8 @@ export const countWords = (t) => (String(t || '').match(/[\p{L}\p{N}]+(?:['’-]
 export async function studioApi(req, env, url, user, h) {
   const { json, fail } = h;
   if (user.role !== 'autor') return fail('Apenas autores usam o Estúdio.', 403);
-  if (Number(req.headers.get('Content-Length') || 0) > LIM.request) return fail('Requisição grande demais.', 413);
+  const ehUpload = req.method === 'POST' && /\/files\/?$/.test(url.pathname); // upload tem limite proprio (1,5 MB)
+  if (!ehUpload && Number(req.headers.get('Content-Length') || 0) > LIM.request) return fail('Requisição grande demais.', 413);
 
   const parts = url.pathname.slice('/api/studio'.length).split('/').filter(Boolean);
   const m = req.method;
@@ -98,6 +99,17 @@ export async function studioApi(req, env, url, user, h) {
       'SELECT id, parent_id, kind, doc_type, title, deleted_at FROM studio_docs WHERE work_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC'
     ).bind(workId).all();
     return json({ itens: rows.results });
+  }
+
+  // ---------- arquivos originais (manuscritos importados), privados ----------
+  if (parts[2] === 'files') {
+    if (parts.length === 3 && m === 'GET') return listFiles(env, work, json);
+    if (parts.length === 3 && m === 'POST') return uploadFile(env, req, url, work, h, newId);
+    if (parts.length === 4 && ID_RE.test(parts[3])) {
+      if (m === 'GET') return downloadFile(env, work, parts[3], fail);
+      if (m === 'DELETE') { await env.DB.prepare('DELETE FROM studio_files WHERE id = ? AND work_id = ?').bind(parts[3], work.id).run(); return json({ ok: true }); }
+    }
+    return fail('Não encontrado.', 404);
   }
 
   // ---------- documentos ----------
@@ -386,6 +398,51 @@ async function duplicateDoc(env, work, docId, h, newId) {
   await env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) SELECT ?, work_id, tag, origem FROM studio_doc_tags WHERE doc_id = ? AND origem = 'manual'").bind(id, docId).run();
   await env.DB.prepare('UPDATE studio_works SET updated_at = ? WHERE id = ?').bind(t, work.id).run();
   return h.json({ ok: true, id, posicao: pos, versao: 1 }, 201);
+}
+
+// ---------------------------------------------------------------- arquivos originais
+const FILE_TYPES = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  txt: 'text/plain; charset=utf-8', md: 'text/markdown; charset=utf-8', markdown: 'text/markdown; charset=utf-8',
+};
+const LIM_FILE = 1500000, LIM_FILES = 5; // limite de linha do D1 = 2 MB
+
+const nomeSeguro = (n) => String(n || 'manuscrito').replace(/[\u0000-\u001f\\/:*?"<>|]/g, '_').replace(/^\.+/, '').trim().slice(0, 120) || 'manuscrito';
+
+async function listFiles(env, work, json) {
+  const r = await env.DB.prepare('SELECT id, name, mime, size, created_at FROM studio_files WHERE work_id = ? ORDER BY created_at DESC').bind(work.id).all();
+  return json({ arquivos: r.results.map((f) => ({ id: f.id, nome: f.name, tamanho: f.size, criado_em: f.created_at })) });
+}
+
+async function uploadFile(env, req, url, work, h, newId) {
+  const nome = nomeSeguro(url.searchParams.get('nome'));
+  const ext = (nome.match(/\.([a-z0-9]+)$/i) || [])[1];
+  const mime = ext && FILE_TYPES[ext.toLowerCase()];
+  if (!mime) return h.fail('Formato não aceito. Use DOCX, TXT ou Markdown.', 400);
+  if (Number(req.headers.get('Content-Length') || 0) > LIM_FILE) return h.fail('O arquivo passou de 1,5 MB: a importação funciona, mas o original não pode ser guardado.', 413);
+  const buf = new Uint8Array(await req.arrayBuffer());
+  if (!buf.length) return h.fail('Arquivo vazio.');
+  if (buf.length > LIM_FILE) return h.fail('O arquivo passou de 1,5 MB: a importação funciona, mas o original não pode ser guardado.', 413);
+  const ehDocx = ext.toLowerCase() === 'docx';
+  if (ehDocx ? !(buf[0] === 0x50 && buf[1] === 0x4b) : buf.subarray(0, 2000).includes(0)) return h.fail('O conteúdo do arquivo não corresponde ao formato.', 400);
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM studio_files WHERE work_id = ?').bind(work.id).first();
+  if (n.n >= LIM_FILES) return h.fail('Esta obra já guarda ' + LIM_FILES + ' arquivos originais. Apague algum para guardar outro.', 403);
+  const id = newId();
+  await env.DB.prepare('INSERT INTO studio_files (id, work_id, name, mime, size, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, work.id, nome, mime, buf.length, buf.buffer, h.now()).run(); // ArrayBuffer, como o upload de imagens
+  return h.json({ ok: true, id, nome, tamanho: buf.length }, 201);
+}
+
+async function downloadFile(env, work, fileId, fail) {
+  const f = await env.DB.prepare('SELECT name, mime, data FROM studio_files WHERE id = ? AND work_id = ?').bind(fileId, work.id).first();
+  if (!f) return fail('Arquivo não encontrado.', 404);
+  const bytes = f.data instanceof ArrayBuffer ? new Uint8Array(f.data) : new Uint8Array(f.data); // o D1 devolve BLOB como lista de numeros
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': f.mime,
+      'Content-Disposition': "attachment; filename*=UTF-8''" + encodeURIComponent(f.name),
+      'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Security-Policy': "default-src 'none'; sandbox",
+    },
+  });
 }
 
 // ---------------------------------------------------------------- links internos [[...]]

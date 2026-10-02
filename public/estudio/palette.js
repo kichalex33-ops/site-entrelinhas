@@ -44,14 +44,16 @@ function listaNavegavel({ titulo, placeholder, fonte, depois, controles = [], in
   };
   const marcar = () => { [...lista.children].forEach((li, i) => { li.classList.toggle('sel', i === sel); li.setAttribute('aria-selected', i === sel ? 'true' : 'false'); }); campo.setAttribute('aria-activedescendant', `st-pal-${sel}`); const li = lista.children[sel]; if (li) li.scrollIntoView({ block: 'nearest' }); };
   const escolher = (i) => { const it = itens[i]; if (!it) return; dlg.close(); setTimeout(() => it.acao(), 0); };
-  const atualizar = async () => {
+  // fonte sincrona (paleta) atualiza na hora, entao Enter digitado logo apos a letra ja escolhe o item certo;
+  // fonte assincrona (busca no servidor) ignora respostas antigas
+  const atualizar = () => {
     const id = ++busca;
-    const r = await fonte(campo.value);
-    if (id !== busca) return; // resposta antiga
-    itens = r.itens; sel = 0; vazio.textContent = r.itens.length ? '' : r.vazio || ''; desenhar();
+    const aplicar = (r) => { if (id !== busca) return; itens = r.itens; sel = 0; vazio.textContent = r.itens.length ? '' : r.vazio || ''; desenhar(); };
+    const r = fonte(campo.value);
+    return r && typeof r.then === 'function' ? r.then(aplicar) : aplicar(r);
   };
   let t;
-  campo.addEventListener('input', () => { clearTimeout(t); t = setTimeout(atualizar, depois || 0); });
+  campo.addEventListener('input', () => { clearTimeout(t); if (depois) t = setTimeout(atualizar, depois); else atualizar(); });
   for (const c of controles) c.el.addEventListener('change', atualizar);
   campo.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (itens.length) { sel = (sel + 1) % itens.length; marcar(); } }

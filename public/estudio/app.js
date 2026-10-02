@@ -4,6 +4,8 @@ import { api } from './api.js';
 import { criarSalvador, lerBackup, limparBackup } from './autosave.js';
 import { h, dialogo, confirmar, perguntar, relativo, dataHora, milhar, TIPOS_OBRA, STATUS_OBRA, TIPOS_DOC } from './ui.js';
 import { abrirBusca, abrirPaleta } from './palette.js';
+import { importarManuscrito } from './importar-ui.js';
+import { abrirExportacao } from './exportar-ui.js';
 
 const raiz = document.getElementById('estudio');
 const lsGet = (k, v) => { try { const x = localStorage.getItem(k); return x === null ? v : JSON.parse(x); } catch { return v; } };
@@ -87,12 +89,17 @@ async function novaObra() {
     catch (e) { dialogo({ titulo: 'Não foi possível criar a obra', corpo: h('p', null, e.message) }); }
   };
   const opcao = (titulo, texto, acao, off) => h('button', { type: 'button', class: 'st-opcao', disabled: off || null, onclick: acao }, h('strong', null, titulo), h('span', null, texto));
+  const importarNova = async () => {
+    dlg.close();
+    const r = await importarManuscrito({});
+    if (r && r.obraId) location.hash = '#/obra/' + r.obraId + (r.primeiro ? '/' + r.primeiro : '');
+  };
   let dlg;
   dlg = h('dialog', { class: 'st-dialogo', 'aria-labelledby': 'st-nova-t' },
     h('h2', { id: 'st-nova-t' }, 'Como deseja começar?'),
     h('div', { class: 'st-opcoes' },
       opcao('Escrever no Entrelinhas', 'Um workspace de texto com capítulos, personagens, mundo e notas.', comecar('texto')),
-      opcao('Importar manuscrito', 'Traga um arquivo DOCX, TXT ou Markdown. Disponível na próxima etapa.', null, true),
+      opcao('Importar manuscrito', 'Traga um arquivo DOCX, TXT ou Markdown e transforme em capítulos editáveis.', importarNova),
       opcao('Criar / enviar HQ', 'Páginas, roteiro, personagens e referências para quadrinhos.', comecar('hq'))),
     h('div', { class: 'st-dialogo-rodape' }, h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => dlg.close() }, 'Cancelar')));
   dlg.addEventListener('close', () => dlg.remove());
@@ -157,6 +164,7 @@ function montarWorkspace() {
     h('a', { class: 'st-bar-voltar', href: '#/' }, 'Estúdio'), h('span', { class: 'st-bar-sep', 'aria-hidden': 'true' }, '/'), E.barTitulo,
     h('span', { class: 'st-bar-espaco' }),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoObra }, 'Obra'),
+    h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: exportarObra }, 'Exportar'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoLixeira }, 'Lixeira'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', id: 'st-foco-btn', onclick: alternarFoco, title: 'Modo foco (Ctrl+Shift+F)' }, 'Modo foco'),
     h('button', { type: 'button', class: 'st-tb', id: 'st-tg-ctx', 'aria-label': 'Mostrar ou esconder o contexto', 'aria-pressed': 'true', onclick: () => alternarPainel('ctx') }, 'ⓘ'));
@@ -501,6 +509,7 @@ function abrirMenu(it, ancora) {
   const menu = h('div', { class: 'st-menu', role: 'menu', 'aria-label': `Ações de ${it.titulo}` },
     itemMenu('Renomear (F2)', () => renomear(it)),
     it.tipo === 'doc' ? itemMenu('Duplicar', () => duplicar(it)) : null,
+    it.tipo === 'pasta' ? itemMenu('Importar manuscrito aqui...', () => importarNaPasta(it)) : null,
     itemMenu('Mover para...', () => moverPara(it)),
     itemMenu('Enviar para a lixeira', () => paraLixeira(it), true));
   document.body.append(menu);
@@ -814,10 +823,25 @@ function comandos() {
     c('Pesquisar na obra', 'Ctrl+K', abrirBuscaObra),
     c('Alternar modo foco', 'Ctrl+Shift+F', alternarFoco),
     c('Alternar visual e Markdown', 'Editor', alternarModo),
+    c('Importar manuscrito', 'Arquivo', () => importarNaPasta(pastaDe('manuscrito') || null)), c('Exportar', 'Arquivo', exportarObra),
     c('Informações da obra', 'Obra', dialogoObra), c('Abrir a lixeira', 'Obra', dialogoLixeira),
     c('Mostrar ou esconder o explorador', 'Painéis', () => alternarPainel('exp')), c('Mostrar ou esconder o contexto', 'Painéis', () => alternarPainel('ctx')),
     c('Voltar à lista de obras', 'Estúdio', () => { location.hash = '#/'; }),
   ];
+}
+
+// ============================================================== importar e exportar
+async function importarNaPasta(pasta) {
+  const docTipo = !pasta || pasta.doc_tipo === 'manuscrito' ? 'capitulo' : 'nota';
+  const r = await importarManuscrito({ obraId: S.obraId, pastaId: pasta ? pasta.id : null, docTipo });
+  if (!r || !S) return;
+  if (pasta) S.expandidas.add(pasta.id);
+  await recarregarArvore();
+  if (r.primeiro) abrirDoc(r.primeiro);
+}
+function exportarObra() {
+  if (docAtivo()) guardarAtivo();
+  abrirExportacao({ obra: S.obra, obraId: S.obraId, itens: S.itens, antes: () => saver.todos() });
 }
 
 // ============================================================== avisos

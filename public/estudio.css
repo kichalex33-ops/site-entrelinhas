@@ -207,3 +207,20 @@ body.st-foco .st-status { background: transparent; border-top-color: transparent
 button.st-lk:hover, button.st-lk:focus-visible { background: var(--accent-dim); }
 .st-lk small { color: var(--muted); font-size: .72rem; }
 .st-lk.quebrado { cursor: default; color: #ff8a80; }
+
+/* ---------- importar e exportar ---------- */
+.st-drop { display: grid; gap: .3rem; justify-items: center; text-align: center; padding: 2.2rem 1rem; border: 2px dashed var(--line-strong); border-radius: var(--radius); cursor: pointer; color: var(--text); }
+.st-drop small { color: var(--muted); }
+.st-drop.sobre, .st-drop:hover, .st-drop:focus-within { border-color: var(--accent); background: var(--accent-dim); }
+.st-drop-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.st-erro { color: #ff8a80; }
+.st-aviso-imp { color: var(--accent); font-size: .88rem; margin: 0; }
+.st-imp-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; max-height: 38vh; overflow: auto; }
+.st-imp-cap { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: start; padding: .5rem; border: 1px solid var(--line); border-radius: 10px; }
+.st-imp-cap.fora { opacity: .45; }
+.st-imp-meio { display: grid; gap: .15rem; min-width: 0; }
+.st-imp-meio small { color: var(--muted); }
+.st-imp-titulo { padding: .3rem .5rem; }
+.st-imp-previa { margin: 0; color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-imp-unir { padding: .2rem .6rem !important; font-size: .72rem !important; }
+.st-exp-estado { min-height: 1.4rem; margin: 0; color: var(--accent); }

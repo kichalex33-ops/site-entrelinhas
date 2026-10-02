@@ -10,7 +10,9 @@
     "dev": "wrangler dev --local --port 8799"
   },
   "devDependencies": {
+    "docx": "^9.8.1",
     "esbuild": "^0.28.2",
+    "mammoth": "^1.13.0",
     "markdown-it": "^14.1.0",
     "playwright-core": "^1.63.0",
     "prosemirror-commands": "^1.7.2",

@@ -13,7 +13,7 @@ export function createD1(db) {
   const wrap = (sql) => {
     let args = [];
     const o = {
-      bind: (...a) => ((args = a), o),
+      bind: (...a) => ((args = a.map((x) => (x instanceof ArrayBuffer ? new Uint8Array(x) : x))), o), // o D1 aceita ArrayBuffer; o SQLite do Node quer TypedArray
       all: async () => ({ results: db.prepare(sql).all(...args) }),
       first: async () => db.prepare(sql).get(...args) ?? null,
       run: async () => {
