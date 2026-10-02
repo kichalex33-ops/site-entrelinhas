@@ -126,7 +126,12 @@ async function sanitizeProfile(env, d, userId) {
       sinopse: str(o.sinopse, 1500),
       capa: '',
       link: isUrl(str(o.link, 300)) ? str(o.link, 300) : '',
+      lojas: [], // outros locais de venda: [{ rotulo, url }]
     };
+    for (const l of (Array.isArray(o.lojas) ? o.lojas : []).slice(0, 6)) {
+      const rotulo = str(l && l.rotulo, 40), url = str(l && l.url, 300);
+      if (rotulo && isUrl(url)) obra.lojas.push({ rotulo, url });
+    }
     if (o.capa && (await ownsImage(env, o.capa, userId))) obra.capa = o.capa;
     out.obras.push(obra);
   }

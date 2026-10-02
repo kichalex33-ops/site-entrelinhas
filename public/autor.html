@@ -60,7 +60,7 @@
       <h3>${esc(o.titulo)}</h3>
       ${o.genero ? `<p class="by">${esc(o.genero)}</p>` : ''}
       ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
-      ${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}
+      ${o.link || (o.lojas || []).length ? `<div class="buy">${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}${(o.lojas || []).map(l => `<a class="btn btn-ghost" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</div>` : ''}
     </article>`;
 
   // botao do chat: so aparece no perfil de moderador, para quem esta logado como moderador

@@ -63,6 +63,7 @@
         <button class="btn btn-ghost" id="logout" type="button">Sair</button>
       </div>
       <form id="ed" class="ed-form" autocomplete="off">
+        <datalist id="lojas-sug">${['Amazon', 'Clube de Autores', 'Uiclap', 'Mercado Livre', 'Shopee', 'Hotmart', 'Kobo', 'Google Play Livros', 'Site do autor'].map(n => `<option value="${n}">`).join('')}</datalist>
         <fieldset class="blk"><legend>Perfil</legend>
           ${field('Nome', input('nome', P.nome, 'maxlength="80" required'))}
           ${field('Frase de apresentação', input('frase', P.frase, 'maxlength="160"'))}
@@ -91,7 +92,13 @@
           field('Gênero', input(`obras.${i}.genero`, o.genero, 'maxlength="60"')) +
           field('Situação', `<select data-k="obras.${i}.status">${STATUS.map(s => `<option${o.status === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`) +
           field('Sinopse', area(`obras.${i}.sinopse`, o.sinopse, 4, 1500)) +
-          field('Link (compra ou leitura)', input(`obras.${i}.link`, o.link, 'maxlength="300" type="url"')) +
+          field('Link principal (compra ou leitura)', input(`obras.${i}.link`, o.link, 'maxlength="300" type="url"')) +
+          `<div class="lojas"><span class="lbl">Outras lojas onde comprar (até 6)</span>
+            ${(o.lojas || []).map((l, j) => `<div class="loja-row">
+              ${input(`obras.${i}.lojas.${j}.rotulo`, l.rotulo, 'maxlength="40" list="lojas-sug" placeholder="Loja (ex.: Amazon)"')}
+              ${input(`obras.${i}.lojas.${j}.url`, l.url, 'maxlength="300" type="url" placeholder="https://..."')}
+              <button type="button" class="rm" data-rmloja="${i}:${j}">Remover</button></div>`).join('')}
+            <button type="button" class="btn btn-ghost add" data-addloja="${i}">Adicionar loja</button></div>` +
           `<div class="photo-row"><div class="photo-prev small" id="prev-capa-${i}">${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="">` : '<span>Sem capa</span>'}</div>
             <div><span class="lbl">Capa</span><input type="file" accept="image/jpeg,image/png,image/webp" data-up="obras.${i}.capa"><p class="hint">JPG, PNG ou WebP.</p>
             ${o.capa ? `<button type="button" class="rm" data-clear="obras.${i}.capa">Remover capa</button>` : ''}</div></div>`)}
@@ -126,10 +133,16 @@
     form.addEventListener('click', (e) => {
       const t = e.target;
       if (t.dataset.add) {
-        const blank = { links: { rotulo: '', url: '' }, obras: { titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '' }, secoes: { titulo: '', texto: '' } }[t.dataset.add];
+        const blank = { links: { rotulo: '', url: '' }, obras: { titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [] }, secoes: { titulo: '', texto: '' } }[t.dataset.add];
         const max = { links: 8, obras: 20, secoes: 8 }[t.dataset.add];
         if (P[t.dataset.add].length >= max) return alert('Limite atingido.');
         P[t.dataset.add].push(blank); editorView();
+      } else if (t.dataset.addloja) {
+        const o = P.obras[Number(t.dataset.addloja)]; o.lojas = o.lojas || [];
+        if (o.lojas.length >= 6) return alert('Limite de 6 lojas por obra.');
+        o.lojas.push({ rotulo: '', url: '' }); editorView();
+      } else if (t.dataset.rmloja) {
+        const [i, j] = t.dataset.rmloja.split(':'); P.obras[Number(i)].lojas.splice(Number(j), 1); editorView();
       } else if (t.dataset.rm) {
         const [k, i] = t.dataset.rm.split(':'); P[k].splice(Number(i), 1); editorView();
       } else if (t.dataset.clear) {
