@@ -15,6 +15,8 @@ export const api = {
   doc: (obra, doc) => req('GET', `${base}/${obra}/docs/${doc}`),
   // keepalive deixa o envio terminar mesmo se a pagina estiver fechando
   salvarDoc: (obra, doc, dados, keepalive) => req('PUT', `${base}/${obra}/docs/${doc}`, dados, keepalive ? { keepalive: true } : undefined),
+  buscar: (obra, params) => req('GET', `${base}/${obra}/search?${params}`),
+  tags: (obra, doc, tags) => req('PUT', `${base}/${obra}/docs/${doc}/tags`, { tags }),
   mover: (obra, doc, pai, posicao) => req('POST', `${base}/${obra}/docs/${doc}/move`, { pai, posicao }),
   duplicar: (obra, doc) => req('POST', `${base}/${obra}/docs/${doc}/duplicate`),
   paraLixeira: (obra, doc) => req('DELETE', `${base}/${obra}/docs/${doc}`),

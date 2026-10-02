@@ -37,7 +37,7 @@ test('criar capitulo, escrever, reabrir: o conteudo volta exatamente igual (text
   const ms = pasta(w, 'manuscrito');
   const c = await app.call('POST', `${base}/${w.id}/docs`, { tok: a.tok, body: { pai: ms.id, doc_tipo: 'capitulo', titulo: 'Capítulo 01' } });
   assert.equal(c.s, 201); assert.equal(c.j.versao, 1);
-  const longo = ('Kayla olhou o rio, “não esqueça”.\n\n— Márcia disse: ação, coração, ¿qué?\n\n').repeat(8000); // ~500 mil caracteres
+  const longo = ('Kayla olhou o rio, “não esqueça”.\n\n— Márcia disse: ação, coração, ¿qué?\n\n').repeat(5000); // ~375 mil caracteres
   const p = await app.call('PUT', `${base}/${w.id}/docs/${c.j.id}`, { tok: a.tok, body: { versao_base: 1, corpo: longo } });
   assert.equal(p.s, 200); assert.equal(p.j.versao, 2);
   assert.ok(p.j.palavras > 40000);
@@ -202,7 +202,7 @@ test('limites, validacoes e status controlado', async () => {
   const app = makeApp(); const a = app.addUser();
   const w = await novaObra(app, a.tok);
   const c = (await app.call('POST', `${base}/${w.id}/docs`, { tok: a.tok, body: { titulo: 'Gigante' } })).j;
-  assert.equal((await app.call('PUT', `${base}/${w.id}/docs/${c.id}`, { tok: a.tok, body: { versao_base: 1, corpo: 'a'.repeat(1000001) } })).s, 413);
+  assert.equal((await app.call('PUT', `${base}/${w.id}/docs/${c.id}`, { tok: a.tok, body: { versao_base: 1, corpo: 'a'.repeat(400001) } })).s, 413);
   assert.equal((await app.call('PUT', `${base}/${w.id}/docs/${c.id}`, { tok: a.tok, body: { versao_base: 1, corpo: 123 } })).s, 400);
   for (const s of ['publicado', 'agendado', 'atualizado', 'qualquer']) assert.equal((await app.call('PATCH', `${base}/${w.id}`, { tok: a.tok, body: { status: s } })).s, 400, `status ${s} nao muda por PATCH`);
   assert.equal((await app.call('PATCH', `${base}/${w.id}`, { tok: a.tok, body: { status: 'em_revisao', titulo: 'Novo título', meta: { sinopse: 'S', meta_palavras: '80000' } } })).s, 200);

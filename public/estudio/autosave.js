@@ -75,7 +75,7 @@ export function criarSalvador(ctx) {
       doc.versao = r.versao; doc.palavras = r.palavras; doc.atualizadoEm = r.atualizado_em; doc.tentativas = 0;
       if (doc.rev === rev) { doc.dirty = false; limparBackup(doc.id); definir(doc, 'salvo'); }
       else { definir(doc, 'pendente'); agendar(doc, 300); } // mudou enquanto enviava
-      if (ctx.aoSalvo) ctx.aoSalvo(doc, r);
+      if (ctx.aoSalvo) ctx.aoSalvo(doc, r, corpo);
     } catch (e) {
       if (e.status === 409 && e.data && e.data.atual) { definir(doc, 'conflito'); ctx.aoConflito(doc, e.data.atual); }
       else if (e.status === 401) definir(doc, 'erro', 'Sessão expirada. Seu texto está guardado neste aparelho; entre de novo em outra aba.');

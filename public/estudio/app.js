@@ -3,6 +3,7 @@ import { createEditor } from '../vendor/estudio-editor.js';
 import { api } from './api.js';
 import { criarSalvador, lerBackup, limparBackup } from './autosave.js';
 import { h, dialogo, confirmar, perguntar, relativo, dataHora, milhar, TIPOS_OBRA, STATUS_OBRA, TIPOS_DOC } from './ui.js';
+import { abrirBusca, abrirPaleta } from './palette.js';
 
 const raiz = document.getElementById('estudio');
 const lsGet = (k, v) => { try { const x = localStorage.getItem(k); return x === null ? v : JSON.parse(x); } catch { return v; } };
@@ -113,7 +114,7 @@ async function abrirObra(obraId, docInicial) {
   try { r = await api.obra(obraId); }
   catch (e) { return telaMensagem(e.status === 404 ? 'Obra não encontrada' : 'Não foi possível abrir a obra', e.status === 404 ? 'Ela não existe ou não é sua.' : e.message, h('a', { class: 'btn btn-primary', href: '#/' }, 'Voltar ao Estúdio')); }
 
-  S = { obraId, obra: r.obra, itens: r.itens, docs: new Map(), abas: [], ativa: null, expandidas: new Set(lsGet(`estudio:arvore:${obraId}`, null) || r.itens.filter((i) => i.tipo === 'pasta').map((i) => i.id)) };
+  S = { obraId, obra: r.obra, itens: r.itens, tags: r.tags || [], filtroTag: null, docs: new Map(), abas: [], ativa: null, expandidas: new Set(lsGet(`estudio:arvore:${obraId}`, null) || r.itens.filter((i) => i.tipo === 'pasta').map((i) => i.id)) };
   document.title = `${r.obra.titulo} | Estúdio`;
   montarWorkspace();
   const abas = lsGet(`estudio:abas:${obraId}`, { abas: [], ativa: null });
@@ -187,7 +188,12 @@ function montarWorkspace() {
     corpoDe: corpoDe,
     aoMudarEstado: (g) => { E.estado.textContent = g.texto; E.estado.dataset.estado = g.estado; renderAbas(); },
     aoConflito: resolverConflito,
-    aoSalvo: (doc, r) => { const it = S.itens.find((i) => i.id === doc.id); if (it) { it.versao = r.versao; it.palavras = r.palavras; it.titulo = doc.titulo; it.doc_tipo = doc.tipo; } renderContexto(); },
+    aoSalvo: (doc, r, corpo) => {
+      const it = S.itens.find((i) => i.id === doc.id);
+      if (it) { it.versao = r.versao; it.palavras = r.palavras; it.titulo = doc.titulo; it.doc_tipo = doc.tipo; }
+      const ht = hashtagsDe(corpo); // #hashtags do texto mudaram? atualiza as tags vindas do servidor
+      if (JSON.stringify(ht) !== JSON.stringify(doc.tagsTexto)) { doc.tagsTexto = ht; recarregarTags(); } else renderContexto();
+    },
   });
   renderExplorador(); renderAbas(); renderContexto();
   document.addEventListener('keydown', atalhos);
@@ -209,7 +215,7 @@ async function abrirDoc(id, { ativar: ir = true } = {}) {
   if (!S.docs.has(id)) {
     let d;
     try { d = await api.doc(S.obraId, id); } catch (e) { if (ir) dialogo({ titulo: 'Não foi possível abrir', corpo: h('p', null, e.message) }); return; }
-    const doc = { id, pai: d.pai, versao: d.versao, titulo: d.titulo, tipo: d.doc_tipo, md: d.corpo, palavras: d.palavras, atualizadoEm: d.atualizado_em, modo: 'visual', dirty: false, rev: 0, estado: 'salvo' };
+    const doc = { id, pai: d.pai, versao: d.versao, titulo: d.titulo, tipo: d.doc_tipo, md: d.corpo, palavras: d.palavras, atualizadoEm: d.atualizado_em, modo: 'visual', dirty: false, rev: 0, estado: 'salvo', tagsTexto: hashtagsDe(d.corpo) };
     doc.edState = ed.createState(d.corpo);
     S.docs.set(id, doc); saver.acompanhar(doc);
     await recuperar(doc, d);
@@ -362,17 +368,27 @@ const iconeDe = (it) => (it.tipo === 'pasta' ? ICONES[it.doc_tipo] || '▸' : IC
 const PADROES = { manuscrito: ['capitulo', 'Capítulo'], personagens: ['personagem', 'Personagem'], mundo: ['lugar', 'Lugar'], pesquisa: ['pesquisa', 'Pesquisa'], ideias: ['nota', 'Ideia'], descartadas: ['cena', 'Cena'] };
 
 const filhosDe = (pai) => S.itens.filter((i) => (i.pai || null) === (pai || null)).sort((a, b) => a.posicao - b.posicao);
+// filtro por tag: mostra so os documentos com a tag e as pastas que os contem
+const visivel = (it) => !S.filtroTag || (it.tipo === 'doc' ? (it.tags || []).includes(S.filtroTag) : S.itens.some((x) => x.pai === it.id && visivel(x)));
+const filhosVisiveis = (pai) => filhosDe(pai).filter(visivel);
+function filtroTags() {
+  if (!S.tags.length) return null;
+  return h('label', { class: 'st-filtro' }, h('span', null, 'Filtrar por tag'),
+    h('select', { 'aria-label': 'Filtrar documentos por tag', onchange: (e) => { S.filtroTag = e.target.value || null; renderExplorador(); } },
+      h('option', { value: '' }, 'Todas'), S.tags.map((t) => h('option', { value: t.tag, selected: t.tag === S.filtroTag }, `#${t.tag} (${t.n})`))));
+}
 
 function renderExplorador() {
   if (!S || !E.explorador) return;
   const foco = document.activeElement && E.explorador.contains(document.activeElement) ? document.activeElement.dataset.id : null;
-  const nivel = (pai, n) => h('ul', { role: n === 1 ? 'tree' : 'group', class: 'st-arvore' }, filhosDe(pai).map((it) => no(it, n)));
+  const nivel = (pai, n) => h('ul', { role: n === 1 ? 'tree' : 'group', class: 'st-arvore' }, filhosVisiveis(pai).map((it) => no(it, n)));
   E.explorador.replaceChildren(
     h('div', { class: 'st-exp-topo' }, h('h2', null, 'Estrutura'),
       h('span', { class: 'st-exp-acoes' },
         h('button', { type: 'button', class: 'st-tb', 'aria-label': 'Nova nota na raiz da obra', title: 'Nova nota', onclick: () => criarItem(null, 'doc', 'nota') }, '＋'),
         h('button', { type: 'button', class: 'st-tb', 'aria-label': 'Nova pasta', title: 'Nova pasta', onclick: () => criarItem(null, 'pasta') }, '🗀'))),
     h('p', { class: 'st-exp-obra' }, S.obra.titulo),
+    filtroTags(),
     nivel(null, 1),
     h('p', { class: 'hint st-exp-dica' }, 'Arraste para reorganizar. F2 renomeia, Delete envia para a lixeira.'));
   if (foco) { const el = E.explorador.querySelector(`[data-id="${foco}"]`); if (el) el.focus(); }
@@ -380,7 +396,7 @@ function renderExplorador() {
 
 function no(it, n) {
   const pasta = it.tipo === 'pasta';
-  const aberta = S.expandidas.has(it.id);
+  const aberta = S.filtroTag ? true : S.expandidas.has(it.id);
   const li = h('li', { role: 'treeitem', 'aria-level': String(n), 'aria-expanded': pasta ? String(aberta) : null, 'aria-selected': it.id === S.ativa ? 'true' : 'false', dataset: { id: it.id } });
   const acoes = h('span', { class: 'st-acoes' },
     pasta ? [
@@ -399,7 +415,7 @@ function no(it, n) {
   linha.addEventListener('dragleave', () => linha.classList.remove('alvo-antes', 'alvo-depois', 'alvo-dentro'));
   linha.addEventListener('drop', (e) => aoSoltar(e, it, linha));
   li.append(linha);
-  if (pasta && aberta) li.append(h('ul', { role: 'group', class: 'st-arvore' }, filhosDe(it.id).map((f) => no(f, n + 1))));
+  if (pasta && aberta) li.append(h('ul', { role: 'group', class: 'st-arvore' }, filhosVisiveis(it.id).map((f) => no(f, n + 1))));
   return li;
 }
 
@@ -468,7 +484,7 @@ async function paraLixeira(it) {
 
 async function recarregarArvore() {
   const r = await api.obra(S.obraId);
-  S.itens = r.itens; S.obra = r.obra; E.barTitulo.textContent = r.obra.titulo;
+  S.itens = r.itens; S.tags = r.tags || []; S.obra = r.obra; E.barTitulo.textContent = r.obra.titulo;
   for (const [id, doc] of S.docs) { const it = S.itens.find((i) => i.id === id); if (!it) continue; if (!doc.dirty) it.titulo = doc.titulo; }
   renderExplorador(); renderAbas();
 }
@@ -557,6 +573,7 @@ function renderContexto() {
         linha('Tipo', TIPOS_DOC[d.tipo] || d.tipo), linha('Palavras', milhar(ultimasStats.palavras), 'palavras'),
         linha('Versão salva', `v${d.versao}`), d.atualizadoEm ? linha('Última gravação', dataHora(d.atualizadoEm)) : null))
       : h('p', { class: 'hint' }, 'Abra um documento para ver as propriedades.'),
+    d ? secaoTags(d) : null,
     h('section', { 'aria-labelledby': 'ctx-obra' }, h('h3', { id: 'ctx-obra' }, 'A obra'),
       h('dl', { class: 'st-props' },
         linha('Manuscrito', `${milhar(total)} palavras`),
@@ -643,7 +660,63 @@ function atalhos(e) {
   if (!S) return;
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); alternarFoco(); }
+  else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!document.querySelector('dialog[open]')) abrirBuscaObra(); }
+  else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') { e.preventDefault(); if (!document.querySelector('dialog[open]')) abrirPaleta(ctxPaleta(), comandos()); }
   else if (e.key === 'Escape' && document.body.classList.contains('st-foco') && !document.querySelector('dialog[open]')) alternarFoco();
+}
+
+// ============================================================== tags, busca e paleta
+const HASHTAG_RE = /(?:^|[\s(>])\\?#([\p{L}][\p{L}\p{N}_-]{1,29})(?![\p{L}\p{N}_-])/gu;
+const hashtagsDe = (md) => [...new Set([...String(md || '').matchAll(HASHTAG_RE)].map((m) => m[1].toLowerCase()))].sort();
+
+function secaoTags(d) {
+  const it = S.itens.find((i) => i.id === d.id); if (!it) return null;
+  const doTexto = new Set(d.tagsTexto || []);
+  const campo = h('input', { class: 'st-campo st-tag-campo', type: 'text', maxlength: '31', placeholder: 'Nova tag e Enter', 'aria-label': 'Adicionar tag', list: 'st-tags-existentes',
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); const v = campo.value; campo.value = ''; adicionarTag(d, v); } } });
+  return h('section', { 'aria-labelledby': 'ctx-tags' }, h('h3', { id: 'ctx-tags' }, 'Tags'),
+    h('div', { class: 'st-chips' }, (it.tags || []).length
+      ? it.tags.map((t) => h('span', { class: 'st-chip' },
+        h('button', { type: 'button', class: 'st-chip-nome', title: 'Filtrar o explorador por esta tag', onclick: () => { S.filtroTag = t; renderExplorador(); } }, '#' + t),
+        doTexto.has(t) ? h('span', { class: 'st-chip-texto', title: 'Vem do texto: apague a #hashtag no texto para tirar', 'aria-label': 'tag vinda do texto' }, '✎')
+          : h('button', { type: 'button', class: 'st-chip-x', 'aria-label': 'Remover a tag ' + t, onclick: () => removerTag(d, t) }, '×')))
+      : h('p', { class: 'hint' }, 'Nenhuma tag. Escreva #resolver no texto ou adicione abaixo.')),
+    campo, h('datalist', { id: 'st-tags-existentes' }, S.tags.map((t) => h('option', { value: t.tag }))));
+}
+const manuaisDe = (d) => { const it = S.itens.find((i) => i.id === d.id); const tx = new Set(d.tagsTexto || []); return ((it && it.tags) || []).filter((t) => !tx.has(t)); };
+async function salvarTags(d, manuais) {
+  try { await api.tags(S.obraId, d.id, manuais); await recarregarTags(); }
+  catch (e) { dialogo({ titulo: 'Não foi possível salvar as tags', corpo: h('p', null, e.message) }); }
+}
+function adicionarTag(d, valor) { const t = String(valor).trim().replace(/^#/, '').toLowerCase(); if (t) salvarTags(d, [...new Set([...manuaisDe(d), t])]); }
+function removerTag(d, t) { salvarTags(d, manuaisDe(d).filter((x) => x !== t)); }
+async function recarregarTags() {
+  const r = await api.obra(S.obraId);
+  S.tags = r.tags || [];
+  for (const n of r.itens) { const it = S.itens.find((i) => i.id === n.id); if (it) it.tags = n.tags; }
+  if (S.filtroTag && !S.tags.some((t) => t.tag === S.filtroTag)) S.filtroTag = null;
+  renderExplorador(); renderContexto();
+}
+
+const ctxPaleta = () => ({ api, obraId: () => S.obraId, itens: () => S.itens, tags: () => S.tags, abrirDoc: (id) => abrirDoc(id) });
+function abrirBuscaObra() {
+  const sel = ed && docAtivo() && docAtivo().modo === 'visual' ? ed.selectedText().trim() : '';
+  abrirBusca(ctxPaleta(), sel.length >= 2 && sel.length <= 60 ? sel : '');
+}
+const pastaDe = (tipo) => S.itens.find((i) => i.tipo === 'pasta' && i.doc_tipo === tipo);
+function comandos() {
+  const c = (rotulo, dica, acao) => ({ rotulo, dica, acao });
+  const novo = (rotulo, pasta) => c(rotulo, 'Criar', () => { const p = pastaDe(pasta); criarItem(p ? p.id : null, 'doc', 'nota'); });
+  return [
+    novo('Criar capítulo', 'manuscrito'), novo('Criar personagem', 'personagens'), novo('Criar nota', 'ideias'),
+    c('Criar pasta', 'Criar', () => criarItem(null, 'pasta')),
+    c('Pesquisar na obra', 'Ctrl+K', abrirBuscaObra),
+    c('Alternar modo foco', 'Ctrl+Shift+F', alternarFoco),
+    c('Alternar visual e Markdown', 'Editor', alternarModo),
+    c('Informações da obra', 'Obra', dialogoObra), c('Abrir a lixeira', 'Obra', dialogoLixeira),
+    c('Mostrar ou esconder o explorador', 'Painéis', () => alternarPainel('exp')), c('Mostrar ou esconder o contexto', 'Painéis', () => alternarPainel('ctx')),
+    c('Voltar à lista de obras', 'Estúdio', () => { location.hash = '#/'; }),
+  ];
 }
 
 // ============================================================== avisos

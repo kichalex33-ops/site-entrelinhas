@@ -7,7 +7,8 @@ const DOC_TYPES = ['capitulo', 'cena', 'personagem', 'lugar', 'objeto', 'evento'
 const FOLDER_TYPES = ['pasta', 'manuscrito', 'personagens', 'mundo', 'pesquisa', 'ideias', 'descartadas'];
 const KINDS = ['texto', 'hq', 'hibrida'];
 const MANUAL_STATUS = ['rascunho', 'em_revisao', 'arquivado']; // os demais so pela publicacao
-const LIM = { works: 30, docs: 2000, body: 1000000, title: 200, meta: 20000, request: 1300000 };
+// body: 400 mil caracteres (~65 mil palavras) mantem cada salvamento dentro dos 10 ms de CPU do plano gratuito do Workers
+const LIM = { works: 30, docs: 2000, body: 400000, title: 200, meta: 20000, request: 520000, tags: 20, links: 100 };
 const ID_RE = /^[a-f0-9]{12}$/;
 const SNAPSHOT_EVERY = 600; // segundos entre snapshots automaticos
 const KEEP_VERSIONS = 50;
@@ -21,6 +22,30 @@ const HQ_FOLDERS = [
   ['Roteiro', 'manuscrito'], ['Personagens', 'personagens'], ['Cenários', 'mundo'],
   ['Referências', 'pesquisa'], ['Notas', 'ideias'],
 ];
+
+// ---------- indice derivado (busca, tags, links): sempre recalculado a partir do texto ----------
+// minusculas e sem acento, para achar "marcia" em "Márcia"
+export const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const HASHTAG_RE = /(?:^|[\s(>])\\?#([\p{L}][\p{L}\p{N}_-]{1,29})(?![\p{L}\p{N}_-])/gu;
+const LINK_RE = /\\?\[\\?\[([^\[\]\n|\\]{1,120})(?:\|[^\[\]\n]*)?\\?\]\\?\]/g;
+export const extractTags = (body) => [...new Set([...String(body || '').matchAll(HASHTAG_RE)].map((m) => m[1].toLowerCase()))].slice(0, LIM.tags * 2);
+export const extractLinks = (body) => {
+  const out = new Map();
+  for (const m of String(body || '').matchAll(LINK_RE)) { const t = m[1].trim(); if (t && out.size < LIM.links) out.set(norm(t), t); }
+  return [...out.entries()];
+};
+
+async function reindex(env, workId, docId, title, body) {
+  const stmts = [
+    env.DB.prepare('INSERT INTO studio_search (doc_id, work_id, norm_title, norm_body) VALUES (?, ?, ?, ?) ON CONFLICT(doc_id) DO UPDATE SET norm_title = excluded.norm_title, norm_body = excluded.norm_body')
+      .bind(docId, workId, norm(title), norm(body)),
+    env.DB.prepare("DELETE FROM studio_doc_tags WHERE doc_id = ? AND origem = 'texto'").bind(docId),
+    ...extractTags(body).map((t) => env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) VALUES (?, ?, ?, 'texto')").bind(docId, workId, t)),
+    env.DB.prepare('DELETE FROM studio_links WHERE from_doc = ?').bind(docId),
+    ...extractLinks(body).map(([n, t]) => env.DB.prepare('INSERT OR IGNORE INTO studio_links (work_id, from_doc, to_norm, to_title) VALUES (?, ?, ?, ?)').bind(workId, docId, n, t)),
+  ];
+  await env.DB.batch(stmts);
+}
 
 export const countWords = (t) => (String(t || '').match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
 
@@ -66,6 +91,8 @@ export async function studioApi(req, env, url, user, h) {
     return fail('Método não permitido.', 405);
   }
 
+  if (parts[2] === 'search' && parts.length === 3 && m === 'GET') return searchDocs(env, work, url, json);
+
   if (parts[2] === 'trash' && parts.length === 3 && m === 'GET') {
     const rows = await env.DB.prepare(
       'SELECT id, parent_id, kind, doc_type, title, deleted_at FROM studio_docs WHERE work_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC'
@@ -96,6 +123,7 @@ export async function studioApi(req, env, url, user, h) {
     if (action === 'duplicate') return duplicateDoc(env, work, docId, h, newId);
     if (action === 'restore') return restoreDoc(env, work, docId, h);
   }
+  if (parts.length === 5 && action === 'tags' && m === 'PUT') return setTags(env, req, work, docId, h);
   return fail('Não encontrado.', 404);
 }
 
@@ -145,12 +173,18 @@ async function getWork(env, work, json) {
   const rows = await env.DB.prepare(
     'SELECT id, parent_id, kind, doc_type, title, position, version, words, updated_at FROM studio_docs WHERE work_id = ? AND deleted_at IS NULL ORDER BY position, created_at'
   ).bind(work.id).all();
+  const tg = await env.DB.prepare(
+    'SELECT t.doc_id, t.tag FROM studio_doc_tags t JOIN studio_docs d ON d.id = t.doc_id WHERE t.work_id = ? AND d.deleted_at IS NULL ORDER BY t.tag'
+  ).bind(work.id).all();
+  const porDoc = new Map(), contagem = new Map();
+  for (const r of tg.results) { if (!porDoc.has(r.doc_id)) porDoc.set(r.doc_id, []); porDoc.get(r.doc_id).push(r.tag); contagem.set(r.tag, (contagem.get(r.tag) || 0) + 1); }
   return json({
     obra: { id: work.id, titulo: work.title, tipo: work.kind, status: work.status, meta: safeJson(work.meta), atualizada_em: work.updated_at },
     itens: rows.results.map((d) => ({
       id: d.id, pai: d.parent_id, tipo: d.kind, doc_tipo: d.doc_type, titulo: d.title,
-      posicao: d.position, versao: d.version, palavras: d.words, atualizado_em: d.updated_at,
+      posicao: d.position, versao: d.version, palavras: d.words, atualizado_em: d.updated_at, tags: porDoc.get(d.id) || [],
     })),
+    tags: [...contagem.entries()].map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag)),
   });
 }
 
@@ -210,6 +244,7 @@ async function createDoc(env, req, work, h, newId) {
       .bind(id, work.id, parent, kind, type, title, body, pos, countWords(body), t, t),
     env.DB.prepare('UPDATE studio_works SET updated_at = ? WHERE id = ?').bind(t, work.id),
   ]);
+  if (kind === 'doc') await reindex(env, work.id, id, title, body);
   return h.json({ ok: true, id, posicao: pos, versao: 1 }, 201);
 }
 
@@ -233,7 +268,7 @@ async function putDoc(env, req, work, docId, h) {
   if (b.corpo !== undefined) {
     if (cur.kind === 'pasta') return h.fail('Pastas não têm texto.');
     if (typeof b.corpo !== 'string') return h.fail('Texto inválido.');
-    if (b.corpo.length > LIM.body) return h.fail('O documento passou do tamanho máximo (1 MB). Divida em capítulos.', 413);
+    if (b.corpo.length > LIM.body) return h.fail('O documento passou do tamanho máximo (400 mil caracteres). Divida em capítulos.', 413);
     body = b.corpo;
   }
   const type = b.doc_tipo === undefined ? cur.doc_type : cur.kind === 'pasta' ? cur.doc_type : DOC_TYPES.includes(b.doc_tipo) ? b.doc_tipo : cur.doc_type;
@@ -249,6 +284,7 @@ async function putDoc(env, req, work, docId, h) {
   if (!res.meta || res.meta.changes !== 1) return conflict(); // alguem salvou entre a leitura e a escrita
   await env.DB.prepare('UPDATE studio_works SET updated_at = ? WHERE id = ?').bind(t, work.id).run();
 
+  if (cur.kind === 'doc' && (body !== cur.body || title !== cur.title)) await reindex(env, work.id, docId, title, body);
   if (cur.kind === 'doc' && body !== cur.body) await maybeSnapshot(env, docId, work.id, title, body, t);
   return h.json({ ok: true, versao: base + 1, palavras: words, atualizado_em: t });
 }
@@ -345,8 +381,54 @@ async function duplicateDoc(env, work, docId, h, newId) {
   const id = newId(), t = h.now(), title = (d.title + ' (cópia)').slice(0, LIM.title);
   await env.DB.prepare('INSERT INTO studio_docs (id, work_id, parent_id, kind, doc_type, title, body, position, words, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, work.id, d.parent_id, d.kind, d.doc_type, title, d.body, pos, d.words, t, t).run();
+  await reindex(env, work.id, id, title, d.body);
+  await env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) SELECT ?, work_id, tag, origem FROM studio_doc_tags WHERE doc_id = ? AND origem = 'manual'").bind(id, docId).run();
   await env.DB.prepare('UPDATE studio_works SET updated_at = ? WHERE id = ?').bind(t, work.id).run();
   return h.json({ ok: true, id, posicao: pos, versao: 1 }, 201);
+}
+
+// ---------------------------------------------------------------- tags e busca
+const TAG_RE = /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,29}$/u;
+async function setTags(env, req, work, docId, h) {
+  const b = await h.body(req);
+  if (!b || !Array.isArray(b.tags)) return h.fail('Informe a lista de tags.');
+  const d = await env.DB.prepare("SELECT id FROM studio_docs WHERE id = ? AND work_id = ? AND kind = 'doc' AND deleted_at IS NULL").bind(docId, work.id).first();
+  if (!d) return h.fail('Documento não encontrado.', 404);
+  const tags = [...new Set(b.tags.map((t) => h.str(t, 31).replace(/^#/, '').toLowerCase()).filter(Boolean))];
+  if (tags.length > LIM.tags) return h.fail('No máximo ' + LIM.tags + ' tags por documento.');
+  const ruim = tags.find((t) => !TAG_RE.test(t));
+  if (ruim) return h.fail('Tag inválida: “' + ruim + '”. Use letras, números, hífen ou sublinhado (até 30).');
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM studio_doc_tags WHERE doc_id = ? AND origem = 'manual'").bind(docId),
+    ...tags.map((t) => env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) VALUES (?, ?, ?, 'manual')").bind(docId, work.id, t)),
+  ]);
+  const todas = await env.DB.prepare('SELECT tag FROM studio_doc_tags WHERE doc_id = ? ORDER BY tag').bind(docId).all();
+  return h.json({ ok: true, tags: todas.results.map((r) => r.tag) });
+}
+
+// busca no titulo e no texto (sem acento, sem diferenca de caixa), so dentro da obra do dono, so documentos vivos
+async function searchDocs(env, work, url, json) {
+  const q = norm(url.searchParams.get('q') || '').trim().slice(0, 100);
+  const tag = (url.searchParams.get('tag') || '').toLowerCase().slice(0, 30);
+  const tipo = DOC_TYPES.includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : '';
+  const comTexto = q.length >= 2;
+  if (!comTexto && !tag && !tipo) return json({ resultados: [] });
+  const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+  const filtros = [], args = [];
+  if (comTexto) { filtros.push("(s.norm_title LIKE ? ESCAPE '\\' OR s.norm_body LIKE ? ESCAPE '\\')"); args.push(like, like); }
+  if (tag) { filtros.push('EXISTS (SELECT 1 FROM studio_doc_tags t WHERE t.doc_id = d.id AND t.tag = ?)'); args.push(tag); }
+  if (tipo) { filtros.push('d.doc_type = ?'); args.push(tipo); }
+  const cols = comTexto
+    ? "(s.norm_title LIKE ? ESCAPE '\\') AS no_titulo, CASE WHEN s.norm_body LIKE ? ESCAPE '\\' THEN substr(d.body, max(1, instr(s.norm_body, ?) - 50), 170) ELSE NULL END AS trecho"
+    : '0 AS no_titulo, NULL AS trecho';
+  const rows = await env.DB.prepare(
+    'SELECT d.id, d.parent_id, d.doc_type, d.title, d.updated_at, ' + cols +
+    " FROM studio_docs d JOIN studio_search s ON s.doc_id = d.id WHERE d.work_id = ? AND d.deleted_at IS NULL AND d.kind = 'doc' AND " +
+    filtros.join(' AND ') + ' ORDER BY no_titulo DESC, d.updated_at DESC LIMIT 40'
+  ).bind(...(comTexto ? [like, like, q] : []), work.id, ...args).all();
+  return json({
+    resultados: rows.results.map((r) => ({ id: r.id, pai: r.parent_id, doc_tipo: r.doc_type, titulo: r.title, no_titulo: !!r.no_titulo, trecho: r.trecho, atualizado_em: r.updated_at })),
+  });
 }
 
 function safeJson(s) { try { const o = JSON.parse(s); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }
