@@ -110,6 +110,7 @@
     app.innerHTML = `
       <div class="bar">
         <a class="btn btn-ghost" href="autor.html?a=${encodeURIComponent(slug)}" target="_blank" rel="noopener">Ver minha página pública</a>
+        <a class="btn btn-ghost" href="estudio.html">Estúdio de escrita</a>
         ${isMod ? '<a class="btn btn-ghost" href="chat.html">Chat da moderação</a>' : ''}
         <button class="btn btn-ghost" id="logout" type="button">Sair</button>
       </div>

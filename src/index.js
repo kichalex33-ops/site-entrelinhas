@@ -1,6 +1,8 @@
 // Entrelinhas: API de perfis de autor (Cloudflare Worker + D1).
 // Rotas /api/* e /img/* passam por aqui; o resto vem dos arquivos estaticos.
 
+import { studioApi } from './studio.js';
+
 const SESSION_DAYS = 30;
 const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
 const MAX_IMG = 600 * 1024;
@@ -494,6 +496,13 @@ export default {
     if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
 
     try {
+      // Estudio Entrelinhas (privado): autenticacao aqui, regras de dono dentro do modulo
+      if (path.startsWith('/api/studio/')) {
+        const su = await currentUser(env, req);
+        if (!su) return fail('Faça login para continuar.', 401);
+        return studioApi(req, env, url, su, { json, fail, str, body, now, rand, toHex });
+      }
+
       if (req.method === 'GET') {
         if (path === '/api/me') {
           const u = await currentUser(env, req);

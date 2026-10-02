@@ -79,7 +79,7 @@
     <div class="profile">
       <div class="profile-photo${p.mod ? ' is-mod' : ''}">${d.retrato ? `<img src="${esc(imgUrl(d.retrato))}" alt="Foto de ${esc(d.nome)}">` : `<div class="typo" style="aspect-ratio:3/4">${initial(d.nome)}</div>`}${p.mod ? '<span class="mod-seal">&#9733; Moderador e Idealizador do projeto</span>' : ''}</div>
       <div class="profile-text">
-        ${isOwner ? '<div class="owner-bar"><a class="btn btn-primary" href="conta.html">Editar perfil e bio</a><a class="btn btn-ghost" href="conta.html#nova-obra">Adicionar livro</a></div>' : ''}
+        ${isOwner ? '<div class="owner-bar"><a class="btn btn-primary" href="conta.html">Editar perfil e bio</a><a class="btn btn-ghost" href="conta.html#nova-obra">Adicionar livro</a><a class="btn btn-ghost" href="estudio.html">Estúdio de escrita</a></div>' : ''}
         <span class="eyebrow">Perfil do autor${d.local ? ' · ' + esc(d.local) : ''}</span>
         <h2>${esc(d.nome)}</h2>
         ${d.frase ? `<p class="lead">${esc(d.frase)}</p>` : ''}

@@ -26,7 +26,7 @@
     const r = await fetch(path, o);
     let data = null;
     try { data = await r.json(); } catch (e) {}
-    if (!r.ok) { const err = new Error((data && data.erro) || 'Falha na requisição.'); err.status = r.status; throw err; }
+    if (!r.ok) { const err = new Error((data && data.erro) || 'Falha na requisição.'); err.status = r.status; err.data = data; throw err; }
     return data;
   }
 

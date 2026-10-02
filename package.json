@@ -1,0 +1,26 @@
+{
+  "name": "entrelinhas-site",
+  "private": true,
+  "type": "module",
+  "description": "Site Entrelinhas (Cloudflare Worker + D1). Este package.json e so de desenvolvimento: o deploy continua sem build.",
+  "scripts": {
+    "test": "node --no-warnings --test \"tools/tests/*.test.mjs\"",
+    "build:editor": "node tools/editor/build.mjs",
+    "e2e": "node --no-warnings --test \"tools/e2e/*.test.mjs\"",
+    "dev": "wrangler dev --local --port 8799"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "markdown-it": "^14.1.0",
+    "playwright-core": "^1.63.0",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.1",
+    "prosemirror-inputrules": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-markdown": "^1.13.8",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-list": "^1.5.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.42.6"
+  }
+}
