@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "entrelinhas-db",
-      "database_id": "834af0a0-9517-4909-b9cb-7054c1ed1a42",
+      "database_id": "a735e336-72de-411f-9771-e6ca5af20b76",
       "migrations_dir": "migrations"
     }
   ],
