@@ -63,6 +63,10 @@
       ${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}
     </article>`;
 
+  // botao do chat: so aparece no perfil de moderador, para quem esta logado como moderador
+  let viewerMod = false;
+  if (p.mod) { try { viewerMod = !!(await api('/api/me')).mod; } catch (e) {} }
+
   root.innerHTML = `
   <section class="page active" id="perfil">
     <div class="profile">
@@ -75,6 +79,7 @@
         ${d.citacao ? `<p class="quote-line">${esc(d.citacao)}</p>` : ''}
         ${p.badges.length ? `<div class="badges">${p.badges.map(b => `<span class="badge-pill">${esc(b)}</span>`).join('')}</div>` : ''}
         ${d.links.length ? `<p class="links">${d.links.map((l, i) => `<a class="btn ${i ? 'btn-ghost' : 'btn-primary'}" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
+        ${viewerMod ? '<p class="links"><a class="btn btn-primary mod-chat-btn" href="chat.html">&#9733; Entrar no chat da moderação</a><a class="btn btn-ghost" href="https://mail.proton.me/" target="_blank" rel="noopener noreferrer">Abrir a caixa de e-mails</a></p>' : ''}
       </div>
     </div>
     ${d.obras.length ? `<div class="section-head"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div><div class="works">${d.obras.map(obra).join('')}</div>` : ''}
