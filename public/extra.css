@@ -129,3 +129,34 @@ a.tab{text-decoration:none;display:inline-block}
 .loja-row input{width:100%}
 .buy{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
 @media (max-width:620px){.loja-row{grid-template-columns:1fr}}
+
+/* avaliacoes */
+.stars{color:#e6b422;letter-spacing:.08em}
+.rev-line{margin:.5rem 0 0;font-size:.85rem;color:var(--muted)}
+.rev-toggle{margin-top:.6rem}
+.rev-box{margin-top:1rem;padding:1rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);text-align:left}
+.rev-sum{margin-bottom:.8rem}
+.rev-login{color:var(--muted)}
+.rev-form{display:grid;gap:.6rem;margin:.6rem 0 1.2rem}
+.rev-form h4{margin:0}
+.rev-form textarea,.rev-form select{width:100%;padding:.55rem .7rem;border:1px solid var(--line-strong);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}
+.chk{display:flex;gap:.5rem;align-items:center;font-size:.9rem}
+.rev-note{font-size:.85rem;color:#e66}
+.rev-item{padding:.8rem 0;border-top:1px solid var(--line)}
+.rev-head{display:flex;flex-wrap:wrap;gap:.6rem;align-items:baseline}
+.rev-date{margin-left:auto;font-size:.78rem;color:var(--muted)}
+.rev-item p{margin:.4rem 0;line-height:1.55;word-break:break-word}
+.rev-spoiler summary{cursor:pointer;color:var(--muted);font-size:.88rem}
+.rev-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.rev-btn{background:none;border:1px solid var(--line-strong);border-radius:999px;color:var(--text);padding:.2rem .7rem;font:inherit;font-size:.8rem;cursor:pointer}
+.rev-btn.on{border-color:var(--accent);color:var(--accent)}
+.rev-btn:disabled{opacity:.45;cursor:default}
+.rev-btn.danger{color:#e66;border-color:rgba(230,102,102,.5)}
+.rev-report summary{cursor:pointer;font-size:.8rem;color:var(--muted)}
+.rev-report{display:inline-flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.rev-flag{font-size:.78rem;color:#e6b422}
+
+/* atalhos do dono do perfil e links dentro das avaliacoes */
+.owner-bar{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1rem}
+.owner-edit{margin:.6rem 0 0}
+.rev-box a,.muted-note a{color:var(--accent)}

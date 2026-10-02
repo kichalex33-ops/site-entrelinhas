@@ -14,22 +14,26 @@
 
   // ---------- login / cadastro ----------
   function authView(mode){
-    subtitle.textContent = 'Entre para editar a sua página pública.';
+    subtitle.textContent = mode === 'leitor' ? 'Crie uma conta de leitor para avaliar obras.' : 'Entre para editar a sua página pública ou avaliar obras.';
     app.innerHTML = `
       <div class="auth-box">
         <div class="auth-tabs">
           <button class="${mode === 'login' ? 'on' : ''}" data-mode="login">Entrar</button>
-          <button class="${mode === 'register' ? 'on' : ''}" data-mode="register">Criar conta</button>
+          <button class="${mode === 'leitor' ? 'on' : ''}" data-mode="leitor">Sou leitor</button>
+          <button class="${mode === 'register' ? 'on' : ''}" data-mode="register">Sou autor</button>
         </div>
         <form id="authForm" autocomplete="on">
           ${mode === 'register' ? field('Código de convite', '<input name="convite" required autocomplete="off">') + field('Seu nome (aparece na página)', '<input name="nome" maxlength="80" autocomplete="name">') : ''}
+          ${mode === 'leitor' ? field('Seu nome (aparece nas suas avaliações)', '<input name="nome" maxlength="40" minlength="2" required autocomplete="nickname">') : ''}
           ${field('E-mail', '<input name="email" type="email" required autocomplete="email">')}
-          ${field('Senha' + (mode === 'register' ? ' (mínimo 10 caracteres)' : ''), `<input name="senha" type="password" required minlength="${mode === 'register' ? 10 : 1}" autocomplete="${mode === 'register' ? 'new-password' : 'current-password'}">`)}
-          <button class="btn btn-primary" type="submit">${mode === 'login' ? 'Entrar' : 'Criar conta'}</button>
+          ${field('Senha' + (mode !== 'login' ? ' (mínimo 10 caracteres)' : ''), `<input name="senha" type="password" required minlength="${mode !== 'login' ? 10 : 1}" autocomplete="${mode !== 'login' ? 'new-password' : 'current-password'}">`)}
+          <button class="btn btn-primary" type="submit">${mode === 'login' ? 'Entrar' : mode === 'leitor' ? 'Criar conta de leitor' : 'Criar conta de autor'}</button>
           <div id="authNote"></div>
         </form>
         <p class="hint">${mode === 'register'
-          ? 'O cadastro é fechado: precisa de um código de convite do coletivo. O e-mail serve só para entrar e nunca aparece no site.'
+          ? 'O cadastro de autor é fechado: precisa de um código de convite do coletivo. O e-mail serve só para entrar e nunca aparece no site.'
+          : mode === 'leitor'
+          ? 'Conta de leitor é aberta a todos. Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos. O e-mail serve só para entrar e nunca aparece no site.'
           : 'Esqueceu a senha? Peça ao coletivo para redefinir.'}</p>
       </div>`;
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => authView(b.dataset.mode)));
@@ -38,12 +42,37 @@
       const f = Object.fromEntries(new FormData(e.target));
       const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
       try {
-        await api('/api/' + mode, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) });
+        await api('/api/' + (mode === 'leitor' ? 'register-leitor' : mode), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) });
         await load();
       } catch (err) {
         document.getElementById('authNote').innerHTML = note(err.message);
         btn.disabled = false;
       }
+    });
+  }
+
+  // ---------- conta de leitor ----------
+  function readerView(me){
+    subtitle.textContent = 'Conta de leitor.';
+    app.innerHTML = `
+      <div class="auth-box">
+        <p>Olá, <b>${esc(me.nome)}</b>! Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos nas páginas dos autores.</p>
+        <p style="margin:1rem 0"><a class="btn btn-primary" href="autores.html">Ver autores e obras</a> <button class="btn btn-ghost" id="logout" type="button">Sair</button></p>
+        <details class="blk pw"><summary>Trocar senha</summary>
+          <form id="pwForm">
+            ${field('Senha atual', '<input name="atual" type="password" autocomplete="current-password" required>')}
+            ${field('Nova senha (mínimo 10 caracteres)', '<input name="nova" type="password" autocomplete="new-password" minlength="10" required>')}
+            <button class="btn btn-ghost" type="submit">Trocar senha</button><span id="pwNote"></span>
+          </form></details>
+      </div>`;
+    document.getElementById('logout').addEventListener('click', async () => { await api('/api/logout', { method: 'POST' }); authView('login'); });
+    document.getElementById('pwForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const n = document.getElementById('pwNote');
+      try {
+        await api('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+        n.innerHTML = note('Senha trocada.', true); e.target.reset();
+      } catch (err) { n.innerHTML = note(err.message); }
     });
   }
 
@@ -205,12 +234,28 @@
     throw new Error('Não foi possível reduzir a imagem. Tente uma menor.');
   }
 
+  // atalhos vindos da pagina publica: #nova-obra cria um livro em branco; #obra-<id> abre aquele livro
+  function openFromHash(){
+    const h = location.hash;
+    if (!h) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    let idx = -1;
+    if (h === '#nova-obra') {
+      if (P.obras.length >= 20) return alert('Limite de 20 obras atingido.');
+      P.obras.push({ titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [] });
+      editorView(); idx = P.obras.length - 1;
+    } else if (h.indexOf('#obra-') === 0) idx = P.obras.findIndex(o => o.id === h.slice(6));
+    const el = idx >= 0 ? document.querySelector('#list-obras .item[data-i="' + idx + '"]') : null;
+    if (el) { el.scrollIntoView({ block: 'start' }); const f = el.querySelector('input,textarea'); if (f) f.focus(); }
+  }
+
   async function load(){
     try {
       const me = await api('/api/me');
       slug = me.slug; isMod = !!me.mod;
+      if (me.role === 'leitor') return readerView(me);
       const p = await api('/api/profile/' + slug);
-      P = p.data; editorView();
+      P = p.data; editorView(); openFromHash();
     } catch (e) { authView('login'); }
   }
   load();

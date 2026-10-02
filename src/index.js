@@ -61,7 +61,7 @@ async function currentUser(env, req) {
   const t = getCookie(req, 'sid');
   if (!t) return null;
   const row = await env.DB.prepare(
-    'SELECT u.id, u.email, u.slug, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.email, u.slug, u.is_admin, u.role, u.nome FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(await sha256Hex(t), now()).first();
   return row || null;
 }
@@ -116,10 +116,15 @@ async function sanitizeProfile(env, d, userId) {
     const titulo = str(s && s.titulo, 80), texto = str(s && s.texto, 4000);
     if (titulo || texto) out.secoes.push({ titulo, texto });
   }
+  const obraIds = new Set();
   for (const o of (Array.isArray(d.obras) ? d.obras : []).slice(0, 20)) {
     const titulo = str(o && o.titulo, 120);
     if (!titulo) continue;
+    // id estavel da obra (as reviews apontam para ele); gera um novo se vier ausente, invalido ou repetido
+    const id = typeof o.id === 'string' && /^[a-f0-9]{12}$/.test(o.id) && !obraIds.has(o.id) ? o.id : toHex(rand(6));
+    obraIds.add(id);
     const obra = {
+      id,
       titulo,
       genero: str(o.genero, 60),
       status: STATUS.includes(o.status) ? o.status : 'Publicado',
@@ -194,6 +199,31 @@ async function register(env, req) {
   return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, userId) });
 }
 
+// cadastro aberto de leitor: sem convite, sem perfil publico. Cada cadastro conta no limite por IP.
+async function registerLeitor(env, req) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const ip = req.headers.get('CF-Connecting-IP') || 'x';
+  const key = 'rl|' + ip;
+  if (await tooManyFails(env, key)) return fail('Muitas tentativas. Tente de novo mais tarde.', 429);
+
+  const email = str(b.email, 254).toLowerCase();
+  const senha = typeof b.senha === 'string' ? b.senha : '';
+  const nome = str(b.nome, 40);
+  if (nome.length < 2) return fail('Informe seu nome (pelo menos 2 letras).');
+  if (!isEmail(email)) return fail('E-mail inválido.');
+  if (senha.length < 10 || senha.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
+  if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(email).first()) return fail('Este e-mail já está cadastrado.', 409);
+
+  const salt = rand(16);
+  const hash = await hashPassword(senha, salt);
+  const slug = 'leitor-' + toHex(rand(5));
+  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at, role, nome) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(email, hash, b64(salt), slug, now(), 'leitor', nome).run();
+  await recordFail(env, key);
+  return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, res.meta.last_row_id) });
+}
+
 async function login(env, req) {
   const b = await body(req);
   if (!b) return fail('Requisição inválida.');
@@ -237,7 +267,19 @@ async function getProfile(env, slug) {
     'SELECT p.slug, p.data, p.badges, p.published, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.slug = ?'
   ).bind(slug).first();
   if (!p || !p.published) return null;
-  return { slug: p.slug, data: JSON.parse(p.data), badges: JSON.parse(p.badges), mod: !!p.mod };
+  const data = JSON.parse(p.data);
+  // obras cadastradas antes das reviews nao tem id: atribui agora e grava (id estavel dai em diante)
+  let changed = false;
+  for (const o of data.obras || []) if (!o.id) { o.id = toHex(rand(6)); changed = true; }
+  if (changed) await env.DB.prepare('UPDATE profiles SET data = ? WHERE slug = ?').bind(JSON.stringify(data), slug).run();
+  // nota media e total de reviews por obra (so na resposta, nao e gravado)
+  const agg = await env.DB.prepare('SELECT obra_id, COUNT(*) AS n, AVG(nota) AS media FROM reviews WHERE author_slug = ? AND hidden = 0 GROUP BY obra_id').bind(slug).all();
+  const byObra = new Map(agg.results.map((r) => [r.obra_id, r]));
+  for (const o of data.obras || []) {
+    const a = byObra.get(o.id);
+    o.reviews = { total: a ? a.n : 0, media: a ? Math.round(a.media * 10) / 10 : 0 };
+  }
+  return { slug: p.slug, data, badges: JSON.parse(p.badges), mod: !!p.mod };
 }
 
 async function saveProfile(env, req, user) {
@@ -280,6 +322,95 @@ async function serveImage(env, id) {
       'Content-Security-Policy': "default-src 'none'",
     },
   });
+}
+
+// ---------- reviews ----------
+const MOTIVOS = ['spoiler', 'ofensivo', 'spam'];
+const SLUG_RE = /^[a-z0-9-]{1,40}$/;
+const OBRA_RE = /^[a-f0-9]{12}$/;
+
+async function obraExists(env, autor, obraId) {
+  const p = await env.DB.prepare('SELECT data FROM profiles WHERE slug = ? AND published = 1').bind(autor).first();
+  return !!p && (JSON.parse(p.data).obras || []).some((o) => o.id === obraId);
+}
+
+// publico: lista as reviews de uma obra. Se houver login, marca as proprias e os votos.
+async function listReviews(env, req, url) {
+  const autor = url.searchParams.get('autor') || '', obra = url.searchParams.get('obra') || '';
+  if (!SLUG_RE.test(autor) || !OBRA_RE.test(obra)) return fail('Obra inválida.');
+  const viewer = await currentUser(env, req);
+  const rows = await env.DB.prepare(
+    'SELECT r.id, r.nota, r.texto, r.spoiler, r.created_at, r.user_id, u.nome, u.role, u.slug AS uslug, p.data AS pdata, ' +
+    '(SELECT COUNT(*) FROM review_votes v WHERE v.review_id = r.id) AS uteis, ' +
+    '(SELECT COUNT(*) FROM review_votes v2 WHERE v2.review_id = r.id AND v2.user_id = ?) AS meu_voto, ' +
+    '(SELECT COUNT(*) FROM review_reports d WHERE d.review_id = r.id) AS denuncias ' +
+    'FROM reviews r JOIN users u ON u.id = r.user_id LEFT JOIN profiles p ON p.slug = u.slug ' +
+    'WHERE r.author_slug = ? AND r.obra_id = ? AND r.hidden = 0 ORDER BY uteis DESC, r.created_at DESC LIMIT 100'
+  ).bind(viewer ? viewer.id : 0, autor, obra).all();
+  const agg = await env.DB.prepare('SELECT COUNT(*) AS n, AVG(nota) AS media FROM reviews WHERE author_slug = ? AND obra_id = ? AND hidden = 0').bind(autor, obra).first();
+  return json({
+    resumo: { total: agg.n, media: agg.n ? Math.round(agg.media * 10) / 10 : 0 },
+    eu: viewer ? { mod: !!viewer.is_admin, role: viewer.role, dono: viewer.slug === autor } : null,
+    reviews: rows.results.map((r) => ({
+      id: r.id, nota: r.nota, texto: r.texto, spoiler: !!r.spoiler, em: r.created_at,
+      nome: r.role === 'autor' ? (r.pdata ? JSON.parse(r.pdata).nome : '') || 'Autor' : r.nome || 'Leitor',
+      perfil: r.role === 'autor' ? r.uslug : null,
+      uteis: r.uteis, meu_voto: !!r.meu_voto,
+      minha: !!viewer && r.user_id === viewer.id,
+      ...(viewer && viewer.is_admin ? { denuncias: r.denuncias } : {}),
+    })),
+  });
+}
+
+async function putReview(env, req, user) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const rl = 'rv|' + user.id;
+  if (await tooManyFails(env, rl)) return fail('Muitas avaliações em pouco tempo. Aguarde alguns minutos.', 429);
+  const autor = typeof b.autor === 'string' ? b.autor : '', obra = typeof b.obra === 'string' ? b.obra : '';
+  const nota = Number(b.nota), texto = str(b.texto, 3000);
+  if (!SLUG_RE.test(autor) || !OBRA_RE.test(obra)) return fail('Obra inválida.');
+  if (!Number.isInteger(nota) || nota < 1 || nota > 5) return fail('Escolha uma nota de 1 a 5.');
+  if (texto.length < 10) return fail('Escreva pelo menos 10 caracteres na review.');
+  if (user.slug === autor) return fail('Você não pode avaliar a sua própria obra.', 403);
+  if (!(await obraExists(env, autor, obra))) return fail('Obra não encontrada.', 404);
+  const t = now();
+  await env.DB.prepare(
+    'INSERT INTO reviews (author_slug, obra_id, user_id, nota, texto, spoiler, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
+    'ON CONFLICT(author_slug, obra_id, user_id) DO UPDATE SET nota = excluded.nota, texto = excluded.texto, spoiler = excluded.spoiler, updated_at = excluded.updated_at'
+  ).bind(autor, obra, user.id, nota, texto, b.spoiler ? 1 : 0, t, t).run();
+  await recordFail(env, rl);
+  return json({ ok: true });
+}
+
+async function deleteReview(env, user, id) {
+  const r = await env.DB.prepare('SELECT user_id FROM reviews WHERE id = ?').bind(id).first();
+  if (!r) return fail('Review não encontrada.', 404);
+  if (r.user_id !== user.id && !user.is_admin) return fail('Sem permissão.', 403);
+  await env.DB.prepare('DELETE FROM reviews WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
+
+async function toggleUtil(env, user, id) {
+  const r = await env.DB.prepare('SELECT user_id FROM reviews WHERE id = ? AND hidden = 0').bind(id).first();
+  if (!r) return fail('Review não encontrada.', 404);
+  if (r.user_id === user.id) return fail('Você não pode votar na própria review.', 403);
+  const has = await env.DB.prepare('SELECT 1 FROM review_votes WHERE review_id = ? AND user_id = ?').bind(id, user.id).first();
+  if (has) await env.DB.prepare('DELETE FROM review_votes WHERE review_id = ? AND user_id = ?').bind(id, user.id).run();
+  else await env.DB.prepare('INSERT INTO review_votes (review_id, user_id) VALUES (?, ?)').bind(id, user.id).run();
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM review_votes WHERE review_id = ?').bind(id).first();
+  return json({ ok: true, uteis: n.n, meu_voto: !has });
+}
+
+async function reportReview(env, req, user, id) {
+  const b = await body(req);
+  const motivo = b && typeof b.motivo === 'string' ? b.motivo : '';
+  if (!MOTIVOS.includes(motivo)) return fail('Escolha um motivo.');
+  const r = await env.DB.prepare('SELECT user_id FROM reviews WHERE id = ?').bind(id).first();
+  if (!r) return fail('Review não encontrada.', 404);
+  if (r.user_id === user.id) return fail('Você não pode denunciar a própria review.', 403);
+  await env.DB.prepare('INSERT OR REPLACE INTO review_reports (review_id, user_id, motivo, created_at) VALUES (?, ?, ?, ?)').bind(id, user.id, motivo, now()).run();
+  return json({ ok: true });
 }
 
 // ---------- chat dos moderadores ----------
@@ -344,8 +475,9 @@ export default {
       if (req.method === 'GET') {
         if (path === '/api/me') {
           const u = await currentUser(env, req);
-          return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin }) : fail('Não autenticado.', 401);
+          return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: u.nome }) : fail('Não autenticado.', 401);
         }
+        if (path === '/api/reviews') return listReviews(env, req, url);
         if (path === '/api/authors') {
           const rows = await env.DB.prepare(
             'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'
@@ -368,13 +500,22 @@ export default {
       }
 
       if (path === '/api/register' && req.method === 'POST') return register(env, req);
+      if (path === '/api/register-leitor' && req.method === 'POST') return registerLeitor(env, req);
       if (path === '/api/login' && req.method === 'POST') return login(env, req);
       if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
 
       const user = await currentUser(env, req);
       if (!user) return fail('Faça login para continuar.', 401);
-      if (path === '/api/profile' && req.method === 'PUT') return saveProfile(env, req, user);
-      if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
+      if (path === '/api/profile' && req.method === 'PUT') return user.role === 'autor' ? saveProfile(env, req, user) : fail('Apenas autores editam perfil.', 403);
+      if (path === '/api/image' && req.method === 'POST') return user.role === 'autor' ? uploadImage(env, req, user) : fail('Apenas autores enviam imagens.', 403);
+      if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user);
+      const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
+      if (rm) {
+        const rid = Number(rm[1]);
+        if (!rm[2] && req.method === 'DELETE') return deleteReview(env, user, rid);
+        if (rm[2] === 'util' && req.method === 'POST') return toggleUtil(env, user, rid);
+        if (rm[2] === 'denunciar' && req.method === 'POST') return reportReview(env, req, user, rid);
+      }
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
       if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
       const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
