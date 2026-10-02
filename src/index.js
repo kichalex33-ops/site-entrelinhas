@@ -275,6 +275,53 @@ async function serveImage(env, id) {
   });
 }
 
+// ---------- chat dos moderadores ----------
+// is_admin = moderador. Todas as rotas de chat exigem login e moderacao.
+async function requireMod(env, req) {
+  const user = await currentUser(env, req);
+  if (!user) return { err: fail('Faça login para continuar.', 401) };
+  if (!user.is_admin) return { err: fail('Apenas moderadores acessam o chat.', 403) };
+  return { user };
+}
+
+async function listChat(env, req, url) {
+  const { user, err } = await requireMod(env, req);
+  if (err) return err;
+  const after = Math.max(0, parseInt(url.searchParams.get('after'), 10) || 0);
+  const sql =
+    'SELECT m.id, m.body, m.created_at, m.user_id, u.slug, p.data FROM chat_messages m ' +
+    'LEFT JOIN users u ON u.id = m.user_id LEFT JOIN profiles p ON p.slug = u.slug WHERE m.id > ? ';
+  // primeira carga: as ultimas 100; depois: so as novas
+  const rows = after
+    ? await env.DB.prepare(sql + 'ORDER BY m.id ASC LIMIT 100').bind(after).all()
+    : await env.DB.prepare(sql + 'ORDER BY m.id DESC LIMIT 100').bind(0).all();
+  const list = after ? rows.results : rows.results.reverse();
+  return json({
+    me: user.id,
+    messages: list.map((r) => ({
+      id: r.id, texto: r.body, em: r.created_at, meu: r.user_id === user.id,
+      autor: r.data ? JSON.parse(r.data).nome || 'Moderador' : 'Ex-moderador',
+    })),
+  });
+}
+
+async function postChat(env, req, user) {
+  if (!user.is_admin) return fail('Apenas moderadores acessam o chat.', 403);
+  const b = await body(req);
+  const texto = str(b && b.texto, 1000);
+  if (!texto) return fail('Escreva uma mensagem.');
+  const res = await env.DB.prepare('INSERT INTO chat_messages (user_id, body, created_at) VALUES (?, ?, ?)').bind(user.id, texto, now()).run();
+  // guarda so as ultimas 1000 mensagens
+  await env.DB.prepare('DELETE FROM chat_messages WHERE id <= ?').bind(res.meta.last_row_id - 1000).run();
+  return json({ ok: true, id: res.meta.last_row_id });
+}
+
+async function deleteChat(env, user, id) {
+  if (!user.is_admin) return fail('Apenas moderadores acessam o chat.', 403);
+  await env.DB.prepare('DELETE FROM chat_messages WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -290,15 +337,21 @@ export default {
       if (req.method === 'GET') {
         if (path === '/api/me') {
           const u = await currentUser(env, req);
-          return u ? json({ slug: u.slug, email: u.email }) : fail('Não autenticado.', 401);
+          return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin }) : fail('Não autenticado.', 401);
         }
         if (path === '/api/authors') {
-          const rows = await env.DB.prepare('SELECT slug, data, badges FROM profiles WHERE published = 1 ORDER BY updated_at DESC').all();
-          return json(rows.results.map((r) => {
+          const rows = await env.DB.prepare(
+            'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'
+          ).all();
+          const list = rows.results.map((r) => {
             const d = JSON.parse(r.data);
-            return { slug: r.slug, nome: d.nome, frase: d.frase, retrato: d.retrato, cor: d.cor, badges: JSON.parse(r.badges) };
-          }));
+            return { slug: r.slug, nome: d.nome, frase: d.frase, retrato: d.retrato, cor: d.cor, badges: JSON.parse(r.badges), mod: !!r.mod };
+          });
+          // moderadores sempre no topo; dentro de cada grupo, ordem alfabetica (sem diferenciar acento/caixa)
+          list.sort((a, b) => b.mod - a.mod || (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+          return json(list);
         }
+        if (path === '/api/chat') return listChat(env, req, url);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
           const p = await getProfile(env, m[1]);
@@ -316,6 +369,9 @@ export default {
       if (path === '/api/profile' && req.method === 'PUT') return saveProfile(env, req, user);
       if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
+      if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
+      const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
+      if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));
       return fail('Não encontrado.', 404);
     } catch (e) {
       return fail('Erro interno.', 500);

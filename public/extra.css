@@ -99,3 +99,18 @@ a.tab{text-decoration:none;display:inline-block}
 .cover-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .buy-row{display:flex;flex-wrap:wrap;gap:.6rem;margin:1rem 0 .8rem}
 .buy-row:empty{display:none}
+
+/* moderacao: etiqueta nos autores e chat */
+.mod-tag{display:inline-block;margin-left:.4rem;padding:.1rem .5rem;border:1px solid var(--accent);border-radius:999px;font:500 .62rem/1.4 Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);vertical-align:middle}
+.chat-box{max-width:760px;margin:1rem auto 3rem;padding:0 1rem}
+.chat-log{height:min(60vh,520px);overflow-y:auto;padding:1rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+.chat-msg{margin:0 0 .9rem;padding:.6rem .8rem;border:1px solid var(--line);border-radius:10px;max-width:85%}
+.chat-msg.mine{margin-left:auto;border-color:var(--accent);background:var(--accent-dim)}
+.chat-msg p{margin:.25rem 0 0;line-height:1.5;word-break:break-word}
+.chat-meta{display:flex;gap:.6rem;align-items:baseline;font-size:.78rem;color:var(--muted)}
+.chat-meta b{color:var(--text);font-weight:500}
+.chat-del{margin-left:auto;background:none;border:0;color:var(--muted);font:inherit;cursor:pointer;text-decoration:underline}
+.chat-del:hover{color:var(--accent)}
+.chat-form{display:flex;gap:.6rem;margin-top:.8rem;align-items:flex-end}
+.chat-form textarea{flex:1;resize:vertical;min-height:2.6rem;padding:.6rem .8rem;border:1px solid var(--line-strong);border-radius:10px;background:var(--panel);color:var(--text);font:inherit}
+.chat-note{min-height:1.2rem;margin:.5rem 0 0;font-size:.82rem;color:var(--muted)}

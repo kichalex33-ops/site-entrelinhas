@@ -61,7 +61,7 @@
     box.innerHTML = list.map(a => `
       <a class="author-card" href="autor.html?a=${encodeURIComponent(a.slug)}" style="--accent:${/^#[0-9a-f]{6}$/i.test(a.cor) ? a.cor : '#d9a94a'}">
         <div class="author-photo">${a.retrato ? `<img src="${esc(imgUrl(a.retrato))}" alt="Foto de ${esc(a.nome)}" loading="lazy">` : `<span>${initial(a.nome)}</span>`}</div>
-        <h3>${esc(a.nome)}</h3>
+        <h3>${esc(a.nome)}${a.mod ? '<span class="mod-tag">Moderação</span>' : ''}</h3>
         ${a.frase ? `<p>${esc(a.frase)}</p>` : ''}
       </a>`).join('');
   } catch (e) {

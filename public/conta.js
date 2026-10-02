@@ -5,7 +5,7 @@
   const subtitle = document.getElementById('subtitle');
   const STATUS = ['Publicado', 'Em desenvolvimento', 'Em escrita', 'Revisão', 'Em breve'];
   const FUNDOS = [['preto', 'Preto'], ['azul', 'Azul noite'], ['vinho', 'Vinho'], ['verde', 'Verde escuro'], ['grafite', 'Grafite']];
-  let P = null, slug = '';
+  let P = null, slug = '', isMod = false;
 
   const field = (label, html) => `<label class="fld"><span>${label}</span>${html}</label>`;
   const input = (path, val, extra = '') => `<input data-k="${path}" value="${esc(val)}" ${extra}>`;
@@ -59,6 +59,7 @@
     app.innerHTML = `
       <div class="bar">
         <a class="btn btn-ghost" href="autor.html?a=${encodeURIComponent(slug)}" target="_blank" rel="noopener">Ver minha página pública</a>
+        ${isMod ? '<a class="btn btn-ghost" href="chat.html">Chat da moderação</a>' : ''}
         <button class="btn btn-ghost" id="logout" type="button">Sair</button>
       </div>
       <form id="ed" class="ed-form" autocomplete="off">
@@ -194,7 +195,7 @@
   async function load(){
     try {
       const me = await api('/api/me');
-      slug = me.slug;
+      slug = me.slug; isMod = !!me.mod;
       const p = await api('/api/profile/' + slug);
       P = p.data; editorView();
     } catch (e) { authView('login'); }
