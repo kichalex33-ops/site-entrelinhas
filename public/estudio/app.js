@@ -182,6 +182,9 @@ function montarWorkspace() {
     onChange: () => { const d = docAtivo(); if (d) { saver.marcar(d); renderAbas(); } },
     onStats: (s) => { E.stats.textContent = `Palavras: ${milhar(s.palavras)} · Caracteres: ${milhar(s.caracteres)}`; atualizarContextoStats(s); },
     onActive: (info) => { for (const b of E.toolbar.querySelectorAll('[data-cmd]')) b.setAttribute('aria-pressed', info[b.dataset.cmd] ? 'true' : 'false'); },
+    onLinkQuery: aoConsultaLink, linkAberto: () => !!pop, onLinkTecla: teclaPopLink,
+    existeTitulo: (t) => S.itens.some((i) => i.tipo === 'doc' && norm(i.titulo) === norm(t)),
+    onAbrirLink: abrirPorTitulo,
   });
   saver = criarSalvador({
     obraId: S.obraId,
@@ -193,6 +196,7 @@ function montarWorkspace() {
       if (it) { it.versao = r.versao; it.palavras = r.palavras; it.titulo = doc.titulo; it.doc_tipo = doc.tipo; }
       const ht = hashtagsDe(corpo); // #hashtags do texto mudaram? atualiza as tags vindas do servidor
       if (JSON.stringify(ht) !== JSON.stringify(doc.tagsTexto)) { doc.tagsTexto = ht; recarregarTags(); } else renderContexto();
+      agendarConexoes(600);
     },
   });
   renderExplorador(); renderAbas(); renderContexto();
@@ -245,14 +249,14 @@ function ativar(id) {
   const anterior = docAtivo();
   if (anterior && anterior.id !== id) guardarAtivo();
   const doc = S.docs.get(id); if (!doc) return;
-  S.ativa = id;
+  S.ativa = id; fecharPop();
   E.vazio.hidden = true;
   E.edDocbar.hidden = false; E.toolbar.hidden = false;
   E.titulo.value = doc.titulo; E.tipo.value = doc.tipo;
   mostrarModo(doc);
   history.replaceState(null, '', `#/obra/${S.obraId}/${id}`);
   lsSet(`estudio:abas:${S.obraId}`, { abas: S.abas, ativa: id });
-  renderAbas(); renderExplorador(); renderContexto();
+  renderAbas(); renderExplorador(); renderContexto(); agendarConexoes(0);
 }
 
 function mostrarModo(doc) {
@@ -392,6 +396,7 @@ function renderExplorador() {
     nivel(null, 1),
     h('p', { class: 'hint st-exp-dica' }, 'Arraste para reorganizar. F2 renomeia, Delete envia para a lixeira.'));
   if (foco) { const el = E.explorador.querySelector(`[data-id="${foco}"]`); if (el) el.focus(); }
+  agendarDecoracao();
 }
 
 function no(it, n) {
@@ -574,6 +579,7 @@ function renderContexto() {
         linha('Versão salva', `v${d.versao}`), d.atualizadoEm ? linha('Última gravação', dataHora(d.atualizadoEm)) : null))
       : h('p', { class: 'hint' }, 'Abra um documento para ver as propriedades.'),
     d ? secaoTags(d) : null,
+    d ? secaoConexoes(d) : null,
     h('section', { 'aria-labelledby': 'ctx-obra' }, h('h3', { id: 'ctx-obra' }, 'A obra'),
       h('dl', { class: 'st-props' },
         linha('Manuscrito', `${milhar(total)} palavras`),
@@ -663,6 +669,101 @@ function atalhos(e) {
   else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!document.querySelector('dialog[open]')) abrirBuscaObra(); }
   else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') { e.preventDefault(); if (!document.querySelector('dialog[open]')) abrirPaleta(ctxPaleta(), comandos()); }
   else if (e.key === 'Escape' && document.body.classList.contains('st-foco') && !document.querySelector('dialog[open]')) alternarFoco();
+}
+
+// ============================================================== links internos [[...]]
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const docPorTitulo = (t) => S.itens.filter((i) => i.tipo === 'doc' && norm(i.titulo) === norm(t)).sort((a, b) => (b.atualizado_em || 0) - (a.atualizado_em || 0))[0] || null;
+
+let decoracaoTimer = null;
+function agendarDecoracao() { clearTimeout(decoracaoTimer); decoracaoTimer = setTimeout(() => { if (ed) ed.atualizarLinks(); }, 120); }
+
+// ---- popup de autocompletar ao digitar [[
+let pop = null, popItens = [], popSel = 0, popQ = null;
+function fecharPop() { if (pop) { pop.remove(); pop = null; } popItens = []; popQ = null; }
+function aoConsultaLink(q) {
+  if (!q || !S) return fecharPop();
+  popQ = q;
+  const nq = norm(q.consulta);
+  const docs = S.itens.filter((i) => i.tipo === 'doc' && i.id !== S.ativa && norm(i.titulo).includes(nq))
+    .sort((a, b) => (norm(b.titulo).startsWith(nq) ? 1 : 0) - (norm(a.titulo).startsWith(nq) ? 1 : 0) || a.titulo.localeCompare(b.titulo, 'pt-BR')).slice(0, 8);
+  popItens = docs.map((d) => ({ titulo: d.titulo, tipo: d.doc_tipo }));
+  if (q.consulta.trim() && !S.itens.some((i) => i.tipo === 'doc' && norm(i.titulo) === nq)) popItens.push({ titulo: q.consulta.trim(), criar: true });
+  if (!popItens.length) { if (pop) { pop.remove(); pop = null; } return; }
+  popSel = Math.min(popSel, popItens.length - 1);
+  desenharPop();
+}
+function desenharPop() {
+  if (!pop) { pop = h('div', { class: 'st-link-pop', role: 'listbox', 'aria-label': 'Documentos para linkar' }); document.body.append(pop); }
+  pop.replaceChildren(...popItens.map((it, i) => h('div', { role: 'option', id: 'st-lk-' + i, class: 'st-link-op' + (i === popSel ? ' sel' : ''), 'aria-selected': i === popSel ? 'true' : 'false',
+    onmousedown: (e) => { e.preventDefault(); escolherPopLink(i); } },
+    it.criar ? [h('span', null, 'Criar “' + it.titulo + '”'), h('small', null, 'novo documento')] : [h('span', null, it.titulo), h('small', null, TIPOS_DOC[it.tipo] || '')])));
+  const c = popQ.coords;
+  pop.style.left = Math.max(8, Math.min(c.left, window.innerWidth - 300)) + 'px';
+  pop.style.top = Math.min(c.bottom + 6, window.innerHeight - pop.offsetHeight - 8) + 'px';
+}
+function teclaPopLink(tecla) {
+  if (!pop) return false;
+  if (tecla === 'ArrowDown') { popSel = (popSel + 1) % popItens.length; desenharPop(); }
+  else if (tecla === 'ArrowUp') { popSel = (popSel - 1 + popItens.length) % popItens.length; desenharPop(); }
+  else if (tecla === 'Escape') { fecharPop(); ed.cancelarLink(); }
+  else escolherPopLink(popSel); // Enter ou Tab
+  return true;
+}
+async function escolherPopLink(i) {
+  const it = popItens[i]; if (!it) return;
+  ed.confirmarLink(it.titulo); fecharPop();
+  if (it.criar) await criarNotaParaLink(it.titulo); // o link ja esta no texto; o destino nasce em seguida
+}
+
+async function criarNotaParaLink(titulo) {
+  const pasta = pastaDe('ideias');
+  try {
+    const r = await api.criarDoc(S.obraId, { pai: pasta ? pasta.id : null, doc_tipo: 'nota', titulo, corpo: '' });
+    S.itens.push({ id: r.id, pai: pasta ? pasta.id : null, tipo: 'doc', doc_tipo: 'nota', titulo, posicao: r.posicao, versao: 1, palavras: 0, tags: [] });
+    if (pasta) S.expandidas.add(pasta.id);
+    renderExplorador(); agendarConexoes(0); avisar('Criamos o documento “' + titulo + '”' + (pasta ? ' em Ideias' : '') + '.');
+    return r.id;
+  } catch (e) { dialogo({ titulo: 'Não foi possível criar o documento', corpo: h('p', null, e.message) }); return null; }
+}
+
+async function abrirPorTitulo(titulo) {
+  const d = docPorTitulo(titulo);
+  if (d) return abrirDoc(d.id);
+  if (await confirmar('Esse documento ainda não existe', 'Criar “' + titulo + '” agora e abrir?', 'Criar e abrir')) {
+    const id = await criarNotaParaLink(titulo);
+    if (id) abrirDoc(id);
+  }
+}
+
+// ---- painel de conexoes (links desta nota e backlinks)
+let conexoesTimer = null;
+function agendarConexoes(ms) { clearTimeout(conexoesTimer); conexoesTimer = setTimeout(carregarConexoes, ms); }
+async function carregarConexoes() {
+  const d = docAtivo(); if (!S || !d) return;
+  const alvo = d.id; S.conexReq = (S.conexReq || 0) + 1; const n = S.conexReq;
+  try {
+    const r = await api.links(S.obraId, alvo);
+    if (!S || n !== S.conexReq || S.ativa !== alvo) return;
+    S.conex = { docId: alvo, saem: r.saem, entram: r.entram };
+  } catch { return; }
+  renderContexto();
+}
+function secaoConexoes(d) {
+  const L = S.conex && S.conex.docId === d.id ? S.conex : null;
+  const abrirBtn = (id, titulo, tipo) => h('button', { type: 'button', class: 'st-lk', onclick: () => abrirDoc(id) }, h('span', null, titulo), h('small', null, TIPOS_DOC[tipo] || ''));
+  return h('section', { 'aria-labelledby': 'ctx-conex' }, h('h3', { id: 'ctx-conex' }, 'Conexões'),
+    h('h4', { class: 'st-sub' }, 'Esta nota é mencionada em'),
+    !L ? h('p', { class: 'hint' }, 'Carregando...')
+      : L.entram.length ? h('ul', { class: 'st-lista-links' }, L.entram.map((x) => h('li', null, abrirBtn(x.id, x.titulo, x.doc_tipo))))
+        : h('p', { class: 'hint' }, 'Nenhuma menção ainda.'),
+    h('h4', { class: 'st-sub' }, 'Links desta nota'),
+    !L ? null
+      : L.saem.length ? h('ul', { class: 'st-lista-links' }, L.saem.map((x) => h('li', null,
+        x.destino ? abrirBtn(x.destino.id, x.destino.titulo, x.destino.doc_tipo)
+          : h('span', { class: 'st-lk quebrado' }, h('span', null, x.titulo), h('small', null, 'não existe'),
+            h('button', { type: 'button', class: 'st-mini', title: 'Criar este documento', 'aria-label': 'Criar o documento ' + x.titulo, onclick: async () => { await criarNotaParaLink(x.titulo); } }, 'criar')))))
+        : h('p', { class: 'hint' }, 'Escreva [[ para linkar outro documento da obra.'));
 }
 
 // ============================================================== tags, busca e paleta

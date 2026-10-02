@@ -191,3 +191,19 @@ body.st-foco .st-status { background: transparent; border-top-color: transparent
 .st-tag-campo { font-size: .85rem; padding: .35rem .6rem; }
 .st-filtro { display: grid; gap: .2rem; margin: 0 0 .6rem; font-size: .75rem; color: var(--muted); }
 .st-filtro select { background: var(--bg); color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px; padding: .3rem .5rem; font: inherit; font-size: .82rem; }
+
+/* ---------- links internos [[...]] ---------- */
+.estudio-prosa .st-wikilink { color: var(--accent); background: var(--accent-dim); border-radius: 4px; padding: 0 .3em; cursor: pointer; border-bottom: 1px dotted var(--accent); white-space: normal; }
+.estudio-prosa .st-wikilink:hover { background: rgba(217,169,74,.28); }
+.estudio-prosa .st-wikilink.quebrado { color: #ff8a80; background: rgba(255,138,128,.1); border-bottom: 1px dashed #ff8a80; }
+.estudio-prosa .st-wikilink.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+.st-link-pop { position: fixed; z-index: 70; min-width: 240px; max-width: 320px; background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 10px; padding: .3rem; box-shadow: 0 10px 30px rgba(0,0,0,.65); }
+.st-link-op { display: flex; justify-content: space-between; gap: .8rem; align-items: baseline; padding: .4rem .6rem; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+.st-link-op small { color: var(--muted); font-size: .72rem; }
+.st-link-op.sel { background: var(--accent-dim); outline: 1px solid var(--accent); }
+.st-sub { font-size: .75rem; color: var(--muted); font-weight: 400; margin: .7rem 0 .3rem; text-transform: uppercase; letter-spacing: .06em; }
+.st-lista-links { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
+.st-lk { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: .5rem; background: none; border: 0; color: var(--text); text-align: left; padding: .3rem .4rem; border-radius: 6px; cursor: pointer; font: inherit; font-size: .88rem; }
+button.st-lk:hover, button.st-lk:focus-visible { background: var(--accent-dim); }
+.st-lk small { color: var(--muted); font-size: .72rem; }
+.st-lk.quebrado { cursor: default; color: #ff8a80; }

@@ -57,3 +57,37 @@ test('links: so http(s) e mailto', () => {
   assert.ok(urlSegura('https://x.com') && urlSegura('http://x.com') && urlSegura('mailto:a@b.com'));
   for (const ruim of ['javascript:alert(1)', 'data:text/html,x', 'vbscript:x', '//evil.com', 'ftp://x', '']) assert.equal(urlSegura(ruim), false, ruim);
 });
+
+// ---------- links internos [[...]] ----------
+const nosLink = (md) => { const out = []; parseMarkdown(md).descendants((n) => { if (n.type.name === 'wikilink') out.push(n.attrs); }); return out; };
+
+test('[[link]] vira um no e volta exatamente como [[link]] (sem escapar colchetes)', () => {
+  const md = 'Falei com [[Kayla]] e depois com [[Casa de Kayla]], tarde demais.';
+  assert.deepEqual(nosLink(md).map((a) => a.titulo), ['Kayla', 'Casa de Kayla']);
+  assert.equal(ida(md), md);
+});
+
+test('alias [[Titulo|texto]] e links dentro de negrito, listas e citacoes', () => {
+  const md = '**Ver [[Max|o amigo]]**\n\n* item com [[Regra dos Nomes]]\n\n> citação sobre [[Rio]]';
+  const nos = nosLink(md);
+  assert.deepEqual(nos.map((a) => [a.titulo, a.alias]), [['Max', 'o amigo'], ['Regra dos Nomes', null], ['Rio', null]]);
+  const out = ida(md);
+  for (const t of ['[[Max|o amigo]]', '[[Regra dos Nomes]]', '[[Rio]]']) assert.ok(out.includes(t), `${t}\n${out}`);
+  assert.equal(ida(out), out, 'estavel');
+});
+
+test('colchetes que nao formam link continuam texto e a conversao e estavel', () => {
+  const md = 'Texto [[sem fim e [[a\nb]] e [[]] e [[ ]] e [link](https://x.com)';
+  assert.equal(nosLink(md).length, 0);
+  const um = ida(md);
+  assert.equal(ida(um), um);
+  assert.ok(um.includes('[link](https://x.com)'), 'link comum de Markdown preservado');
+});
+
+test('[[...]] dentro de codigo nao vira link', () => {
+  assert.equal(nosLink('Use `[[Kayla]]` assim.\n\n```\n[[Max]]\n```').length, 0);
+});
+
+test('o titulo do link conta como palavra nas estatisticas', () => {
+  assert.equal(statsOf(parseMarkdown('Olhou [[Casa de Kayla]] ontem')).palavras, 5);
+});

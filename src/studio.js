@@ -124,6 +124,7 @@ export async function studioApi(req, env, url, user, h) {
     if (action === 'restore') return restoreDoc(env, work, docId, h);
   }
   if (parts.length === 5 && action === 'tags' && m === 'PUT') return setTags(env, req, work, docId, h);
+  if (parts.length === 5 && action === 'links' && m === 'GET') return getLinks(env, work, docId, json, fail);
   return fail('Não encontrado.', 404);
 }
 
@@ -385,6 +386,32 @@ async function duplicateDoc(env, work, docId, h, newId) {
   await env.DB.prepare("INSERT OR IGNORE INTO studio_doc_tags (doc_id, work_id, tag, origem) SELECT ?, work_id, tag, origem FROM studio_doc_tags WHERE doc_id = ? AND origem = 'manual'").bind(id, docId).run();
   await env.DB.prepare('UPDATE studio_works SET updated_at = ? WHERE id = ?').bind(t, work.id).run();
   return h.json({ ok: true, id, posicao: pos, versao: 1 }, 201);
+}
+
+// ---------------------------------------------------------------- links internos [[...]]
+// "saem": links escritos neste documento (com o destino, se existir); "entram": documentos que citam este (backlinks).
+// A resolucao e por titulo normalizado, entao criar, renomear ou restaurar o destino conserta o link sozinho.
+async function getLinks(env, work, docId, json, fail) {
+  const d = await env.DB.prepare("SELECT id, title FROM studio_docs WHERE id = ? AND work_id = ? AND kind = 'doc' AND deleted_at IS NULL").bind(docId, work.id).first();
+  if (!d) return fail('Documento não encontrado.', 404);
+  const saem = await env.DB.prepare(
+    'SELECT l.to_title, l.to_norm, d2.id AS did, d2.title AS dtitle, d2.doc_type AS dtipo FROM studio_links l ' +
+    'LEFT JOIN studio_search s2 ON s2.work_id = l.work_id AND s2.norm_title = l.to_norm ' +
+    "LEFT JOIN studio_docs d2 ON d2.id = s2.doc_id AND d2.deleted_at IS NULL AND d2.kind = 'doc' " +
+    'WHERE l.from_doc = ? AND l.work_id = ? ORDER BY l.to_title, d2.updated_at DESC'
+  ).bind(docId, work.id).all();
+  const vistos = new Set(), listaSaem = [];
+  for (const r of saem.results) {
+    if (vistos.has(r.to_norm)) continue; // titulo repetido na obra: usa o mais recente
+    vistos.add(r.to_norm);
+    listaSaem.push({ titulo: r.to_title, destino: r.did && r.did !== docId ? { id: r.did, titulo: r.dtitle, doc_tipo: r.dtipo } : r.did ? { id: r.did, titulo: r.dtitle, doc_tipo: r.dtipo, proprio: true } : null });
+  }
+  const entram = await env.DB.prepare(
+    'SELECT d3.id, d3.title, d3.doc_type FROM studio_links l ' +
+    "JOIN studio_docs d3 ON d3.id = l.from_doc AND d3.deleted_at IS NULL AND d3.work_id = l.work_id " +
+    'WHERE l.work_id = ? AND l.from_doc != ? AND l.to_norm = (SELECT norm_title FROM studio_search WHERE doc_id = ?) ORDER BY d3.title'
+  ).bind(work.id, docId, docId).all();
+  return json({ saem: listaSaem, entram: entram.results.map((r) => ({ id: r.id, titulo: r.title, doc_tipo: r.doc_type })) });
 }
 
 // ---------------------------------------------------------------- tags e busca

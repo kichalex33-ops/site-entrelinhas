@@ -1,24 +1,62 @@
 // Editor do Estudio Entrelinhas: ProseMirror com Markdown como formato persistente.
 // Este arquivo e a FONTE; o resultado empacotado fica em public/vendor/estudio-editor.js (npm run build:editor).
-import { EditorState, TextSelection } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
+import { EditorState, TextSelection, Plugin, PluginKey } from 'prosemirror-state';
+import { EditorView, Decoration, DecorationSet } from 'prosemirror-view';
+import { Schema } from 'prosemirror-model';
+import markdownit from 'markdown-it';
 import { history, undo, redo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap, toggleMark, setBlockType, wrapIn, chainCommands, exitCode, lift } from 'prosemirror-commands';
 import { wrapInList, splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
 import { inputRules, wrappingInputRule, textblockTypeInputRule, InputRule } from 'prosemirror-inputrules';
-import { schema, defaultMarkdownParser, defaultMarkdownSerializer } from 'prosemirror-markdown';
+import { schema as esquemaBase, defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
+
+// ---------- esquema: o esquema padrao de Markdown + link interno [[Titulo]] (no inline, atomico) ----------
+const noWikilink = {
+  inline: true, group: 'inline', atom: true, selectable: true, draggable: false,
+  attrs: { titulo: {}, alias: { default: null } },
+  leafText: (n) => n.attrs.alias || n.attrs.titulo, // conta como texto nas estatisticas
+  toDOM: (n) => ['span', { class: 'st-wikilink', 'data-titulo': n.attrs.titulo, title: 'Link interno: ' + n.attrs.titulo }, n.attrs.alias || n.attrs.titulo],
+  parseDOM: [{ tag: 'span.st-wikilink', getAttrs: (dom) => ({ titulo: dom.getAttribute('data-titulo') || dom.textContent, alias: null }) }],
+};
+export const schema = new Schema({ nodes: esquemaBase.spec.nodes.addToEnd('wikilink', noWikilink), marks: esquemaBase.spec.marks });
+
+// markdown-it: reconhece [[Titulo]] e [[Titulo|alias]] antes do tratamento de links comuns
+function pluginWikilink(md) {
+  md.inline.ruler.before('link', 'wikilink', (state, silent) => {
+    const src = state.src, pos = state.pos;
+    if (src.charCodeAt(pos) !== 0x5b || src.charCodeAt(pos + 1) !== 0x5b) return false;
+    const fim = src.indexOf(']]', pos + 2);
+    if (fim < 0) return false;
+    const dentro = src.slice(pos + 2, fim);
+    if (!dentro || dentro.length > 150 || /[\n\[\]]/.test(dentro)) return false;
+    const [titulo, ...resto] = dentro.split('|');
+    if (!titulo.trim()) return false; // valida ANTES de criar o token
+    if (!silent) {
+      const tok = state.push('wikilink', '', 0);
+      tok.content = titulo.trim(); tok.meta = { alias: resto.length ? resto.join('|').trim() : null };
+    }
+    state.pos = fim + 2;
+    return true;
+  });
+}
+const mdIt = markdownit('commonmark', { html: false }).use(pluginWikilink);
+const parser = new MarkdownParser(schema, mdIt, { ...defaultMarkdownParser.tokens, wikilink: { node: 'wikilink', getAttrs: (t) => ({ titulo: t.content, alias: (t.meta && t.meta.alias) || null }) } });
+const serializer = new MarkdownSerializer({
+  ...defaultMarkdownSerializer.nodes,
+  wikilink(state, node) { state.write('[[' + node.attrs.titulo + (node.attrs.alias ? '|' + node.attrs.alias : '') + ']]'); }, // sem escapar
+}, defaultMarkdownSerializer.marks);
 
 const { strong, em, link } = schema.marks;
 const { paragraph, heading, blockquote, bullet_list, ordered_list, list_item, horizontal_rule, hard_break } = schema.nodes;
 
 // ---------- Markdown <-> documento ----------
-export const parseMarkdown = (md) => defaultMarkdownParser.parse(md || '') || schema.node('doc', null, [paragraph.create()]);
-export const serializeMarkdown = (doc) => defaultMarkdownSerializer.serialize(doc, { tightLists: true });
+export const parseMarkdown = (md) => parser.parse(md || '') || schema.node('doc', null, [paragraph.create()]);
+export const serializeMarkdown = (doc) => serializer.serialize(doc, { tightLists: true });
 
 const WORD_RE = /[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu;
 export function statsOf(doc) {
-  const text = doc.textBetween(0, doc.content.size, '\n', ' ');
+  const text = doc.textBetween(0, doc.content.size, '\n', (n) => (n.type.spec.leafText ? n.type.spec.leafText(n) : ' '));
   return { palavras: (text.match(WORD_RE) || []).length, caracteres: text.replace(/\n/g, '').length };
 }
 
@@ -44,6 +82,7 @@ function markRule(re, markType) {
 
 const rules = inputRules({
   rules: [
+    new InputRule(/\[\[([^\[\]\n|]{1,120})\]\]$/, (state, m, start, end) => state.tr.replaceWith(start, end, schema.nodes.wikilink.create({ titulo: m[1].trim() }))),
     textblockTypeInputRule(/^(#{1,3})\s$/, heading, (m) => ({ level: m[1].length })),
     wrappingInputRule(/^\s*>\s$/, blockquote),
     wrappingInputRule(/^\s*([-+*])\s$/, bullet_list),
@@ -127,12 +166,65 @@ function activeInfo(state) {
   };
 }
 
+// ---------- links internos: autocompletar ao digitar [[, destaque de quebrados e clique ----------
+const CONSULTA_RE = /\[\[([^\[\]\n|]{0,60})$/;
+function consultaDeLink(state) {
+  const { selection } = state;
+  if (!selection.empty) return null;
+  const { $from } = selection;
+  if (!$from.parent.isTextblock || $from.parent.type === schema.nodes.code_block) return null;
+  const antes = $from.parent.textBetween(0, $from.parentOffset, undefined, '￼');
+  const m = antes.match(CONSULTA_RE);
+  return m ? { consulta: m[1], de: $from.pos - m[0].length, ate: $from.pos } : null;
+}
+function decorarLinks(doc, opts) {
+  const lista = [];
+  doc.descendants((n, pos) => {
+    if (n.type === schema.nodes.wikilink) lista.push(Decoration.node(pos, pos + n.nodeSize, { class: !opts.existeTitulo || opts.existeTitulo(n.attrs.titulo) ? 'ok' : 'quebrado' }));
+  });
+  return DecorationSet.create(doc, lista);
+}
+const chaveLinks = new PluginKey('links');
+const pluginLinks = (opts) => new Plugin({
+  key: chaveLinks,
+  state: {
+    init: (_, st) => decorarLinks(st.doc, opts),
+    apply: (tr, antigo, _estado, novo) => (tr.docChanged || tr.getMeta('links') ? decorarLinks(novo.doc, opts) : antigo.map(tr.mapping, novo.doc)),
+  },
+  props: {
+    decorations(state) { return chaveLinks.getState(state); },
+    handleKeyDown(_view, e) {
+      if (opts.linkAberto && opts.linkAberto() && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) { e.preventDefault(); return !!opts.onLinkTecla(e.key); }
+      return false;
+    },
+    handleClickOn(_view, _pos, node) {
+      if (node.type === schema.nodes.wikilink && opts.onAbrirLink) { opts.onAbrirLink(node.attrs.titulo); return true; }
+      return false;
+    },
+  },
+  view: () => {
+    let ultimo = '';
+    return {
+      update(view) {
+        const q = consultaDeLink(view.state);
+        const chave = q ? q.consulta + '@' + q.de : '';
+        if (chave === ultimo) return;
+        ultimo = chave;
+        if (opts.onLinkQuery) opts.onLinkQuery(q ? { ...q, coords: view.coordsAtPos(q.ate) } : null);
+      },
+    };
+  },
+});
+
 // ---------- editor ----------
 // opcoes: { mount, markdown, onChange(md|null), onStats({palavras,caracteres}), onActive(info), onSelection, editable }
 export function createEditor(opts) {
+  let ultimaConsulta = null;
+  const opcoesLinks = { ...opts, onLinkQuery: (q) => { ultimaConsulta = q; if (opts.onLinkQuery) opts.onLinkQuery(q); } };
   const plugins = [
     rules,
     history(),
+    pluginLinks(opcoesLinks),
     keymap({
       'Mod-z': undo, 'Mod-y': redo, 'Shift-Mod-z': redo,
       'Mod-b': COMMANDS.negrito, 'Mod-i': COMMANDS.italico,
@@ -180,6 +272,14 @@ export function createEditor(opts) {
       view.focus();
       return ok;
     },
+    // troca o "[[consulta" digitado por um link para `titulo`
+    confirmarLink(titulo) {
+      const q = ultimaConsulta; if (!q) return false;
+      view.dispatch(view.state.tr.replaceWith(q.de, q.ate, schema.nodes.wikilink.create({ titulo })).scrollIntoView());
+      view.focus(); return true;
+    },
+    cancelarLink() { ultimaConsulta = null; },
+    atualizarLinks() { view.dispatch(view.state.tr.setMeta('links', true)); },
     selectedText: () => { const { from, to } = view.state.selection; return view.state.doc.textBetween(from, to, ' '); },
     insertText(texto) { view.dispatch(view.state.tr.insertText(texto).scrollIntoView()); view.focus(); },
     focus: () => view.focus(),
