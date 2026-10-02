@@ -228,9 +228,11 @@ async function changePassword(env, req, user) {
 }
 
 async function getProfile(env, slug) {
-  const p = await env.DB.prepare('SELECT slug, data, badges, published FROM profiles WHERE slug = ?').bind(slug).first();
+  const p = await env.DB.prepare(
+    'SELECT p.slug, p.data, p.badges, p.published, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.slug = ?'
+  ).bind(slug).first();
   if (!p || !p.published) return null;
-  return { slug: p.slug, data: JSON.parse(p.data), badges: JSON.parse(p.badges) };
+  return { slug: p.slug, data: JSON.parse(p.data), badges: JSON.parse(p.badges), mod: !!p.mod };
 }
 
 async function saveProfile(env, req, user) {
