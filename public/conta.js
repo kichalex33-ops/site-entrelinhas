@@ -12,8 +12,26 @@
   const area = (path, val, rows = 4, max = 4000) => `<textarea data-k="${path}" rows="${rows}" maxlength="${max}">${esc(val)}</textarea>`;
   const note = (t, ok) => `<p class="note ${ok ? 'ok' : 'err'}" role="status">${esc(t)}</p>`;
 
+  // ---------- captcha (Turnstile) no cadastro de leitor ----------
+  let tsId = null;
+  async function mountTurnstile(){
+    const box = document.getElementById('tsBox');
+    if (!box) return;
+    let cfg;
+    try { cfg = await api('/api/config'); } catch (e) { return; }
+    if (!cfg.turnstile) return; // sem chave (ambiente local): sem captcha
+    await new Promise((ok, no) => {
+      if (window.turnstile) return ok();
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true; s.onload = ok; s.onerror = no; document.head.appendChild(s);
+    }).catch(() => {});
+    if (window.turnstile) tsId = window.turnstile.render(box, { sitekey: cfg.turnstile, theme: 'dark', language: 'pt-br' });
+  }
+
   // ---------- login / cadastro ----------
   function authView(mode){
+    tsId = null;
     subtitle.textContent = mode === 'leitor' ? 'Crie uma conta de leitor para avaliar obras.' : 'Entre para editar a sua página pública ou avaliar obras.';
     app.innerHTML = `
       <div class="auth-box">
@@ -27,6 +45,7 @@
           ${mode === 'leitor' ? field('Seu nome (aparece nas suas avaliações)', '<input name="nome" maxlength="40" minlength="2" required autocomplete="nickname">') : ''}
           ${field('E-mail', '<input name="email" type="email" required autocomplete="email">')}
           ${field('Senha' + (mode !== 'login' ? ' (mínimo 10 caracteres)' : ''), `<input name="senha" type="password" required minlength="${mode !== 'login' ? 10 : 1}" autocomplete="${mode !== 'login' ? 'new-password' : 'current-password'}">`)}
+          ${mode === 'leitor' ? '<div id="tsBox" style="margin:.4rem 0"></div>' : ''}
           <button class="btn btn-primary" type="submit">${mode === 'login' ? 'Entrar' : mode === 'leitor' ? 'Criar conta de leitor' : 'Criar conta de autor'}</button>
           <div id="authNote"></div>
         </form>
@@ -37,15 +56,18 @@
           : 'Esqueceu a senha? Peça ao coletivo para redefinir.'}</p>
       </div>`;
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => authView(b.dataset.mode)));
+    if (mode === 'leitor') mountTurnstile();
     document.getElementById('authForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
+      if (mode === 'leitor' && tsId !== null && window.turnstile) f.turnstile = window.turnstile.getResponse(tsId);
       const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
       try {
         await api('/api/' + (mode === 'leitor' ? 'register-leitor' : mode), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) });
         await load();
       } catch (err) {
         document.getElementById('authNote').innerHTML = note(err.message);
+        if (tsId !== null && window.turnstile) window.turnstile.reset(tsId);
         btn.disabled = false;
       }
     });

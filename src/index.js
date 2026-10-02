@@ -199,6 +199,21 @@ async function register(env, req) {
   return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, userId) });
 }
 
+// Turnstile (captcha do Cloudflare). So e exigido quando o segredo esta configurado (producao);
+// sem ele (desenvolvimento local) o cadastro segue sem captcha.
+async function turnstileOk(env, token, ip) {
+  if (!env.TURNSTILE_SECRET) return true;
+  if (typeof token !== 'string' || !token || token.length > 2048) return false;
+  try {
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }),
+    });
+    const d = await r.json();
+    return d.success === true;
+  } catch { return false; }
+}
+
 // cadastro aberto de leitor: sem convite, sem perfil publico. Cada cadastro conta no limite por IP.
 async function registerLeitor(env, req) {
   const b = await body(req);
@@ -206,6 +221,7 @@ async function registerLeitor(env, req) {
   const ip = req.headers.get('CF-Connecting-IP') || 'x';
   const key = 'rl|' + ip;
   if (await tooManyFails(env, key)) return fail('Muitas tentativas. Tente de novo mais tarde.', 429);
+  if (!(await turnstileOk(env, b.turnstile, ip))) return fail('Confirme que você não é um robô e tente de novo.', 400);
 
   const email = str(b.email, 254).toLowerCase();
   const senha = typeof b.senha === 'string' ? b.senha : '';
@@ -465,6 +481,12 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname;
 
+    // www.dominio -> dominio (redirecionamento permanente, preserva caminho e parametros)
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
+
     if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
     if (!path.startsWith('/api/')) return env.ASSETS.fetch(req);
 
@@ -478,6 +500,8 @@ export default {
           return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: u.nome }) : fail('Não autenticado.', 401);
         }
         if (path === '/api/reviews') return listReviews(env, req, url);
+        // configuracao publica para o navegador (a chave do captcha nao e segredo)
+        if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null });
         if (path === '/api/authors') {
           const rows = await env.DB.prepare(
             'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'
