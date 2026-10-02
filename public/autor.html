@@ -66,7 +66,7 @@
   root.innerHTML = `
   <section class="page active" id="perfil">
     <div class="profile">
-      <div class="profile-photo${p.mod ? ' is-mod' : ''}">${d.retrato ? `<img src="${esc(imgUrl(d.retrato))}" alt="Foto de ${esc(d.nome)}">` : `<div class="typo" style="aspect-ratio:3/4">${initial(d.nome)}</div>`}${p.mod ? '<span class="mod-seal">&#9733; Moderador</span>' : ''}</div>
+      <div class="profile-photo${p.mod ? ' is-mod' : ''}">${d.retrato ? `<img src="${esc(imgUrl(d.retrato))}" alt="Foto de ${esc(d.nome)}">` : `<div class="typo" style="aspect-ratio:3/4">${initial(d.nome)}</div>`}${p.mod ? '<span class="mod-seal">&#9733; Moderador e Idealizador do projeto</span>' : ''}</div>
       <div class="profile-text">
         <span class="eyebrow">Perfil do autor${d.local ? ' · ' + esc(d.local) : ''}</span>
         <h2>${esc(d.nome)}</h2>

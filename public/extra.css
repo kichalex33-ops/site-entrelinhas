@@ -119,4 +119,4 @@ a.tab{text-decoration:none;display:inline-block}
 .is-mod .author-photo{border-color:#e6b422;box-shadow:0 0 0 3px rgba(230,180,34,.18),0 0 22px rgba(230,180,34,.35)}
 .profile-photo{position:relative}
 .profile-photo.is-mod img{border:2px solid #e6b422;box-shadow:0 0 0 3px rgba(230,180,34,.18),0 0 26px rgba(230,180,34,.3)}
-.mod-seal{position:absolute;left:50%;bottom:-.55rem;transform:translateX(-50%);white-space:nowrap;padding:.18rem .65rem;border-radius:999px;background:linear-gradient(135deg,#f6d365,#e6b422 55%,#b8860b);color:#1a1300;font:600 .66rem/1.4 Inter,sans-serif;letter-spacing:.09em;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.mod-seal{position:absolute;left:50%;bottom:-.7rem;transform:translateX(-50%);width:max-content;max-width:190px;text-align:center;white-space:normal;padding:.18rem .65rem;border-radius:999px;background:linear-gradient(135deg,#f6d365,#e6b422 55%,#b8860b);color:#1a1300;font:600 .66rem/1.4 Inter,sans-serif;letter-spacing:.09em;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,.5)}
