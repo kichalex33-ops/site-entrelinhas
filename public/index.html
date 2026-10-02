@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrelinhas | Coletivo de escritores independentes</title>
+<meta name="description" content="Entrelinhas, coletivo de escritores independentes: livros, projetos em andamento e notícias assinadas pelos autores.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <h1>ENTRE<b>LINHAS</b></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-target="home">Início</button>
+    <button class="tab" data-target="biblioteca">Biblioteca</button>
+    <button class="tab" data-target="lancamentos">Lançamentos</button>
+    <button class="tab" data-target="projetos">Projetos</button>
+    <button class="tab" data-target="servicos">Serviços</button>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+
+<main>
+
+  <section class="page active" id="home">
+    <div class="hero">
+      <span class="eyebrow reveal">Bem-vindo ao nosso acervo</span>
+      <h2 class="reveal">Histórias escritas<br><em>a muitas mãos.</em></h2>
+      <p class="reveal">Somos um coletivo de escritores independentes. Aqui reunimos nossos livros, mostramos o que está sendo escrito e levamos você até o perfil de cada autor.</p>
+      <div class="hero-actions reveal">
+        <a href="#destaques" class="btn btn-primary">Explorar destaques</a>
+        <button class="btn btn-ghost" data-goto="biblioteca">Ver biblioteca</button>
+      </div>
+    </div>
+
+    <div class="section-head" id="destaques">
+      <div><span class="eyebrow">Em destaque</span><h2>Livros do coletivo</h2></div>
+      <div class="line"></div>
+    </div>
+    <div class="marquee"><div class="marquee-track"><div class="group" id="featured"></div></div></div>
+
+    <div class="section-head">
+      <div><span class="eyebrow">Notícias</span><h2>Do coletivo</h2></div>
+      <div class="line"></div>
+    </div>
+    <div class="news" id="news"></div>
+
+    <div class="section-head">
+      <div><span class="eyebrow">Participação</span><h2>Selos do coletivo</h2></div>
+      <div class="line"></div>
+    </div>
+    <p class="section-lead">Quem ajuda a comunidade recebe um selo. Selos reconhecem participação e nunca comparam uma pessoa com outra.</p>
+    <div class="selos" id="selos"></div>
+  </section>
+
+  <section class="page" id="biblioteca">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Acervo completo</span>
+      <h2>Nossa <em>Biblioteca</em></h2>
+      <p>Todos os livros do coletivo, em ordem alfabética. Clique em uma capa para ler a sinopse.</p>
+    </div>
+    <div class="chips reveal" id="chips"></div>
+    <div class="grid" id="libraryGrid"></div>
+  </section>
+
+  <section class="page" id="lancamentos">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Recém-chegados</span>
+      <h2>Últimos <em>Lançamentos</em></h2>
+      <p>As obras mais recentes do coletivo.</p>
+    </div>
+    <div class="carousel" style="margin-top:2.5rem">
+      <button class="car-btn prev" id="carPrev" aria-label="Anterior">&#8249;</button>
+      <div class="car-track" id="releases"></div>
+      <button class="car-btn next" id="carNext" aria-label="Próximo">&#8250;</button>
+    </div>
+  </section>
+
+  <section class="page" id="projetos">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Obras em construção</span>
+      <h2>Projetos <em>em andamento</em></h2>
+      <p>O que ainda está sendo escrito. Sinopses e trechos, para você acompanhar antes de todo mundo.</p>
+    </div>
+    <div class="projects" style="margin-top:3rem" id="projects"></div>
+  </section>
+
+  <section class="page" id="servicos">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Mão na massa</span>
+      <h2>Ajuda entre <em>autores</em></h2>
+      <p>O coletivo existe para os autores se ajudarem. Começamos pelo mais simples e ampliamos aos poucos.</p>
+    </div>
+    <div class="services" style="margin-top:3rem" id="services"></div>
+    <div class="form-wrap reveal">
+      <h3>Como funciona</h3>
+      <p>Quem recebe ajuda também ajuda: leitura beta, leitura crítica, ideias de divulgação. Cada contribuição vira um selo no perfil. Não há nota nem ranking entre os membros.</p>
+      <p id="contact" class="contact"></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close aria-label="Fechar">&times;</button>
+    <div class="cover" id="modalCover">
+      <span class="cover-title" id="modalCoverTitle"></span>
+      <span class="cover-author" id="modalCoverAuthor"></span>
+    </div>
+    <div class="modal-body">
+      <span class="eyebrow" id="modalGenre"></span>
+      <h3 id="modalTitle"></h3>
+      <p class="modal-author" id="modalAuthor"></p>
+      <p class="synopsis" id="modalSynopsis"></p>
+      <div class="buy-row" id="modalBuy"></div>
+      <a href="#" class="btn btn-ghost" id="modalLink" target="_blank" rel="noopener" hidden>Ver perfil do autor</a>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

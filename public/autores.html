@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autores | Entrelinhas</title>
+<meta name="description" content="Os autores do coletivo Entrelinhas.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab active" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main>
+  <section class="page active">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Quem escreve</span>
+      <h2>Nossos <em>Autores</em></h2>
+      <p>Clique em um autor para ver o perfil, as obras e os links.</p>
+      <p class="cta-row"><a class="btn btn-primary" href="conta.html">Entrar na Área do autor</a></p>
+    </div>
+    <div class="authors-grid" id="authors"><p class="muted-note">Carregando...</p></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script>
+(async function(){
+  const { esc, imgUrl, api, initial } = EL;
+  const box = document.getElementById('authors');
+  try {
+    const list = await api('/api/authors');
+    if (!list.length) { box.innerHTML = '<p class="muted-note">Nenhum autor publicado ainda.</p>'; return; }
+    box.innerHTML = list.map(a => `
+      <a class="author-card" href="autor.html?a=${encodeURIComponent(a.slug)}" style="--accent:${/^#[0-9a-f]{6}$/i.test(a.cor) ? a.cor : '#d9a94a'}">
+        <div class="author-photo">${a.retrato ? `<img src="${esc(imgUrl(a.retrato))}" alt="Foto de ${esc(a.nome)}" loading="lazy">` : `<span>${initial(a.nome)}</span>`}</div>
+        <h3>${esc(a.nome)}</h3>
+        ${a.frase ? `<p>${esc(a.frase)}</p>` : ''}
+      </a>`).join('');
+  } catch (e) {
+    box.innerHTML = '<p class="muted-note">Não foi possível carregar os autores.</p>';
+  }
+})();
+</script>
+</body>
+</html>

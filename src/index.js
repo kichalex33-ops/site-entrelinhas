@@ -1,0 +1,324 @@
+// Entrelinhas: API de perfis de autor (Cloudflare Worker + D1).
+// Rotas /api/* e /img/* passam por aqui; o resto vem dos arquivos estaticos.
+
+const SESSION_DAYS = 30;
+const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
+const MAX_IMG = 600 * 1024;
+const MAX_IMGS_PER_USER = 30;
+const FAIL_LIMIT = 8;
+const FAIL_WINDOW = 15 * 60;
+const FUNDOS = ['preto', 'azul', 'vinho', 'verde', 'grafite'];
+const STATUS = ['Publicado', 'Em desenvolvimento', 'Em escrita', 'Revisão', 'Em breve'];
+const SERVICOS = ['beta', 'critica', 'divulgacao', 'capa']; // chaves de "Serviços que ofereço"
+const SHORT_SESSION_HOURS = 12;
+const IMG_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
+
+const now = () => Math.floor(Date.now() / 1000);
+
+const json = (obj, status = 200, headers = {}) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers },
+  });
+const fail = (msg, status = 400) => json({ erro: msg }, status);
+
+// ---------- cripto ----------
+const enc = new TextEncoder();
+const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+const sha256Hex = async (s) => toHex(await crypto.subtle.digest('SHA-256', enc.encode(s)));
+
+async function hashPassword(password, saltBytes) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: saltBytes, iterations: PBKDF2_ITER }, key, 256);
+  return b64(bits);
+}
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+// ---------- cookies e sessao ----------
+function getCookie(req, name) {
+  const m = (req.headers.get('Cookie') || '').match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return m ? m[1] : null;
+}
+const cookie = (value, maxAge) => `sid=${value}; HttpOnly; Secure; SameSite=Strict; Path=/${maxAge == null ? '' : '; Max-Age=' + maxAge}`;
+
+async function newSession(env, userId, lembrar = true) {
+  const token = toHex(rand(32));
+  const ttl = lembrar ? SESSION_DAYS * 86400 : SHORT_SESSION_HOURS * 3600;
+  await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
+    .bind(await sha256Hex(token), userId, now() + ttl).run();
+  // sem "continuar conectado": cookie de sessao (some ao fechar o navegador) e validade curta no servidor
+  return cookie(token, lembrar ? ttl : null);
+}
+async function currentUser(env, req) {
+  const t = getCookie(req, 'sid');
+  if (!t) return null;
+  const row = await env.DB.prepare(
+    'SELECT u.id, u.email, u.slug, u.is_admin FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+  ).bind(await sha256Hex(t), now()).first();
+  return row || null;
+}
+
+// ---------- limite de tentativas ----------
+async function tooManyFails(env, key) {
+  await env.DB.prepare('DELETE FROM login_fails WHERE at < ?').bind(now() - 86400).run();
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_fails WHERE key = ? AND at > ?').bind(key, now() - FAIL_WINDOW).first();
+  return r.n >= FAIL_LIMIT;
+}
+const recordFail = (env, key) => env.DB.prepare('INSERT INTO login_fails (key, at) VALUES (?, ?)').bind(key, now()).run();
+
+// ---------- validacao ----------
+const str = (v, max) => (typeof v === 'string' ? v.replace(/\u0000/g, '').trim().slice(0, max) : '');
+const isEmail = (e) => /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(e) && e.length <= 254;
+const isUrl = (u) => {
+  try { const x = new URL(u); return (x.protocol === 'https:' || x.protocol === 'http:') && u.length <= 300; } catch { return false; }
+};
+const slugify = (s) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+
+async function ownsImage(env, id, userId) {
+  if (/^\/autor\/[a-z0-9._-]+\.(jpg|png|webp)$/.test(id)) return true; // imagens estaticas do site
+  if (!/^[a-f0-9]{24}$/.test(id)) return false;
+  const r = await env.DB.prepare('SELECT user_id FROM images WHERE id = ?').bind(id).first();
+  return !!r && (r.user_id === userId || r.user_id === null);
+}
+
+async function sanitizeProfile(env, d, userId) {
+  if (!d || typeof d !== 'object') throw new Error('Dados inválidos.');
+  const out = {
+    nome: str(d.nome, 80),
+    frase: str(d.frase, 160),
+    bio: str(d.bio, 1200),
+    citacao: str(d.citacao, 200),
+    local: str(d.local, 80),
+    cor: /^#[0-9a-fA-F]{6}$/.test(d.cor || '') ? d.cor.toLowerCase() : '#d9a94a',
+    fundo: FUNDOS.includes(d.fundo) ? d.fundo : 'preto',
+    retrato: '',
+    servicos: (Array.isArray(d.servicos) ? d.servicos : []).filter((k, i, a) => SERVICOS.includes(k) && a.indexOf(k) === i),
+    links: [],
+    secoes: [],
+    obras: [],
+  };
+  if (!out.nome) throw new Error('O nome é obrigatório.');
+  if (d.retrato && (await ownsImage(env, d.retrato, userId))) out.retrato = d.retrato;
+  for (const l of (Array.isArray(d.links) ? d.links : []).slice(0, 8)) {
+    const rotulo = str(l && l.rotulo, 40), url = str(l && l.url, 300);
+    if (rotulo && isUrl(url)) out.links.push({ rotulo, url });
+  }
+  for (const s of (Array.isArray(d.secoes) ? d.secoes : []).slice(0, 8)) {
+    const titulo = str(s && s.titulo, 80), texto = str(s && s.texto, 4000);
+    if (titulo || texto) out.secoes.push({ titulo, texto });
+  }
+  for (const o of (Array.isArray(d.obras) ? d.obras : []).slice(0, 20)) {
+    const titulo = str(o && o.titulo, 120);
+    if (!titulo) continue;
+    const obra = {
+      titulo,
+      genero: str(o.genero, 60),
+      status: STATUS.includes(o.status) ? o.status : 'Publicado',
+      sinopse: str(o.sinopse, 1500),
+      capa: '',
+      link: isUrl(str(o.link, 300)) ? str(o.link, 300) : '',
+    };
+    if (o.capa && (await ownsImage(env, o.capa, userId))) obra.capa = o.capa;
+    out.obras.push(obra);
+  }
+  if (JSON.stringify(out).length > 60000) throw new Error('Perfil grande demais.');
+  return out;
+}
+
+function defaultProfile(nome) {
+  return { nome, frase: '', servicos: [], bio: '', citacao: '', local: '', cor: '#d9a94a', fundo: 'preto', retrato: '', links: [], secoes: [], obras: [] };
+}
+
+// ---------- rotas ----------
+async function body(req) {
+  try { return await req.json(); } catch { return null; }
+}
+
+async function register(env, req) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const ip = req.headers.get('CF-Connecting-IP') || 'x';
+  const key = 'reg|' + ip;
+  if (await tooManyFails(env, key)) return fail('Muitas tentativas. Tente de novo mais tarde.', 429);
+
+  const email = str(b.email, 254).toLowerCase();
+  const senha = typeof b.senha === 'string' ? b.senha : '';
+  const nome = str(b.nome, 80);
+  if (!isEmail(email)) return fail('E-mail inválido.');
+  if (senha.length < 10 || senha.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
+
+  const codeHash = await sha256Hex(str(b.convite, 100).toUpperCase());
+  const inv = await env.DB.prepare('SELECT claim_slug, used_by, reusable FROM invites WHERE code_hash = ?').bind(codeHash).first();
+  if (!inv || (inv.used_by && !inv.reusable)) { await recordFail(env, key); return fail('Convite inválido ou já usado.', 403); }
+
+  let slug, claimed = false;
+  if (inv.claim_slug) {
+    const p = await env.DB.prepare('SELECT user_id FROM profiles WHERE slug = ?').bind(inv.claim_slug).first();
+    if (!p || p.user_id) return fail('Este perfil já tem dono.', 409);
+    slug = inv.claim_slug; claimed = true;
+  } else {
+    if (!nome) return fail('Informe seu nome.');
+    const base = slugify(nome) || 'autor';
+    slug = base;
+    for (let i = 2; await env.DB.prepare('SELECT 1 FROM profiles WHERE slug = ?').bind(slug).first(); i++) slug = `${base}-${i}`;
+  }
+  if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(email).first()) return fail('Este e-mail já está cadastrado.', 409);
+
+  const salt = rand(16);
+  const hash = await hashPassword(senha, salt);
+  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(email, hash, b64(salt), slug, now()).run();
+  const userId = res.meta.last_row_id;
+  if (inv.reusable) await recordFail(env, key); // convite universal: cada cadastro conta no limite por IP
+  else await env.DB.prepare('UPDATE invites SET used_by = ? WHERE code_hash = ?').bind(userId, codeHash).run();
+  if (claimed) {
+    await env.DB.prepare('UPDATE profiles SET user_id = ? WHERE slug = ?').bind(userId, slug).run();
+  } else {
+    await env.DB.prepare('INSERT INTO profiles (slug, user_id, data, badges, published, updated_at) VALUES (?, ?, ?, ?, 1, ?)')
+      .bind(slug, userId, JSON.stringify(defaultProfile(nome)), '[]', now()).run();
+  }
+  return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, userId) });
+}
+
+async function login(env, req) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const ip = req.headers.get('CF-Connecting-IP') || 'x';
+  const email = str(b.email, 254).toLowerCase();
+  const keys = ['ip|' + ip, 'em|' + email];
+  for (const k of keys) if (await tooManyFails(env, k)) return fail('Muitas tentativas. Tente de novo em alguns minutos.', 429);
+
+  const user = await env.DB.prepare('SELECT id, pass_hash, pass_salt, slug FROM users WHERE email = ?').bind(email).first();
+  const salt = user ? unb64(user.pass_salt) : rand(16); // custo igual com e sem usuario
+  const h = await hashPassword(typeof b.senha === 'string' ? b.senha.slice(0, 200) : '', salt);
+  if (!user || !safeEqual(h, user.pass_hash)) {
+    for (const k of keys) await recordFail(env, k);
+    return fail('E-mail ou senha incorretos.', 401);
+  }
+  return json({ ok: true, slug: user.slug }, 200, { 'Set-Cookie': await newSession(env, user.id) });
+}
+
+async function logout(env, req) {
+  const t = getCookie(req, 'sid');
+  if (t) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(t)).run();
+  return json({ ok: true }, 200, { 'Set-Cookie': cookie('', 0) });
+}
+
+async function changePassword(env, req, user) {
+  const b = await body(req);
+  if (!b || typeof b.nova !== 'string' || b.nova.length < 10 || b.nova.length > 200) return fail('A nova senha precisa ter pelo menos 10 caracteres.');
+  const row = await env.DB.prepare('SELECT pass_hash, pass_salt FROM users WHERE id = ?').bind(user.id).first();
+  const h = await hashPassword(typeof b.atual === 'string' ? b.atual.slice(0, 200) : '', unb64(row.pass_salt));
+  if (!safeEqual(h, row.pass_hash)) return fail('Senha atual incorreta.', 401);
+  const salt = rand(16);
+  await env.DB.prepare('UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?').bind(await hashPassword(b.nova, salt), b64(salt), user.id).run();
+  // encerra as outras sessoes; mantem a atual
+  const cur = await sha256Hex(getCookie(req, 'sid') || '');
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(user.id, cur).run();
+  return json({ ok: true });
+}
+
+async function getProfile(env, slug) {
+  const p = await env.DB.prepare('SELECT slug, data, badges, published FROM profiles WHERE slug = ?').bind(slug).first();
+  if (!p || !p.published) return null;
+  return { slug: p.slug, data: JSON.parse(p.data), badges: JSON.parse(p.badges) };
+}
+
+async function saveProfile(env, req, user) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  let data;
+  try { data = await sanitizeProfile(env, b.data, user.id); } catch (e) { return fail(e.message); }
+  await env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug).run();
+  // limpa imagens do autor sem uso (com mais de 1h, para nao apagar upload recem-feito)
+  const used = new Set([data.retrato, ...data.obras.map((o) => o.capa)].filter(Boolean));
+  const imgs = await env.DB.prepare('SELECT id FROM images WHERE user_id = ? AND created_at < ?').bind(user.id, now() - 3600).all();
+  for (const r of imgs.results) if (!used.has(r.id)) await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(r.id).run();
+  return json({ ok: true, data });
+}
+
+async function uploadImage(env, req, user) {
+  if (Number(req.headers.get('Content-Length') || 0) > MAX_IMG) return fail('A imagem deve ter até 600 KB.');
+  const type = (req.headers.get('Content-Type') || '').split(';')[0].trim();
+  if (!IMG_TYPES[type]) return fail('Envie uma imagem JPEG, PNG ou WebP.');
+  const buf = await req.arrayBuffer();
+  if (buf.byteLength === 0 || buf.byteLength > MAX_IMG) return fail('A imagem deve ter até 600 KB.');
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM images WHERE user_id = ?').bind(user.id).first();
+  if (n.n >= MAX_IMGS_PER_USER) return fail('Limite de imagens atingido. Remova obras antigas.');
+  const id = toHex(rand(12));
+  await env.DB.prepare('INSERT INTO images (id, user_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, user.id, type, buf, now()).run();
+  return json({ ok: true, id });
+}
+
+async function serveImage(env, id) {
+  if (!/^[a-f0-9]{24}$/.test(id)) return new Response('Not found', { status: 404 });
+  const r = await env.DB.prepare('SELECT mime, data FROM images WHERE id = ?').bind(id).first();
+  if (!r) return new Response('Not found', { status: 404 });
+  // o D1 devolve BLOB como lista de numeros; converte para bytes
+  const bytes = r.data instanceof ArrayBuffer ? r.data : new Uint8Array(r.data);
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': r.mime,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'",
+    },
+  });
+}
+
+export default {
+  async fetch(req, env) {
+    const url = new URL(req.url);
+    const path = url.pathname;
+
+    if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
+    if (!path.startsWith('/api/')) return env.ASSETS.fetch(req);
+
+    // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
+    if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
+
+    try {
+      if (req.method === 'GET') {
+        if (path === '/api/me') {
+          const u = await currentUser(env, req);
+          return u ? json({ slug: u.slug, email: u.email }) : fail('Não autenticado.', 401);
+        }
+        if (path === '/api/authors') {
+          const rows = await env.DB.prepare('SELECT slug, data, badges FROM profiles WHERE published = 1 ORDER BY updated_at DESC').all();
+          return json(rows.results.map((r) => {
+            const d = JSON.parse(r.data);
+            return { slug: r.slug, nome: d.nome, frase: d.frase, retrato: d.retrato, cor: d.cor, badges: JSON.parse(r.badges) };
+          }));
+        }
+        const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
+        if (m) {
+          const p = await getProfile(env, m[1]);
+          return p ? json(p) : fail('Perfil não encontrado.', 404);
+        }
+        return fail('Não encontrado.', 404);
+      }
+
+      if (path === '/api/register' && req.method === 'POST') return register(env, req);
+      if (path === '/api/login' && req.method === 'POST') return login(env, req);
+      if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
+
+      const user = await currentUser(env, req);
+      if (!user) return fail('Faça login para continuar.', 401);
+      if (path === '/api/profile' && req.method === 'PUT') return saveProfile(env, req, user);
+      if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
+      if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
+      return fail('Não encontrado.', 404);
+    } catch (e) {
+      return fail('Erro interno.', 500);
+    }
+  },
+};

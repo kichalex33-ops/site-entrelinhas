@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autor | Entrelinhas</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab active" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main id="root"><section class="page active"><p class="muted-note">Carregando...</p></section></main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script>
+(async function(){
+  const { esc, imgUrl, paras, linkAttrs, theme, initial, api } = EL;
+  const root = document.getElementById('root');
+  const slug = new URLSearchParams(location.search).get('a') || '';
+  const msg = (t) => { root.innerHTML = `<section class="page active"><p class="muted-note">${esc(t)}</p><p style="text-align:center;margin-top:1.5rem"><a class="btn btn-ghost" href="autores.html">Ver todos os autores</a></p></section>`; };
+  if (!/^[a-z0-9-]{1,40}$/.test(slug)) return msg('Autor não informado.');
+
+  let p;
+  try { p = await api('/api/profile/' + slug); } catch (e) { return msg(e.status === 404 ? 'Perfil não encontrado.' : 'Não foi possível carregar o perfil.'); }
+  const d = p.data;
+  document.title = d.nome + ' | Entrelinhas';
+
+  const obra = (o) => `
+    <article class="work">
+      ${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : `<div class="typo">${initial(o.titulo)}</div>`}
+      <span class="status${o.status === 'Publicado' ? ' on' : ''}">${esc(o.status)}</span>
+      <h3>${esc(o.titulo)}</h3>
+      ${o.genero ? `<p class="by">${esc(o.genero)}</p>` : ''}
+      ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
+      ${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}
+    </article>`;
+
+  root.innerHTML = `
+  <section class="page active" id="perfil">
+    <div class="profile">
+      <div class="profile-photo">${d.retrato ? `<img src="${esc(imgUrl(d.retrato))}" alt="Foto de ${esc(d.nome)}">` : `<div class="typo" style="aspect-ratio:3/4">${initial(d.nome)}</div>`}</div>
+      <div class="profile-text">
+        <span class="eyebrow">Perfil do autor${d.local ? ' · ' + esc(d.local) : ''}</span>
+        <h2>${esc(d.nome)}</h2>
+        ${d.frase ? `<p class="lead">${esc(d.frase)}</p>` : ''}
+        ${paras(d.bio)}
+        ${d.citacao ? `<p class="quote-line">${esc(d.citacao)}</p>` : ''}
+        ${p.badges.length ? `<div class="badges">${p.badges.map(b => `<span class="badge-pill">${esc(b)}</span>`).join('')}</div>` : ''}
+        ${d.links.length ? `<p class="links">${d.links.map((l, i) => `<a class="btn ${i ? 'btn-ghost' : 'btn-primary'}" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
+      </div>
+    </div>
+    ${d.obras.length ? `<div class="section-head"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div><div class="works">${d.obras.map(obra).join('')}</div>` : ''}
+    ${d.secoes.map(s => `${s.titulo ? `<div class="section-head"><div><h2>${esc(s.titulo)}</h2></div><div class="line"></div></div>` : ''}<div class="prose">${paras(s.texto)}</div>`).join('')}
+    <p style="text-align:center;margin:3rem 0 0"><a class="btn btn-ghost" href="autores.html">Ver todos os autores</a></p>
+  </section>`;
+  theme(root, d);
+})();
+</script>
+</body>
+</html>
