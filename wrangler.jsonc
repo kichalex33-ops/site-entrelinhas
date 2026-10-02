@@ -15,5 +15,5 @@
       "migrations_dir": "migrations"
     }
   ],
-  "routes": [{ "pattern": "entrelinhas.sinalruido.com.br", "custom_domain": true }]
+  "routes": [{ "pattern": "entrelinhasbr.com.br", "custom_domain": true }]
 }
