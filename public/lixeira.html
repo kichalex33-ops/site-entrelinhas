@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lixeira de livros | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main>
+  <section class="page active lixeira">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Só você vê esta página</span>
+      <h2>Lixeira de <em>livros</em></h2>
+      <p id="explica">Livros que você removeu do perfil ou excluiu no Estúdio. Avaliações, favoritos e a página do livro ficam guardados e voltam ao restaurar.</p>
+    </div>
+    <div id="root"><p class="muted-note">Carregando...</p></div>
+    <p class="lx-voltar"><a class="btn btn-ghost" href="conta.html">Voltar para a minha conta</a></p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { esc, api } = window.EL;
+  const root = document.getElementById('root');
+  const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
+  const n = (q, s, p) => `${q} ${q === 1 ? s : p}`;
+  let D = null, confirmando = '';
+
+  carregar();
+  async function carregar() {
+    try { D = await api('/api/lixeira'); }
+    catch (e) {
+      root.innerHTML = e.status === 401
+        ? '<div class="auth-box"><p>Entre na sua conta de autor para ver a lixeira.</p><p style="margin-top:1rem"><a class="btn btn-primary" href="conta.html">Entrar</a></p></div>'
+        : `<p class="muted-note">${esc(e.status === 403 ? 'A lixeira de livros é só para autores.' : 'Não foi possível carregar a lixeira.')}</p>`;
+      return;
+    }
+    document.getElementById('explica').textContent += ` Depois de ${D.prazo_dias} dias, o livro é excluído de vez.`;
+    desenhar();
+  }
+
+  function faltam(i) {
+    const d = Math.ceil((i.exclui_em - Date.now() / 1000) / 86400);
+    return d <= 1 ? 'Será excluído de vez nas próximas horas' : `Será excluído de vez em ${d} dias (${dia(i.exclui_em)})`;
+  }
+  const perde = (i) => [i.avaliacoes && n(i.avaliacoes, 'avaliação', 'avaliações'), i.favoritos && n(i.favoritos, 'favorito', 'favoritos')].filter(Boolean).join(' e ');
+
+  // livro removido antes de a lixeira existir: o cadastro se perdeu, as avaliacoes nao
+  function orfao(i) {
+    return `<article class="lx-item">
+      <div class="obra-mini"><span>?</span></div>
+      <div class="lx-info">
+        <h4>${esc(i.titulo || 'Livro removido antes da lixeira existir')}</h4>
+        <p class="hint">O título, a sinopse e a capa se perderam, mas ${perde(i) ? esc(perde(i)) + ' e a página do livro estão guardados' : 'a página do livro está guardada'}. Escreva o título para recuperar; depois complete o resto.</p>
+        ${confirmando === i.id
+          ? `<div class="lx-confirma"><p><b>Descartar para sempre?</b> ${perde(i) ? `Isso apaga ${esc(perde(i))}.` : ''} Não dá para desfazer.</p><button type="button" class="btn btn-ghost" data-cancelar>Cancelar</button><button type="button" class="btn btn-ghost btn-perigo" data-definitivo="${i.id}">Descartar para sempre</button></div>`
+          : `<form class="lx-recuperar" data-recuperar="${i.id}"><input name="titulo" maxlength="120" required placeholder="Título do livro" aria-label="Título do livro" value="${esc(i.titulo)}"><button class="btn btn-primary" type="submit">Recuperar e editar</button><button type="button" class="rm" data-excluir="${i.id}">Descartar</button></form>`}
+        <div class="el-estado" role="status"></div>
+      </div>
+    </article>`;
+  }
+
+  function item(i) {
+    if (i.tipo === 'orfao') return orfao(i);
+    const acoes = confirmando === i.id
+      ? `<div class="lx-confirma"><p><b>Excluir “${esc(i.titulo)}” para sempre?</b> ${perde(i) ? `Isso apaga também ${esc(perde(i))}.` : ''} Não dá para desfazer.</p>
+          <button type="button" class="btn btn-ghost" data-cancelar>Cancelar</button><button type="button" class="btn btn-ghost btn-perigo" data-definitivo="${i.id}">Excluir para sempre</button></div>`
+      : `<div class="lx-acoes"><button type="button" class="btn btn-primary" data-restaurar="${i.id}">Restaurar</button><button type="button" class="btn btn-ghost" data-restaurar="${i.id}" data-editar="1">Restaurar e editar</button><button type="button" class="rm" data-excluir="${i.id}">Excluir definitivamente</button></div>`;
+    return `<article class="lx-item">
+      <div class="obra-mini">${i.capa ? `<img src="${esc(i.capa)}" alt="">` : `<span>${esc((i.titulo || '?').trim().charAt(0).toUpperCase())}</span>`}</div>
+      <div class="lx-info">
+        <h4>${esc(i.titulo)}</h4>
+        <p class="hint">${i.tipo === 'perfil' ? 'Livro do perfil' : i.publicada ? 'Obra publicada pelo Estúdio' : 'Obra do Estúdio'} · removido em ${dia(i.removido_em)}${perde(i) ? ' · ' + esc(perde(i)) + ' guardados' : ''}</p>
+        <p class="lx-prazo">${faltam(i)}</p>
+        ${acoes}
+        <div class="el-estado" role="status"></div>
+      </div>
+    </article>`;
+  }
+
+  function desenhar() {
+    root.innerHTML = D.itens.length ? `<div class="lx-lista">${D.itens.map(item).join('')}</div>` : '<p class="muted-note">A lixeira está vazia.</p>';
+  }
+
+  root.addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.excluir) { confirmando = t.dataset.excluir; desenhar(); return; }
+    if (t.dataset.cancelar !== undefined) { confirmando = ''; desenhar(); return; }
+    const estado = t.closest('.lx-info').querySelector('.el-estado');
+    t.disabled = true;
+    try {
+      if (t.dataset.restaurar) {
+        const id = t.dataset.restaurar, r = await api(`/api/lixeira/${id}/restaurar`, { method: 'POST' });
+        if (t.dataset.editar) { location.href = r.tipo === 'perfil' ? `conta.html#obra-${id}` : `estudio.html#/obra/${id}`; return; }
+      } else if (t.dataset.definitivo) {
+        await api(`/api/lixeira/${t.dataset.definitivo}`, { method: 'DELETE' });
+        confirmando = '';
+      }
+      D = await api('/api/lixeira'); desenhar();
+    } catch (err) { estado.innerHTML = `<p class="note err">${esc(err.message)}</p>`; t.disabled = false; }
+  });
+
+  root.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, id = f.dataset.recuperar, bt = f.querySelector('button[type=submit]');
+    bt.disabled = true;
+    try {
+      await api(`/api/lixeira/${id}/restaurar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ titulo: f.titulo.value }) });
+      location.href = `conta.html#obra-${id}`;
+    } catch (err) { f.closest('.lx-info').querySelector('.el-estado').innerHTML = `<p class="note err">${esc(err.message)}</p>`; bt.disabled = false; }
+  });
+})();
+</script>
+</body>
+</html>

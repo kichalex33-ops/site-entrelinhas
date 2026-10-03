@@ -474,3 +474,18 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .bib-ordem{display:flex;gap:.6rem;align-items:center;justify-content:center;margin:1.4rem 0 .8rem;font-size:.82rem;color:var(--muted)}
 .bib-ordem select{background:var(--panel);color:var(--text);border:1px solid var(--line-strong);border-radius:999px;padding:.45rem .9rem;font:inherit;font-size:.82rem}
 .rel-card .badge-new{align-self:flex-start}
+
+/* lixeira.html */
+.lixeira{max-width:860px;margin:0 auto;padding:0 1.5rem 3rem}
+.lx-lista{display:grid;gap:1rem;margin-top:2rem}
+.lx-item{display:flex;gap:1rem;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1rem}
+.lx-info{flex:1;min-width:0;display:grid;gap:.35rem}
+.lx-info h4{font-family:'Playfair Display',serif;font-weight:500;font-size:1.15rem}
+.lx-prazo{font-size:.8rem;color:#e0b45c}
+.lx-acoes,.lx-confirma{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:.4rem}
+.lx-acoes .rm{margin:0}
+.lx-confirma p{flex-basis:100%;font-size:.88rem;color:#c8c8d0}
+.lx-voltar{text-align:center;margin-top:2.4rem}
+.lx-recuperar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:.4rem}
+.lx-recuperar input{flex:1 1 220px;min-width:0;padding:.55rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.88rem}
+.lx-recuperar .rm{margin:0}

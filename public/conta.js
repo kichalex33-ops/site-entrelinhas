@@ -150,6 +150,7 @@
             <div class="obra-acoes">${o.id ? `<a class="btn btn-ghost" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">Página do livro</a>` : ''}<button type="button" class="btn btn-ghost" data-editobra="${i}">Editar</button><button type="button" class="rm" data-rmobra="${i}">Remover</button></div>
           </div>`).join('') || '<p class="hint">Nenhum livro divulgado ainda.</p>'}</div>
           <button type="button" class="btn btn-primary" data-novaobra>Adicionar obra</button>
+          <a class="btn btn-ghost" href="lixeira.html">Lixeira de livros</a>
         </fieldset>
 
         ${listBlock('secoes', 'Seções de texto', 'Adicionar seção', (s, i) =>
@@ -377,7 +378,7 @@
       ok.disabled = true;
       try { await salvarPerfil(dados); dlg.close(); } catch (err) { estado.innerHTML = note(err.message); ok.disabled = false; }
     });
-    const dlg = janela('Remover este livro?', [el(`<p>“${esc(o.titulo || 'Sem título')}” sai da sua página pública, junto com as avaliações dele.</p>`), estado], [botao('Cancelar', 'btn-ghost', () => dlg.close()), ok]);
+    const dlg = janela('Remover este livro?', [el(`<p>“${esc(o.titulo || 'Sem título')}” sai da sua página pública e vai para a <a href="lixeira.html">Lixeira de livros</a>. Lá você pode restaurá-lo com as avaliações e favoritos por 15 dias; depois disso ele é excluído de vez.</p>`), estado], [botao('Cancelar', 'btn-ghost', () => dlg.close()), ok]);
   }
 
   // reduz a imagem no navegador para caber no limite do servidor (600 KB)

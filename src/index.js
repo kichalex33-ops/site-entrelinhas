@@ -3,6 +3,7 @@
 
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
+import { movimentosDaLixeira, naLixeira, listarLixeira, restaurar, excluirDefinitivo, limparLixeiraVencida } from './lixeira.js';
 import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOferta } from './ajuda.js';
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine } from './vitrine.js';
@@ -305,6 +306,7 @@ async function deleteAccount(env, req, user) {
   const p = await env.DB.prepare('SELECT data FROM profiles WHERE user_id = ?').bind(user.id).first();
   try { for (const o of JSON.parse(p ? p.data : '{}').obras || []) if (o.id) obras.add(o.id); } catch { /* perfil invalido */ }
   for (const w of (await env.DB.prepare('SELECT id FROM studio_works WHERE user_id = ?').bind(user.id).all()).results) obras.add(w.id);
+  for (const l of await naLixeira(env, user.id)) obras.add(l.id);
   const ids = [...obras];
 
   const st = (sql, ...a) => env.DB.prepare(sql).bind(...a);
@@ -478,6 +480,7 @@ async function limparImagens(env, userId, perfil) {
   const capas = await env.DB.prepare('SELECT meta, pub_meta FROM studio_works WHERE user_id = ?').bind(userId).all();
   for (const w of capas.results) for (const j of [w.meta, w.pub_meta]) { try { const c = JSON.parse(j || '{}').capa; if (c) used.add(c); } catch { /* json invalido */ } }
   for (const id of await imagensDasPaginas(env, userId)) used.add(id);
+  for (const l of await naLixeira(env, userId)) if (l.capa) used.add(l.capa); // capa de livro na lixeira volta ao restaurar
   const imgs = await env.DB.prepare('SELECT id FROM images WHERE user_id = ? AND created_at < ?').bind(userId, now() - 3600).all();
   for (const r of imgs.results) if (!used.has(r.id)) await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(r.id).run();
 }
@@ -491,9 +494,15 @@ async function saveProfile(env, req, user) {
   // livro que ja existia mantem a data gravada (os antigos, de antes deste campo, ficam sem data).
   const antes = await env.DB.prepare('SELECT data FROM profiles WHERE slug = ?').bind(user.slug).first();
   const noSite = new Map();
-  try { for (const o of JSON.parse(antes.data).obras || []) if (o.id) noSite.set(o.id, o.no_site_em || 0); } catch { /* perfil antigo */ }
+  let obrasAntes = [];
+  try { obrasAntes = JSON.parse(antes.data).obras || []; } catch { /* perfil antigo */ }
+  for (const o of obrasAntes) if (o.id) noSite.set(o.id, o.no_site_em || 0);
   for (const o of data.obras) { const t = noSite.has(o.id) ? noSite.get(o.id) : now(); if (t) o.no_site_em = t; }
-  await env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug).run();
+  // livro removido do perfil vai para a lixeira (lixeira.html), com avaliacoes e tudo ligado ao mesmo id
+  await env.DB.batch([
+    env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug),
+    ...movimentosDaLixeira(env, user.id, obrasAntes, data.obras, now()),
+  ]);
   await limparImagens(env, user.id, data);
   return json({ ok: true, data });
 }
@@ -665,6 +674,13 @@ async function deleteChat(env, user, id) {
 }
 
 export default {
+  // tarefa diaria (wrangler.jsonc: triggers.crons): exclui de vez os livros com mais de 15 dias na lixeira
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      for (const userId of await limparLixeiraVencida(env, now())) await limparImagens(env, userId);
+    })());
+  },
+
   async fetch(req, env) {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -729,6 +745,11 @@ export default {
           return listarDenunciasLivros(env, url, { json });
         }
         if (path === '/api/admin/convites') return listarConvites(env, req);
+        if (path === '/api/lixeira') {
+          const u = await currentUser(env, req);
+          if (!u) return fail('Faça login para continuar.', 401);
+          return u.role === 'autor' ? listarLixeira(env, u, { json, now }) : fail('Apenas autores têm lixeira de livros.', 403);
+        }
         if (path === '/api/ajuda') {
           const u = await currentUser(env, req);
           if (!u) return fail('Faça login para continuar.', 401);
@@ -769,6 +790,17 @@ export default {
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
       const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
       if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+      if (path === '/api/lixeira' || path.startsWith('/api/lixeira/')) {
+        if (user.role !== 'autor') return fail('Apenas autores têm lixeira de livros.', 403);
+        const lx = path.match(/^\/api\/lixeira\/([a-f0-9]{12})(\/restaurar)?$/);
+        if (lx && lx[2] && req.method === 'POST') return restaurar(env, req, user, lx[1], { json, fail, now, str, body });
+        if (lx && !lx[2] && req.method === 'DELETE') {
+          const r = await excluirDefinitivo(env, user, lx[1], { json, fail });
+          if (r.ok) await limparImagens(env, user.id);
+          return r;
+        }
+        return fail('Não encontrado.', 404);
+      }
       if (path === '/api/ajuda' || path.startsWith('/api/ajuda/')) {
         if (user.role !== 'autor') return fail('A ajuda entre autores é para autores do coletivo.', 403);
         const ha = { json, fail, str, body, now };

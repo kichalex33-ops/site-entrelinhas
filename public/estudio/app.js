@@ -57,7 +57,7 @@ async function telaInicio() {
     h('div', { class: 'hero', style: 'padding-bottom:.5rem' },
       h('span', { class: 'eyebrow' }, 'Espaço privado de criação'), h('h2', null, 'Estúdio ', h('em', null, 'Entrelinhas')),
       h('p', null, 'Pense, conecte, escreva, organize e revise. Nada aqui aparece para os leitores até você escolher publicar.'),
-      h('p', { class: 'cta-row' }, h('button', { class: 'btn btn-primary', id: 'st-nova', onclick: () => novaObra() }, '+ Nova obra'))),
+      h('p', { class: 'cta-row' }, h('button', { class: 'btn btn-primary', id: 'st-nova', onclick: () => novaObra() }, '+ Nova obra'), ' ', h('a', { class: 'btn btn-ghost', href: 'lixeira.html' }, 'Lixeira de livros'))),
     obras.length ? [
       grupo('Obras recentes', obras.slice(0, 6), 'g-rec'),
       grupo('Rascunhos', por('rascunho'), 'g-ras'), grupo('Em revisão', por('em_revisao'), 'g-rev'),
@@ -79,7 +79,7 @@ function cartao(o) {
 }
 
 async function excluirObra(o) {
-  if (!(await confirmar('Excluir esta obra?', `“${o.titulo}” vai para a lixeira de obras. Você pode restaurá-la depois.`, 'Excluir', true))) return;
+  if (!(await confirmar('Excluir esta obra?', `“${o.titulo}” vai para a Lixeira de livros (link no início do Estúdio). Você pode restaurá-la por 15 dias; depois disso ela é excluída de vez.`, 'Excluir', true))) return;
   try { await api.excluirObra(o.id); } catch (e) { return dialogo({ titulo: 'Não foi possível excluir', corpo: h('p', null, e.message) }); }
   telaInicio();
 }
