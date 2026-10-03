@@ -88,11 +88,12 @@ export async function leituraPublica(req, env, url, h) {
       palavras: caps.results.reduce((s, c) => s + c.palavras, 0),
     });
   }
-  const cap = await env.DB.prepare('SELECT ordem, titulo, corpo FROM studio_pub_docs WHERE work_id = ? AND ordem = ?').bind(w.id, Number(n)).first();
+  const cap = await env.DB.prepare('SELECT ordem, doc_id, titulo, corpo FROM studio_pub_docs WHERE work_id = ? AND ordem = ?').bind(w.id, Number(n)).first();
   if (!cap) return h.fail('Capítulo não encontrado.', 404);
   const total = await env.DB.prepare('SELECT COUNT(*) AS n FROM studio_pub_docs WHERE work_id = ?').bind(w.id).first();
   return h.json({
-    n: cap.ordem, titulo: cap.titulo, corpo: limparPrivado(cap.corpo), total: total.n,
+    // conversa: id fixo do capitulo (nao muda se o autor inserir ou reordenar capitulos ao republicar)
+    n: cap.ordem, conversa: `${w.id}-${cap.doc_id}`, titulo: cap.titulo, corpo: limparPrivado(cap.corpo), total: total.n,
     anterior: cap.ordem > 1 ? cap.ordem - 1 : null, proximo: cap.ordem < total.n ? cap.ordem + 1 : null,
     obra: { titulo: safe(w.pub_meta).titulo || w.title, slug, autor: { slug: autor, nome: nomeDoAutor(w.pdata) } },
   });

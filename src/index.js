@@ -618,7 +618,7 @@ export default {
           if (r) return r;
         }
         // configuracao publica para o navegador (a chave do captcha nao e segredo)
-        if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null });
+        if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null, disqus: /^[a-z0-9-]{1,64}$/.test(env.DISQUS_SHORTNAME || '') ? env.DISQUS_SHORTNAME : null });
         if (path === '/api/authors') {
           const rows = await env.DB.prepare(
             'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'

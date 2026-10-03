@@ -63,3 +63,9 @@ test('pedido publico responde igual exista a conta ou nao, e sem e-mail configur
   assert.equal(a.j.email, false);
   assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM password_resets').get().n, 0);
 });
+
+test('config publica: Disqus so com shortname valido', async () => {
+  assert.equal((await makeApp().call('GET', '/api/config')).j.disqus, null);
+  assert.equal((await makeApp({ DISQUS_SHORTNAME: 'entrelinhas' }).call('GET', '/api/config')).j.disqus, 'entrelinhas');
+  assert.equal((await makeApp({ DISQUS_SHORTNAME: 'x"><script>' }).call('GET', '/api/config')).j.disqus, null);
+});

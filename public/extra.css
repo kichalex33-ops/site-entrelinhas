@@ -204,3 +204,6 @@ a.tab{text-decoration:none;display:inline-block}
 .mod-saida{flex-basis:100%}
 .mod-link{display:flex;gap:.5rem;margin-top:.4rem}
 .mod-link input{flex:1;min-width:0;padding:.55rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.8rem}
+.ler-comentarios{max-width:65ch;margin:3.5rem auto 0}
+.ler-comentarios .section-head{padding:0;margin-bottom:.6rem}
+#disqus_thread{margin-top:1rem}

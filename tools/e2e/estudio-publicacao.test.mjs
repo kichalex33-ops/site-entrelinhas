@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { iniciar } from './helpers.mjs';
 
 let E2E;
-before(async () => { E2E = await iniciar({ ESTUDIO_PUBLICACAO: 'on' }); });
+before(async () => { E2E = await iniciar({ ESTUDIO_PUBLICACAO: 'on', DISQUS_SHORTNAME: 'entrelinhas-teste' }); });
 after(async () => { await E2E.parar(); });
 
 const salvo = (p) => p.waitForFunction(() => document.querySelector('.st-estado')?.dataset.estado === 'salvo', null, { timeout: 15000 });
@@ -58,6 +58,16 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   await leitor.click('a:has-text("Próximo")');
   await leitor.waitForSelector('.ler-texto p:has-text("Márcia")');
   assert.equal(await leitor.locator('.ler-texto p').innerText(), 'A água lembrava de Márcia.', '[[link]] vira texto');
+
+  // comentarios (Disqus): nada carrega ate o leitor pedir; o clique carrega o embed do shortname configurado
+  const disqus = [];
+  await leitor.route('https://*.disqus.com/**', (r) => { disqus.push(r.request().url()); r.abort(); });
+  await leitor.waitForSelector('.ler-comentarios:not([hidden]) #ver-comentarios');
+  assert.equal(disqus.length, 0, 'Disqus nao carrega sozinho');
+  await leitor.click('#ver-comentarios');
+  await leitor.waitForFunction(() => document.querySelector('script[src="https://entrelinhas-teste.disqus.com/embed.js"]'));
+  const id = await leitor.evaluate(() => { const o = { page: {} }; window.disqus_config.call(o); return o.page.identifier; });
+  assert.match(id, /^[a-f0-9]{12}-[a-f0-9]{12}$/, 'conversa presa ao documento, nao ao numero do capitulo');
 
   // perfil do autor e biblioteca mostram a obra (perfil completo, como o salvo pela conta)
   E2E.app.db.prepare('UPDATE profiles SET data = ? WHERE slug = ?').run(JSON.stringify({ nome: 'Autora Publicada', frase: '', local: '', bio: '', citacao: '', cor: '#d9a94a', fundo: 'preto', retrato: '', links: [], obras: [], secoes: [] }), a.slug);

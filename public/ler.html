@@ -103,9 +103,40 @@ async function capitulo() {
     <p class="ler-trilha"><a href="${base}">${esc(c.obra.titulo)}</a> · <a href="autor.html?a=${encodeURIComponent(c.obra.autor.slug)}">${esc(c.obra.autor.nome)}</a> · capítulo ${c.n} de ${c.total}</p>
     <article class="ler-texto"><h2>${esc(c.titulo)}</h2></article>
     ${nav()}
+    <section class="ler-comentarios" hidden>
+      <div class="section-head"><div><span class="eyebrow">Leitores</span><h2>Comentários</h2></div><div class="line"></div></div>
+      <p class="hint">Os comentários usam o Disqus, um serviço de fora do Entrelinhas: ele só carrega se você pedir, e pode exibir anúncios e usar cookies próprios.</p>
+      <button type="button" class="btn btn-ghost" id="ver-comentarios">Ver comentários</button>
+      <div id="disqus_thread"></div>
+    </section>
   </section>`;
   root.querySelector('.ler-texto').append(renderizar(c.corpo));
   window.scrollTo(0, 0);
+  comentarios(c);
+}
+
+// Disqus: so aparece com o shortname configurado (wrangler.jsonc: DISQUS_SHORTNAME) e so carrega no clique.
+async function comentarios(c) {
+  let cfg = null;
+  try { cfg = await api('/api/config'); } catch { return; }
+  if (!cfg || !cfg.disqus) return;
+  const box = root.querySelector('.ler-comentarios');
+  box.hidden = false;
+  box.querySelector('#ver-comentarios').addEventListener('click', (e) => {
+    e.target.remove();
+    const pagina = `${location.origin}/ler.html?a=${encodeURIComponent(autor)}&o=${encodeURIComponent(obra)}&c=${c.n}`;
+    window.disqus_config = function () {
+      this.page.url = pagina;
+      this.page.identifier = c.conversa;
+      this.page.title = `${c.titulo} · ${c.obra.titulo}`;
+      this.language = 'pt_BR';
+    };
+    const s = document.createElement('script');
+    s.src = `https://${cfg.disqus}.disqus.com/embed.js`;
+    s.setAttribute('data-timestamp', String(Date.now()));
+    s.async = true;
+    document.body.append(s);
+  }, { once: true });
 }
 </script>
 </body>
