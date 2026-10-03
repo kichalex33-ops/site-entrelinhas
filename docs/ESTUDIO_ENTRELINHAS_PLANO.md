@@ -83,7 +83,7 @@ Autorização: **toda** consulta filtra por `user_id` da sessão, direto na obra
 ## 9. Testes
 
 - API: harness atual (Worker contra SQLite), movido para `tools/tests/` e rodando com `node --test`.
-- E2E: Playwright com o Chrome instalado, contra `wrangler dev --local`.
+- E2E: Playwright com o Chrome instalado, contra o Worker real servido em memória (tools/e2e/helpers.mjs).
 - Cobertura mínima conforme a seção 34 da especificação, incluindo acesso à obra de outro usuário.
 
 ## 10. Riscos

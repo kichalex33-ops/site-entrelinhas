@@ -30,9 +30,6 @@
   }
 
   // ---------- login / cadastro ----------
-  // servidor local (iniciar-local): mostra as contas de teste criadas por scripts/dev-contas.mjs
-  const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-  const CONTAS_LOCAIS = [['alex@local.test', 'Alex Jr. Kich (autor + moderador)'], ['autor@local.test', 'Autor Teste'], ['leitor@local.test', 'Leitor Teste']];
   function authView(mode){
     tsId = null;
     subtitle.textContent = mode === 'leitor' ? 'Crie uma conta de leitor para avaliar obras.' : 'Entre para editar a sua página pública ou avaliar obras.';
@@ -57,13 +54,8 @@
           : mode === 'leitor'
           ? 'Conta de leitor é aberta a todos. Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos. O e-mail serve só para entrar e nunca aparece no site.'
           : '<a href="recuperar.html">Esqueci minha senha</a>'}</p>
-        ${mode === 'login' && LOCAL ? `<p class="hint"><b>Rodando no seu computador.</b> As contas do site real não existem aqui. Entre com uma conta de teste (senha <code>entrelinhas123</code>):<br>${CONTAS_LOCAIS.map(([em, rot]) => `<button type="button" class="btn btn-ghost" data-local="${em}" style="margin:.4rem .4rem 0 0">${rot}</button>`).join('')}</p>` : ''}
       </div>`;
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => authView(b.dataset.mode)));
-    app.querySelectorAll('[data-local]').forEach(b => b.addEventListener('click', () => {
-      const f = document.getElementById('authForm');
-      f.email.value = b.dataset.local; f.senha.value = 'entrelinhas123'; f.requestSubmit();
-    }));
     if (mode === 'leitor') mountTurnstile();
     document.getElementById('authForm').addEventListener('submit', async (e) => {
       e.preventDefault();
