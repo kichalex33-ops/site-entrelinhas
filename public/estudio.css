@@ -47,6 +47,9 @@ body.st-workspace { overflow: hidden; }
 .st-bar { display: flex; align-items: center; gap: .6rem; padding: .45rem .8rem; border-bottom: 1px solid var(--line); background: var(--panel); min-height: 46px; }
 .st-bar-voltar { color: var(--accent); text-decoration: none; font-family: 'Playfair Display', serif; }
 .st-bar-sep { color: var(--muted); }
+.st-bar-mais { display: none; font-size: 1.2rem; }
+.st-menu-acoes { display: grid; gap: .5rem; }
+.st-menu-acoes .btn { justify-content: center; width: 100%; }
 .st-bar-titulo { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .st-bar-espaco { flex: 1; }
 .st-bar-btn { padding: .3rem .8rem !important; font-size: .8rem !important; }
@@ -163,6 +166,8 @@ body.st-foco .st-status { background: transparent; border-top-color: transparent
   .st-titulo { font-size: 1.25rem; flex-basis: 100%; }
   .st-toolbar { overflow-x: auto; flex-wrap: nowrap; }
   .st-bar-btn { display: none; }
+  .st-bar-pub { display: inline-flex; }
+  .st-bar-mais { display: inline-flex; }
   .st-pm, .st-md { padding: 1rem .9rem 40vh; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

@@ -221,3 +221,28 @@ a.tab{text-decoration:none;display:inline-block}
 .work .btn{max-width:100%;white-space:normal;text-align:center;line-height:1.35}
 .work .buy{display:flex;flex-wrap:wrap;gap:.5rem}
 .work .buy .btn{margin-top:.6rem}
+
+/* celular: formularios e botoes nunca passam da largura da tela */
+fieldset.blk{min-width:0}
+.fld input,.fld textarea,.fld select{max-width:100%;box-sizing:border-box}
+.auth-box .btn{white-space:normal;text-align:center;max-width:100%}
+@media (max-width:480px){
+  .auth-box,.blk{padding:1rem}
+  .bar{display:flex;flex-wrap:wrap;gap:.5rem}
+  .bar .btn{flex:1 1 auto;justify-content:center}
+}
+.photo-row{flex-wrap:wrap}
+.photo-row>div{min-width:0;flex:1 1 180px}
+input[type=file]{max-width:100%}
+
+/* abas do topo: centralizadas so quando cabem (antes, no celular, "Inicio" ficava fora de alcance) */
+.tabs{justify-content:flex-start}
+.tabs>.tab:first-child{margin-left:auto}
+.tabs>.tab:last-child{margin-right:auto}
+@media (max-width:560px){
+  .tabs{flex-wrap:wrap;justify-content:center;overflow:visible;gap:0}
+  .tabs>.tab:first-child,.tabs>.tab:last-child{margin:0}
+  .tabs .tab{letter-spacing:.08em;font-size:.66rem;padding:.6rem .15rem;flex:0 0 33.33%;box-sizing:border-box;text-align:center}
+  .site-header{position:relative;padding-top:1rem}
+  .brand{margin-bottom:.6rem}
+}

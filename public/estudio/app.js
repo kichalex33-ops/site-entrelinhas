@@ -164,11 +164,12 @@ function montarWorkspace() {
     h('button', { type: 'button', class: 'st-tb', id: 'st-tg-exp', 'aria-label': 'Mostrar ou esconder o explorador', 'aria-pressed': 'true', onclick: () => alternarPainel('exp') }, '☰'),
     h('a', { class: 'st-bar-voltar', href: '#/' }, 'Estúdio'), h('span', { class: 'st-bar-sep', 'aria-hidden': 'true' }, '/'), E.barTitulo,
     h('span', { class: 'st-bar-espaco' }),
-    h('button', { type: 'button', class: 'btn btn-primary st-bar-btn', onclick: publicarObra }, 'Publicar'),
+    h('button', { type: 'button', class: 'btn btn-primary st-bar-btn st-bar-pub', onclick: publicarObra }, 'Publicar'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoObra }, 'Obra'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: exportarObra }, 'Exportar'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoLixeira }, 'Lixeira'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', id: 'st-foco-btn', onclick: alternarFoco, title: 'Modo foco (Ctrl+Shift+F)' }, 'Modo foco'),
+    h('button', { type: 'button', class: 'st-tb st-bar-mais', 'aria-label': 'Mais ações da obra', onclick: menuObra }, '⋯'),
     h('button', { type: 'button', class: 'st-tb', id: 'st-tg-ctx', 'aria-label': 'Mostrar ou esconder o contexto', 'aria-pressed': 'true', onclick: () => alternarPainel('ctx') }, 'ⓘ'));
 
   const editor = h('section', { class: 'st-editor', 'aria-label': 'Editor' }, E.abas, E.edDocbar, E.toolbar, E.superficie, h('div', { class: 'st-status' }, E.stats, E.estado));
@@ -856,6 +857,20 @@ function publicarObra() {
   abrirPublicacao({
     obraId: S.obraId, obra: S.obra, itens: S.itens, antes: salvarTudoOuFalhar,
     aoMudar: (status) => { if (S) { S.obra.status = status; renderContexto(); } },
+  });
+}
+// celular: os botoes da barra nao cabem; o "⋯" reune as acoes da obra num menu
+function menuObra() {
+  const item = (rotulo, acao) => h('button', { type: 'button', class: 'btn btn-ghost', onclick: (e) => { e.target.closest('dialog').close(); acao(); } }, rotulo);
+  dialogo({
+    titulo: S.obra.titulo,
+    corpo: h('div', { class: 'st-menu-acoes' },
+      item('Informações da obra', dialogoObra),
+      item('Pesquisar na obra', abrirBuscaObra),
+      item('Importar manuscrito', () => importarNaPasta(pastaDe('manuscrito') || null)),
+      item('Exportar', exportarObra),
+      item('Lixeira', dialogoLixeira),
+      item('Modo foco', alternarFoco)),
   });
 }
 function exportarObra() {
