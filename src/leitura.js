@@ -24,7 +24,7 @@ function resumo(w, extra = {}) {
   const meta = safe(w.pub_meta);
   return {
     id: w.id, slug: w.pub_slug, titulo: meta.titulo || w.title, genero: meta.genero || '', sinopse: meta.sinopse || '', creditos: meta.creditos || '',
-    capa: meta.capa || '', publicado_em: w.published_at, versao: w.pub_version, ...extra,
+    capa: meta.capa || '', faixa: meta.faixa || '', publicado_em: w.published_at, versao: w.pub_version, ...extra,
   };
 }
 function safe(s) { try { const o = JSON.parse(s); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }

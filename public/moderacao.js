@@ -9,7 +9,7 @@
   let carregando = false;
 
   async function montar() {
-    if (carregando || document.getElementById('mod-panel') || !app.querySelector('#ed')) return;
+    if (carregando || app.dataset.mod !== '1' || document.getElementById('mod-panel') || !app.querySelector('#ed')) return;
     carregando = true;
     let contas = null;
     try { contas = await api('/api/admin/contas'); } catch { /* nao e moderador */ }

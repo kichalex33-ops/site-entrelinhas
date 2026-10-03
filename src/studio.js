@@ -540,6 +540,8 @@ async function searchDocs(env, work, url, json) {
 // Editar o rascunho depois nao muda nada no ar ate o autor "atualizar a publicacao".
 const agora = () => Math.floor(Date.now() / 1000);
 const PUBLICAS = ['publicado', 'atualizado'];
+// classificacao indicativa (padrao brasileiro): L = livre; os demais, "nao recomendado para menores de N anos"
+export const FAIXAS = ['L', '10', '12', '14', '16', '18'];
 const LIM_PUB = { caps: 500, sinopse: 3000, genero: 80, creditos: 500, agendaMax: 366 * 86400 };
 const IMG_ID_RE = /^[a-f0-9]{24}$/;
 
@@ -576,7 +578,7 @@ async function getPublicacao(env, work, user, h) {
     // o que ja esta publicado (ou, na primeira vez, o que vem das informacoes da obra)
     meta: {
       titulo: pub.titulo || work.title, genero: pub.genero ?? meta.genero ?? '', sinopse: pub.sinopse ?? meta.sinopse ?? '',
-      creditos: pub.creditos || '', capa: pub.capa || meta.capa || '',
+      creditos: pub.creditos || '', capa: pub.capa || meta.capa || '', faixa: pub.faixa || '',
     },
     capitulos: caps.results.map((c) => ({ n: c.ordem, doc_id: c.doc_id, titulo: c.titulo, palavras: c.palavras })),
   });
@@ -598,9 +600,11 @@ async function publicar(env, req, work, user, h) {
   const meta = {
     titulo: h.str(m.titulo, LIM.title), genero: h.str(m.genero, LIM_PUB.genero),
     sinopse: h.str(m.sinopse, LIM_PUB.sinopse), creditos: h.str(m.creditos, LIM_PUB.creditos), capa: '',
+    faixa: FAIXAS.includes(m.faixa) ? m.faixa : '',
   };
   if (!meta.titulo) return h.fail('Dê um título à obra publicada.');
   if (!meta.sinopse) return h.fail('Escreva uma sinopse: é ela que apresenta a obra ao leitor.');
+  if (!meta.faixa) return h.fail('Escolha a classificação indicativa: para qual faixa etária a obra é recomendada.');
   if (m.capa) {
     if (!IMG_ID_RE.test(String(m.capa))) return h.fail('Capa inválida.');
     const img = await env.DB.prepare('SELECT 1 FROM images WHERE id = ? AND user_id = ?').bind(m.capa, user.id).first();

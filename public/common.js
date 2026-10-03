@@ -30,5 +30,12 @@
     return data;
   }
 
-  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api };
+  // classificacao indicativa (mesma lista de src/studio.js: FAIXAS)
+  const FAIXAS = [['L', 'Livre para todos os públicos'], ['10', 'Não recomendado para menores de 10 anos'], ['12', 'Não recomendado para menores de 12 anos'],
+    ['14', 'Não recomendado para menores de 14 anos'], ['16', 'Não recomendado para menores de 16 anos'], ['18', 'Não recomendado para menores de 18 anos']];
+  const faixa = (f) => { const x = FAIXAS.find((i) => i[0] === f); return x ? `<span class="faixa faixa-${x[0]}" title="${esc(x[1])}" aria-label="${esc(x[1])}">${x[0]}</span>` : ''; };
+  // "2025" -> "2025"; "2025-03" -> "mar. 2025"
+  const mesAno = (s) => { const m = /^(\d{4})(?:-(\d{2}))?$/.exec(s || ''); if (!m) return ''; return m[2] ? new Date(+m[1], +m[2] - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : m[1]; };
+
+  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api, FAIXAS, faixa, mesAno };
 })();

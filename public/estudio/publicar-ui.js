@@ -50,6 +50,11 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
   const genero = h('input', { class: 'st-campo', type: 'text', maxlength: '80', value: P.meta.genero || '' });
   const sinopse = h('textarea', { class: 'st-campo', rows: '4', maxlength: '3000' }, P.meta.sinopse || '');
   const creditos = h('input', { class: 'st-campo', type: 'text', maxlength: '500', value: P.meta.creditos || '', placeholder: 'opcional: revisão, capa, ilustrações...' });
+  // classificacao indicativa: obrigatoria para publicar
+  const faixaCaixas = window.EL.FAIXAS.map(([v, rot]) => h('input', { type: 'radio', name: 'st-pub-faixa', value: v, checked: P.meta.faixa === v || null, 'aria-label': rot }));
+  const faixaEscolhida = () => (faixaCaixas.find((x) => x.checked) || {}).value || '';
+  const faixaCampo = h('div', { class: 'faixa-op', role: 'radiogroup', 'aria-label': 'Classificação indicativa' },
+    faixaCaixas.map((cx, i) => h('label', { title: window.EL.FAIXAS[i][1] }, cx, h('span', { class: `faixa faixa-${cx.value}` }, cx.value), i === 0 ? ' Livre' : ` ${cx.value} anos`)));
 
   // ---- capa
   let capa = P.meta.capa || '';
@@ -124,9 +129,10 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
     const docs = escolhidos();
     if (!docs.length) { estado.textContent = 'Escolha pelo menos um capítulo.'; return; }
     if (!sinopse.value.trim()) { estado.textContent = 'Escreva uma sinopse: é ela que apresenta a obra ao leitor.'; sinopse.focus(); return; }
+    if (!faixaEscolhida()) { estado.textContent = 'Escolha a classificação indicativa: para qual faixa etária a obra é recomendada.'; faixaCaixas[0].focus(); return; }
     const dados = {
       acao: !P.no_ar && agendar.checked ? 'agendar' : 'publicar', aceite: P.declaracao && P.declaracao.versao,
-      meta: { titulo: titulo.value, genero: genero.value, sinopse: sinopse.value, creditos: creditos.value, capa },
+      meta: { titulo: titulo.value, genero: genero.value, sinopse: sinopse.value, creditos: creditos.value, capa, faixa: faixaEscolhida() },
       docs: docs.map((d) => d.id),
     };
     if (dados.acao === 'agendar') {
@@ -187,7 +193,9 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
       P.ligada ? null : h('p', { class: 'st-pub-sit' }, 'A publicação ainda não está liberada no Entrelinhas. Você pode preparar tudo e ver a prévia.'),
       situacao,
       h('p', { class: 'hint' }, `Status no Estúdio: ${STATUS_OBRA[P.status] || P.status}.`),
-      f('Título', titulo), f('Gênero', genero), f('Sinopse', sinopse, 'Obrigatória. Aparece na biblioteca e na página da obra.'), f('Créditos', creditos),
+      f('Título', titulo), f('Gênero', genero), f('Sinopse', sinopse, 'Obrigatória. Aparece na biblioteca e na página da obra.'),
+      h('div', { class: 'fld' }, h('span', null, 'Classificação indicativa (faixa etária)'), faixaCampo, h('small', { class: 'hint' }, 'Obrigatória. Escolha a partir de que idade a obra é recomendada, pensando em violência, sexo, drogas e linguagem.')),
+      f('Créditos', creditos),
       h('div', { class: 'fld' }, h('span', null, 'Capa'), capaImg, capaArquivo, capaTirar),
       h('div', { class: 'fld' }, h('span', null, 'O que vai para o leitor'), listaCaps, resumoCaps,
         h('small', { class: 'hint' }, 'Notas, fichas e pesquisa só vão se você marcar. [[Links]] viram texto comum e #tags somem.')),

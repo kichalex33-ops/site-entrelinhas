@@ -30,6 +30,9 @@ async function iniciar() {
   let eu;
   try { eu = await api.me(); } catch (e) { return telaMensagem('Entre na sua conta', 'O Estúdio é o espaço privado de criação dos autores.', h('a', { class: 'btn btn-primary', href: 'conta.html' }, 'Entrar')); }
   if (eu.role !== 'autor') return telaMensagem('Apenas para autores', 'O Estúdio é exclusivo de contas de autor.', h('a', { class: 'btn btn-ghost', href: 'autores.html' }, 'Ver autores'));
+  // atalhos vindos da conta ("Adicionar obra"): #/nova/escrever ou #/nova/importar
+  const nova = location.hash.match(/^#\/nova\/(escrever|importar)$/);
+  if (nova) { history.replaceState(null, '', '#/'); await telaInicio(); return novaObra(nova[1]); }
   const r = rota();
   if (r.obra) return abrirObra(r.obra, r.doc);
   return telaInicio();
@@ -54,7 +57,7 @@ async function telaInicio() {
     h('div', { class: 'hero', style: 'padding-bottom:.5rem' },
       h('span', { class: 'eyebrow' }, 'Espaço privado de criação'), h('h2', null, 'Estúdio ', h('em', null, 'Entrelinhas')),
       h('p', null, 'Pense, conecte, escreva, organize e revise. Nada aqui aparece para os leitores até você escolher publicar.'),
-      h('p', { class: 'cta-row' }, h('button', { class: 'btn btn-primary', id: 'st-nova', onclick: novaObra }, '+ Nova obra'))),
+      h('p', { class: 'cta-row' }, h('button', { class: 'btn btn-primary', id: 'st-nova', onclick: () => novaObra() }, '+ Nova obra'))),
     obras.length ? [
       grupo('Obras recentes', obras.slice(0, 6), 'g-rec'),
       grupo('Rascunhos', por('rascunho'), 'g-ras'), grupo('Em revisão', por('em_revisao'), 'g-rev'),
@@ -81,9 +84,9 @@ async function excluirObra(o) {
   telaInicio();
 }
 
-async function novaObra() {
-  const comecar = (tipo, rotulo) => async () => {
-    dlg.close();
+async function novaObra(modo) {
+  const comecar = (tipo) => async () => {
+    if (dlg) dlg.close();
     const titulo = await perguntar('Como se chama a obra?', 'Título', '', 'Criar obra');
     if (!titulo) return;
     try { const r = await api.criarObra(titulo, tipo); location.hash = `#/obra/${r.id}`; }
@@ -91,11 +94,13 @@ async function novaObra() {
   };
   const opcao = (titulo, texto, acao, off) => h('button', { type: 'button', class: 'st-opcao', disabled: off || null, onclick: acao }, h('strong', null, titulo), h('span', null, texto));
   const importarNova = async () => {
-    dlg.close();
+    if (dlg) dlg.close();
     const r = await importarManuscrito({});
     if (r && r.obraId) location.hash = '#/obra/' + r.obraId + (r.primeiro ? '/' + r.primeiro : '');
   };
-  let dlg;
+  let dlg = null;
+  if (modo === 'escrever') return comecar('texto')();
+  if (modo === 'importar') return importarNova();
   dlg = h('dialog', { class: 'st-dialogo', 'aria-labelledby': 'st-nova-t' },
     h('h2', { id: 'st-nova-t' }, 'Como deseja começar?'),
     h('div', { class: 'st-opcoes' },

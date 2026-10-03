@@ -39,6 +39,10 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   await dlg.locator('textarea').fill('Um rio que lembra de tudo.');
   await dlg.locator('.st-pub-aceite input').check();
   await ok.click();
+  await dlg.locator('.st-exp-estado:has-text("faixa etária")').waitFor(); // sem faixa nao publica
+  await dlg.locator('input[name=st-pub-faixa][value="12"]').check();
+  await dlg.locator('.st-pub-aceite input').check();
+  await ok.click();
   const link = p.locator('dialog a:has-text("Abrir a página de leitura")');
   await link.waitFor();
   const href = await link.getAttribute('href');
@@ -50,8 +54,9 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   leitor.on('pageerror', (e) => erros.push(e.message));
   await leitor.goto(`${E2E.url}/${href}`);
   await leitor.waitForSelector('.ler-sumario li');
-  assert.equal(await leitor.locator('.ler-obra h2').innerText(), 'O Rio');
+  assert.match(await leitor.locator('.ler-obra h2').innerText(), /^O Rio/);
   assert.equal(await leitor.locator('.ler-sumario li').count(), 2);
+  assert.equal(await leitor.locator('.ler-obra .faixa').innerText(), '12', 'selo da faixa etaria na pagina da obra');
   await leitor.click('a:has-text("Começar a ler")');
   await leitor.waitForSelector('.ler-texto p');
   assert.equal(await leitor.locator('.ler-texto p').innerText(), 'Kayla olhou o rio.', '#tag some do texto publico');

@@ -38,3 +38,19 @@ test('convite expirado nao abre cadastro; so moderador gera e lista', async () =
   assert.equal((await app.call('GET', '/api/admin/convites', { tok: autor.tok })).s, 403);
   assert.equal((await app.call('POST', '/api/admin/convites', { body: {} })).s, 401);
 });
+
+test('perfil: faixa etaria e lancamento validados; data de entrada no site e do servidor e nao muda', async () => {
+  const app = makeApp();
+  const a = app.addUser({ nome: 'Ana' });
+  const base = { nome: 'Ana', links: [], secoes: [] };
+  const salvar = (obras) => app.call('PUT', '/api/profile', { tok: a.tok, body: { data: { ...base, obras } } });
+  let r = await salvar([{ titulo: 'Livro', faixa: '14', publicado_em: '2025-03', no_site_em: 1 }]);
+  assert.equal(r.s, 200, JSON.stringify(r.j));
+  const o = r.j.data.obras[0];
+  assert.equal(o.faixa, '14'); assert.equal(o.publicado_em, '2025-03');
+  const t = JSON.parse(app.db.prepare('SELECT data FROM profiles WHERE slug = ?').get(a.slug).data).obras[0].no_site_em;
+  assert.ok(t > 1000, 'o servidor ignora a data enviada pelo autor');
+  r = await salvar([{ id: o.id, titulo: 'Livro', faixa: '99', publicado_em: '1800' }]);
+  const o2 = JSON.parse(app.db.prepare('SELECT data FROM profiles WHERE slug = ?').get(a.slug).data).obras[0];
+  assert.equal(o2.faixa, ''); assert.equal(o2.publicado_em, ''); assert.equal(o2.no_site_em, t, 'mantem a data de entrada');
+});

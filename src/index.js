@@ -1,7 +1,7 @@
 // Entrelinhas: API de perfis de autor (Cloudflare Worker + D1).
 // Rotas /api/* e /img/* passam por aqui; o resto vem dos arquivos estaticos.
 
-import { studioApi } from './studio.js';
+import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
 
 const SESSION_DAYS = 30;
@@ -132,6 +132,9 @@ async function sanitizeProfile(env, d, userId) {
       genero: str(o.genero, 60),
       status: STATUS.includes(o.status) ? o.status : 'Publicado',
       sinopse: str(o.sinopse, 1500),
+      faixa: FAIXAS.includes(o.faixa) ? o.faixa : '',
+      // ano (AAAA) ou mes (AAAA-MM) em que o livro saiu
+      publicado_em: /^(19|20)\d{2}(-(0[1-9]|1[0-2]))?$/.test(str(o.publicado_em, 7)) ? str(o.publicado_em, 7) : '',
       capa: '',
       link: isUrl(str(o.link, 300)) ? str(o.link, 300) : '',
       lojas: [], // outros locais de venda: [{ rotulo, url }]
@@ -435,6 +438,12 @@ async function saveProfile(env, req, user) {
   if (!b) return fail('Requisição inválida.');
   let data;
   try { data = await sanitizeProfile(env, b.data, user.id); } catch (e) { return fail(e.message); }
+  // data em que cada livro entrou no site: definida pelo servidor (o autor nao altera). Livro novo = agora;
+  // livro que ja existia mantem a data gravada (os antigos, de antes deste campo, ficam sem data).
+  const antes = await env.DB.prepare('SELECT data FROM profiles WHERE slug = ?').bind(user.slug).first();
+  const noSite = new Map();
+  try { for (const o of JSON.parse(antes.data).obras || []) if (o.id) noSite.set(o.id, o.no_site_em || 0); } catch { /* perfil antigo */ }
+  for (const o of data.obras) { const t = noSite.has(o.id) ? noSite.get(o.id) : now(); if (t) o.no_site_em = t; }
   await env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug).run();
   // limpa imagens do autor sem uso (com mais de 1h, para nao apagar upload recem-feito)
   const used = new Set([data.retrato, ...data.obras.map((o) => o.capa)].filter(Boolean));

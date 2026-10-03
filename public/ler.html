@@ -73,10 +73,11 @@ async function sumario() {
       ${o.capa ? `<img class="ler-capa" src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}">` : ''}
       <div>
         <span class="eyebrow">${esc(o.genero || 'Obra publicada')}</span>
-        <h2>${esc(o.titulo)}</h2>
+        <h2>${esc(o.titulo)} ${EL.faixa(o.faixa)}</h2>
         <p class="ler-autor">por ${autorLink}</p>
         ${o.sinopse ? `<p class="ler-sinopse">${esc(o.sinopse)}</p>` : ''}
-        <p class="ler-meta">${o.capitulos.length} capítulo${o.capitulos.length === 1 ? '' : 's'} · ${milhar(o.palavras)} palavras</p>
+        <p class="ler-meta">${o.capitulos.length} capítulo${o.capitulos.length === 1 ? '' : 's'} · ${milhar(o.palavras)} palavras${o.publicado_em ? ` · no Entrelinhas desde ${new Date(o.publicado_em * 1000).toLocaleDateString('pt-BR')}` : ''}</p>
+        ${EL.FAIXAS.find((x) => x[0] === o.faixa) ? `<p class="ler-meta">${esc(EL.FAIXAS.find((x) => x[0] === o.faixa)[1])}</p>` : ''}
         ${o.capitulos.length ? `<p><a class="btn btn-primary" href="${base}&c=${o.capitulos[0].n}">Começar a ler</a></p>` : ''}
         ${o.creditos ? `<p class="ler-creditos">${esc(o.creditos)}</p>` : ''}
       </div>

@@ -158,10 +158,12 @@ fetch('/api/biblioteca').then((r) => r.ok ? r.json() : null).then((d) => {
   const ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
   const img = (id) => !id ? '' : id.charAt(0) === '/' ? id : '/img/' + id + '?v=2';
+  const CORES = { L: 'Livre', 10: '10', 12: '12', 14: '14', 16: '16', 18: '18' };
+  const faixa = (f) => CORES[f] ? `<span class="faixa faixa-${f}" title="${f === 'L' ? 'Livre para todos os públicos' : 'Não recomendado para menores de ' + f + ' anos'}">${f}</span>` : '';
   document.getElementById('lerAquiGrid').innerHTML = d.obras.map((o) => `
     <article class="work">
       ${o.capa ? `<img src="${esc(img(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : ''}
-      <h3>${esc(o.titulo)}</h3>
+      <h3>${esc(o.titulo)} ${faixa(o.faixa)}</h3>
       <p class="by">${esc(o.autor.nome)}${o.genero ? ' · ' + esc(o.genero) : ''}</p>
       ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
       <a class="btn btn-primary" href="${esc(o.url)}">Ler · ${o.capitulos} cap.</a>

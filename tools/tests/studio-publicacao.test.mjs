@@ -15,7 +15,7 @@ async function cenario(env = { ESTUDIO_PUBLICACAO: 'on' }) {
   const c2 = await doc('Capítulo 2', 'Kayla voltou.');
   const nota = await doc('Ideia secreta', 'Ninguém pode ler isto.', 'nota');
   const dec = (await app.call('GET', `${base}/${w}/publicacao`, { tok: a.tok })).j.declaracao.versao;
-  const pub = (body, tok = a.tok, obra = w) => app.call('POST', `${base}/${obra}/publicacao`, { tok, body: { acao: 'publicar', aceite: dec, meta: { titulo: 'O Rio', sinopse: 'Uma menina e um rio.', genero: 'Fantasia' }, docs: [c1, c2], ...body } });
+  const pub = (body, tok = a.tok, obra = w) => app.call('POST', `${base}/${obra}/publicacao`, { tok, body: { acao: 'publicar', aceite: dec, meta: { titulo: 'O Rio', sinopse: 'Uma menina e um rio.', genero: 'Fantasia', faixa: '12' }, docs: [c1, c2], ...body } });
   return { app, a, w, c1, c2, nota, dec, pub };
 }
 
@@ -75,6 +75,9 @@ test('validacoes: declaracao, sinopse, capitulos de outra obra, repetidos e capa
   assert.equal((await pub({ aceite: undefined })).s, 400, 'sem aceite');
   assert.equal((await pub({ aceite: dec + 1 })).s, 400, 'aceite de versao errada');
   assert.equal((await pub({ meta: { titulo: 'X', sinopse: '' } })).s, 400, 'sem sinopse');
+  const semFaixa = await pub({ meta: { titulo: 'O Rio', sinopse: 's' } });
+  assert.equal(semFaixa.s, 400, 'sem faixa etaria'); assert.match(semFaixa.j.erro, /faixa etária/);
+  assert.equal((await pub({ meta: { titulo: 'O Rio', sinopse: 's', faixa: '13' } })).s, 400, 'faixa fora da lista');
   assert.equal((await pub({ docs: [] })).s, 400, 'sem capitulos');
   assert.equal((await pub({ docs: [c1, c1] })).s, 400, 'repetido');
   const outra = (await app.call('POST', base, { tok: a.tok, body: { titulo: 'Outra' } })).j.id;
@@ -82,9 +85,9 @@ test('validacoes: declaracao, sinopse, capitulos de outra obra, repetidos e capa
   assert.equal((await pub({ docs: [c1, alheio] })).s, 409, 'documento de outra obra');
   const b = app.addUser();
   app.db.prepare('INSERT INTO images (id, user_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)').run('ab'.repeat(12), b.id, 'image/png', new Uint8Array([1]), 1);
-  assert.equal((await pub({ meta: { titulo: 'O Rio', sinopse: 's', capa: 'ab'.repeat(12) } })).s, 400, 'capa de outra pessoa');
+  assert.equal((await pub({ meta: { titulo: 'O Rio', sinopse: 's', faixa: '12', capa: 'ab'.repeat(12) } })).s, 400, 'capa de outra pessoa');
   app.db.prepare('INSERT INTO images (id, user_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)').run('cd'.repeat(12), a.id, 'image/png', new Uint8Array([1]), 1);
-  const ok = await pub({ meta: { titulo: 'O Rio', sinopse: 's', capa: 'cd'.repeat(12) } });
+  const ok = await pub({ meta: { titulo: 'O Rio', sinopse: 's', faixa: '12', capa: 'cd'.repeat(12) } });
   assert.equal(ok.s, 200);
   assert.equal((await app.call('GET', `/api/leitura/${a.slug}/o-rio`)).j.capa, 'cd'.repeat(12));
   // nada publicado nas tentativas que falharam: o aceite so foi gravado uma vez
@@ -135,7 +138,7 @@ test('despublicar tira do ar, guarda o endereco e libera a edicao de status', as
   assert.equal((await app.call('GET', `/api/profile/${a.slug}`)).j.publicadas.length, 0);
   assert.equal((await app.call('DELETE', `${base}/${w}/publicacao`, { tok: a.tok })).s, 409, 'ja esta fora do ar');
   assert.equal((await app.call('PATCH', `${base}/${w}`, { tok: a.tok, body: { status: 'rascunho' } })).s, 200);
-  const r = await pub({ meta: { titulo: 'Outro título', sinopse: 's' } });
+  const r = await pub({ meta: { titulo: 'Outro título', sinopse: 's', faixa: '12' } });
   assert.equal(r.j.slug, 'o-rio', 'volta no mesmo endereco');
 });
 
@@ -173,7 +176,7 @@ test('chave desligada: nao publica e a leitura publica nao existe', async () => 
 test('salvar o perfil nao apaga a capa usada no Estudio', async () => {
   const { app, a, pub } = await cenario();
   app.db.prepare('INSERT INTO images (id, user_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)').run('ef'.repeat(12), a.id, 'image/png', new Uint8Array([1]), 1);
-  await pub({ meta: { titulo: 'O Rio', sinopse: 's', capa: 'ef'.repeat(12) } });
+  await pub({ meta: { titulo: 'O Rio', sinopse: 's', faixa: '12', capa: 'ef'.repeat(12) } });
   await app.call('PUT', '/api/profile', { tok: a.tok, body: { data: { nome: 'Ana Autora', obras: [] } } });
   assert.ok(app.db.prepare('SELECT 1 FROM images WHERE id = ?').get('ef'.repeat(12)));
 });

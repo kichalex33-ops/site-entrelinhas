@@ -115,6 +115,7 @@
 
   function editorView(){
     subtitle.textContent = 'Tudo o que você editar aqui aparece na sua página pública.';
+    app.dataset.mod = isMod ? '1' : ''; // moderacao.js so monta o painel para moderadores
     app.innerHTML = `
       <div class="bar">
         <a class="btn btn-ghost" href="autor.html?a=${encodeURIComponent(slug)}" target="_blank" rel="noopener">Ver minha página pública</a>
@@ -147,21 +148,15 @@
         ${listBlock('links', 'Links (o primeiro vira o botão principal)', 'Adicionar link', (l, i) =>
           field('Texto do botão', input(`links.${i}.rotulo`, l.rotulo, 'maxlength="40"')) + field('Endereço (https://...)', input(`links.${i}.url`, l.url, 'maxlength="300" type="url"')))}
 
-        ${listBlock('obras', 'Obras', 'Adicionar obra', (o, i) =>
-          field('Título', input(`obras.${i}.titulo`, o.titulo, 'maxlength="120"')) +
-          field('Gênero', input(`obras.${i}.genero`, o.genero, 'maxlength="60"')) +
-          field('Situação', `<select data-k="obras.${i}.status">${STATUS.map(s => `<option${o.status === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`) +
-          field('Sinopse', area(`obras.${i}.sinopse`, o.sinopse, 4, 1500)) +
-          field('Link principal (compra ou leitura)', input(`obras.${i}.link`, o.link, 'maxlength="300" type="url"')) +
-          `<div class="lojas"><span class="lbl">Outras lojas onde comprar (até 6)</span>
-            ${(o.lojas || []).map((l, j) => `<div class="loja-row">
-              ${input(`obras.${i}.lojas.${j}.rotulo`, l.rotulo, 'maxlength="40" list="lojas-sug" placeholder="Loja (ex.: Amazon)"')}
-              ${input(`obras.${i}.lojas.${j}.url`, l.url, 'maxlength="300" type="url" placeholder="https://..."')}
-              <button type="button" class="rm" data-rmloja="${i}:${j}">Remover</button></div>`).join('')}
-            <button type="button" class="btn btn-ghost add" data-addloja="${i}">Adicionar loja</button></div>` +
-          `<div class="photo-row"><div class="photo-prev small" id="prev-capa-${i}">${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="">` : '<span>Sem capa</span>'}</div>
-            <div><span class="lbl">Capa</span><input type="file" accept="image/jpeg,image/png,image/webp" data-up="obras.${i}.capa"><p class="hint">JPG, PNG ou WebP.</p>
-            ${o.capa ? `<button type="button" class="rm" data-clear="obras.${i}.capa">Remover capa</button>` : ''}</div></div>`)}
+        <fieldset class="blk" id="obras-blk"><legend>Obras</legend>
+          <p class="hint">Obras escritas ou carregadas no Estúdio aparecem sozinhas na sua página quando você publica. Aqui ficam também os livros que você divulga com link de compra.</p>
+          <div class="obras-lista">${P.obras.map((o, i) => `<div class="obra-item">
+            <div class="obra-mini">${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="">` : `<span>${esc((o.titulo || '?').trim().charAt(0).toUpperCase())}</span>`}</div>
+            <div class="obra-info"><b>${esc(o.titulo || 'Sem título')} ${EL.faixa(o.faixa)}</b><span class="hint">${esc([o.status, o.genero, EL.mesAno(o.publicado_em)].filter(Boolean).join(' · '))}</span></div>
+            <div class="obra-acoes"><button type="button" class="btn btn-ghost" data-editobra="${i}">Editar</button><button type="button" class="rm" data-rmobra="${i}">Remover</button></div>
+          </div>`).join('') || '<p class="hint">Nenhum livro divulgado ainda.</p>'}</div>
+          <button type="button" class="btn btn-primary" data-novaobra>Adicionar obra</button>
+        </fieldset>
 
         ${listBlock('secoes', 'Seções de texto', 'Adicionar seção', (s, i) =>
           field('Título', input(`secoes.${i}.titulo`, s.titulo, 'maxlength="80"')) + field('Texto', area(`secoes.${i}.texto`, s.texto, 6, 4000)))}
@@ -205,6 +200,12 @@
         const [i, j] = t.dataset.rmloja.split(':'); P.obras[Number(i)].lojas.splice(Number(j), 1); editorView();
       } else if (t.dataset.rm) {
         const [k, i] = t.dataset.rm.split(':'); P[k].splice(Number(i), 1); editorView();
+      } else if (t.dataset.novaobra !== undefined) {
+        escolherCaminho();
+      } else if (t.dataset.editobra) {
+        obraDialogo(Number(t.dataset.editobra));
+      } else if (t.dataset.rmobra) {
+        removerObra(Number(t.dataset.rmobra));
       } else if (t.dataset.clear) {
         setAt(P, t.dataset.clear, ''); editorView();
       }
@@ -249,6 +250,116 @@
     });
   }
 
+  // ---------- obras: escolha de caminho + janela guiada (mesmo esquema da publicacao do Estudio) ----------
+  function janela(titulo, corpo, rodape) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'el-dialogo';
+    dlg.innerHTML = `<h2>${esc(titulo)}</h2><div class="el-dialogo-corpo"></div><div class="el-dialogo-rodape"></div>`;
+    dlg.querySelector('.el-dialogo-corpo').append(...[].concat(corpo));
+    dlg.querySelector('.el-dialogo-rodape').append(...[].concat(rodape));
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg); dlg.showModal();
+    return dlg;
+  }
+  const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
+  const botao = (rotulo, classe, fn) => { const b = el(`<button type="button" class="btn ${classe}">${esc(rotulo)}</button>`); b.addEventListener('click', fn); return b; };
+
+  async function salvarPerfil(dados) {
+    const r = await api('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: dados }) });
+    P = r.data; editorView();
+    const n = document.getElementById('saveNote'); if (n) n.innerHTML = note('Salvo. Já está na sua página pública.', true);
+  }
+
+  function escolherCaminho() {
+    if (P.obras.length >= 20) {
+      const d = janela('Limite atingido', el('<p>Você já tem 20 livros divulgados. Remova um para adicionar outro.</p>'), botao('Fechar', 'btn-ghost', () => d.close()));
+      return;
+    }
+    const opcao = (titulo, texto, acao) => { const b = el(`<button type="button" class="el-opcao"><strong>${esc(titulo)}</strong><span>${esc(texto)}</span></button>`); b.addEventListener('click', acao); return b; };
+    const dlg = janela('Como é esta obra?', [
+      opcao('Escrever aqui no site', 'Abre o Estúdio para escrever capítulo por capítulo. Quando quiser, você publica e ela aparece na sua página.', () => { location.href = 'estudio.html#/nova/escrever'; }),
+      opcao('Carregar arquivo pronto', 'Traga o livro em DOCX, TXT ou Markdown: o Estúdio divide em capítulos para você revisar e publicar.', () => { location.href = 'estudio.html#/nova/importar'; }),
+      opcao('Divulgar livro de fora', 'Livro já publicado em outro lugar: título, sinopse, capa e onde comprar.', () => { dlg.close(); obraDialogo(null); }),
+    ], botao('Cancelar', 'btn-ghost', () => dlg.close()));
+  }
+
+  function obraDialogo(idx) {
+    const o = idx == null ? { titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [] } : JSON.parse(JSON.stringify(P.obras[idx]));
+    o.lojas = o.lojas || [];
+    const f = el(`<form class="el-form">
+      <label class="fld"><span>Título</span><input name="titulo" maxlength="120" required value="${esc(o.titulo)}"></label>
+      <label class="fld"><span>Gênero</span><input name="genero" maxlength="60" value="${esc(o.genero)}" placeholder="ex.: Fantasia · Livro I"></label>
+      <label class="fld"><span>Situação</span><select name="status">${STATUS.map((st) => `<option${o.status === st ? ' selected' : ''}>${st}</option>`).join('')}</select></label>
+      <div class="fld"><span>Classificação indicativa (faixa etária)</span><div class="faixa-op" role="radiogroup">${EL.FAIXAS.map(([v, rot]) => `<label title="${esc(rot)}"><input type="radio" name="faixa" value="${v}"${o.faixa === v ? ' checked' : ''}>${EL.faixa(v)} ${v === 'L' ? 'Livre' : v + ' anos'}</label>`).join('')}</div></div>
+      <div class="fld"><span>Lançamento</span><div class="data-pub"><input name="ano" type="number" min="1900" max="2100" placeholder="Ano" aria-label="Ano de lançamento" value="${esc((o.publicado_em || '').slice(0, 4))}"><select name="mes" aria-label="Mês de lançamento"><option value="">Mês (opcional)</option>${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${(o.publicado_em || '').slice(5) === v ? ' selected' : ''}>${m}</option>`; }).join('')}</select></div><small class="hint">Ano em que o livro saiu (o mês é opcional).</small></div>
+      <label class="fld"><span>Sinopse</span><textarea name="sinopse" rows="4" maxlength="1500">${esc(o.sinopse)}</textarea><small class="hint">Aparece no seu perfil, embaixo da capa.</small></label>
+      <div class="fld"><span>Capa</span><div class="el-capa"><div class="obra-mini grande"></div><div><input type="file" accept="image/jpeg,image/png,image/webp" aria-label="Enviar capa"><button type="button" class="rm" data-tirar>Tirar a capa</button><p class="hint">JPG, PNG ou WebP. A imagem é reduzida automaticamente.</p></div></div></div>
+      <label class="fld"><span>Link principal (compra ou leitura)</span><input name="link" type="url" maxlength="300" value="${esc(o.link)}" placeholder="https://..."></label>
+      <div class="fld"><span>Outras lojas (até 6)</span><div class="el-lojas"></div><button type="button" class="btn btn-ghost" data-loja>Adicionar loja</button></div>
+      <div class="el-estado" role="status"></div>
+    </form>`);
+    const estado = f.querySelector('.el-estado');
+    const capaBox = f.querySelector('.obra-mini');
+    const desenharCapa = () => {
+      capaBox.innerHTML = o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="Capa">` : '<span>Sem capa</span>';
+      f.querySelector('[data-tirar]').hidden = !o.capa;
+    };
+    const lojasBox = f.querySelector('.el-lojas');
+    const desenharLojas = () => {
+      lojasBox.innerHTML = o.lojas.map((l, j) => `<div class="loja-row"><input data-lr="${j}" maxlength="40" list="lojas-sug" placeholder="Loja (ex.: Amazon)" value="${esc(l.rotulo)}"><input data-lu="${j}" type="url" maxlength="300" placeholder="https://..." value="${esc(l.url)}"><button type="button" class="rm" data-rml="${j}">Remover</button></div>`).join('');
+      f.querySelector('[data-loja]').hidden = o.lojas.length >= 6;
+    };
+    desenharCapa(); desenharLojas();
+    f.addEventListener('submit', (e) => e.preventDefault());
+    f.addEventListener('input', (e) => {
+      if (e.target.dataset.lr) o.lojas[Number(e.target.dataset.lr)].rotulo = e.target.value;
+      if (e.target.dataset.lu) o.lojas[Number(e.target.dataset.lu)].url = e.target.value;
+    });
+    f.addEventListener('click', (e) => {
+      if (e.target.dataset.loja !== undefined) { o.lojas.push({ rotulo: '', url: '' }); desenharLojas(); }
+      else if (e.target.dataset.rml) { o.lojas.splice(Number(e.target.dataset.rml), 1); desenharLojas(); }
+      else if (e.target.dataset.tirar !== undefined) { o.capa = ''; desenharCapa(); }
+    });
+    f.querySelector('input[type=file]').addEventListener('change', async (e) => {
+      const arq = e.target.files[0]; if (!arq) return;
+      estado.innerHTML = note('Enviando a capa...', true);
+      try {
+        const blob = await shrink(arq);
+        const r = await fetch('/api/image', { method: 'POST', headers: { 'X-Requested-With': 'fetch', 'Content-Type': blob.type }, body: blob });
+        const d = await r.json(); if (!r.ok) throw new Error(d.erro || 'Falha no envio.');
+        o.capa = d.id; desenharCapa(); estado.innerHTML = note('Capa enviada.', true);
+      } catch (err) { estado.innerHTML = note(err.message); }
+      e.target.value = '';
+    });
+    const salvar = botao(idx == null ? 'Adicionar ao perfil' : 'Salvar', 'btn-primary', async () => {
+      if (!f.titulo.value.trim()) { estado.innerHTML = note('Dê um título à obra.'); f.titulo.focus(); return; }
+      if (!f.faixa.value) { estado.innerHTML = note('Escolha a classificação indicativa: para qual faixa etária o livro é recomendado.'); return; }
+      const ano = f.ano.value.trim();
+      if (ano && !/^(19|20)\d{2}$/.test(ano)) { estado.innerHTML = note('Ano de lançamento inválido.'); f.ano.focus(); return; }
+      Object.assign(o, { titulo: f.titulo.value, genero: f.genero.value, status: f.status.value, sinopse: f.sinopse.value, link: f.link.value,
+        faixa: f.faixa.value, publicado_em: ano ? (f.mes.value ? `${ano}-${f.mes.value}` : ano) : '' });
+      o.lojas = o.lojas.filter((l) => l.rotulo.trim() || l.url.trim());
+      const dados = JSON.parse(JSON.stringify(P));
+      if (idx == null) dados.obras.push(o); else dados.obras[idx] = o;
+      salvar.disabled = true; estado.innerHTML = note('Salvando...', true);
+      try { await salvarPerfil(dados); dlg.close(); }
+      catch (err) { estado.innerHTML = note(err.message); salvar.disabled = false; }
+    });
+    const dlg = janela(idx == null ? 'Divulgar livro' : 'Editar livro', f, [botao('Cancelar', 'btn-ghost', () => dlg.close()), salvar]);
+    f.titulo.focus();
+  }
+
+  function removerObra(idx) {
+    const o = P.obras[idx];
+    const estado = el('<div class="el-estado" role="status"></div>');
+    const ok = botao('Remover', 'btn-primary', async () => {
+      const dados = JSON.parse(JSON.stringify(P)); dados.obras.splice(idx, 1);
+      ok.disabled = true;
+      try { await salvarPerfil(dados); dlg.close(); } catch (err) { estado.innerHTML = note(err.message); ok.disabled = false; }
+    });
+    const dlg = janela('Remover este livro?', [el(`<p>“${esc(o.titulo || 'Sem título')}” sai da sua página pública, junto com as avaliações dele.</p>`), estado], [botao('Cancelar', 'btn-ghost', () => dlg.close()), ok]);
+  }
+
   // reduz a imagem no navegador para caber no limite do servidor (600 KB)
   async function shrink(file){
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Envie uma imagem JPEG, PNG ou WebP.');
@@ -270,14 +381,11 @@
     const h = location.hash;
     if (!h) return;
     history.replaceState(null, '', location.pathname + location.search);
-    let idx = -1;
-    if (h === '#nova-obra') {
-      if (P.obras.length >= 20) return alert('Limite de 20 obras atingido.');
-      P.obras.push({ titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [] });
-      editorView(); idx = P.obras.length - 1;
-    } else if (h.indexOf('#obra-') === 0) idx = P.obras.findIndex(o => o.id === h.slice(6));
-    const el = idx >= 0 ? document.querySelector('#list-obras .item[data-i="' + idx + '"]') : null;
-    if (el) { el.scrollIntoView({ block: 'start' }); const f = el.querySelector('input,textarea'); if (f) f.focus(); }
+    if (h === '#nova-obra') return escolherCaminho();
+    if (h.indexOf('#obra-') === 0) {
+      const idx = P.obras.findIndex(o => o.id === h.slice(6));
+      if (idx >= 0) obraDialogo(idx);
+    }
   }
 
   async function load(){
