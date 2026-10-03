@@ -47,7 +47,7 @@ test('pagina do livro: o dono preenche personagens, galeria e materiais; o publi
   await v.waitForSelector('.livro-abas');
   assert.equal(await v.locator('[data-editar]').count(), 0);
   const abas = await v.locator('.livro-abas button').allInnerTexts();
-  assert.deepEqual(abas, ['Detalhes', 'Personagens (1)', 'Galeria (1)', 'Materiais (1)', 'Avaliações']);
+  assert.deepEqual(abas, ['Sinopse', 'Personagens (1)', 'Galeria (1)', 'Materiais (1)', 'Avaliações']);
   await v.click('.livro-abas button:has-text("Personagens")');
   assert.match(await v.innerText('.livro-pers'), /Kayla\s+Protagonista/);
   await v.click('.livro-abas button:has-text("Galeria")');

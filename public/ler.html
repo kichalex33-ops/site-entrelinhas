@@ -113,6 +113,8 @@ async function capitulo() {
     </section>
   </section>`;
   root.querySelector('.ler-texto').append(renderizar(c.corpo));
+  // "continuar lendo" na pagina do livro: guarda o ultimo capitulo aberto neste aparelho
+  try { localStorage.setItem('el:lendo:' + c.conversa.split('-')[0], String(c.n)); } catch { /* armazenamento bloqueado */ }
   window.scrollTo(0, 0);
   comentarios(c);
 }

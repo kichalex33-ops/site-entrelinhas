@@ -54,7 +54,7 @@
   const root = document.getElementById('root');
   const q = new URLSearchParams(location.search);
   const autor = q.get('a') || '', obraId = q.get('o') || '';
-  const ABAS = [['detalhes', 'Detalhes'], ['capitulos', 'Capítulos'], ['personagens', 'Personagens'], ['galeria', 'Galeria'], ['materiais', 'Materiais'], ['avaliacoes', 'Avaliações']];
+  const ABAS = [['detalhes', 'Sinopse'], ['capitulos', 'Capítulos'], ['personagens', 'Personagens'], ['galeria', 'Galeria'], ['materiais', 'Materiais'], ['avaliacoes', 'Avaliações']];
   const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
   const paras = (t) => String(t || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
@@ -87,9 +87,10 @@
   function painel(aba) {
     const p = D.pagina, o = D.obra;
     if (aba === 'detalhes') return `
-      <h3>Sinopse</h3>${paras(o.sinopse) || '<p class="hint">O autor ainda não escreveu a sinopse.</p>'}
+      <div class="livro-sinopse">${paras(o.sinopse) || '<p class="hint">O autor ainda não escreveu a sinopse.</p>'}</div>
       ${p.contexto ? `<h3>Bastidores</h3>${paras(p.contexto)}` : ''}
-      ${p.estilo ? `<h3>Estilo e tom</h3>${paras(p.estilo)}` : ''}`;
+      ${p.estilo ? `<h3>Estilo e tom</h3>${paras(p.estilo)}` : ''}
+      <h3>Informações</h3>${info()}`;
     if (aba === 'capitulos') return `<ol class="ler-sumario">${(D.capitulos || []).map((c) => `<li><a href="${esc(o.url)}&c=${c.n}"><span>${esc(c.titulo)}</span><small>${milhar(c.palavras)} palavras</small></a></li>`).join('')}</ol>`;
     if (aba === 'personagens') return `<div class="livro-pers">${p.personagens.map((c) => `<article class="pers">
         <div class="pers-foto">${c.imagem ? `<img src="${esc(imgUrl(c.imagem))}" alt="${esc(c.nome)}" loading="lazy">` : `<span>${initial(c.nome)}</span>`}</div>
@@ -103,8 +104,21 @@
   function abasVisiveis() {
     const p = D.pagina;
     const tem = { detalhes: true, capitulos: !!(D.capitulos && D.capitulos.length), personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: true };
-    const n = { capitulos: D.capitulos && D.capitulos.length, personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length };
+    const n = { capitulos: D.capitulos && D.capitulos.length, personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: D.avaliacoes.total };
     return ABAS.filter(([k]) => tem[k]).map(([k, r]) => [k, n[k] ? `${r} (${n[k]})` : r]);
+  }
+
+  // numeros reais apenas (visualizacoes e favoritos entram quando forem contados)
+  function numeros() {
+    const o = D.obra, av = D.avaliacoes, caps = D.capitulos || [];
+    const itens = [
+      [av.total ? `${av.media.toFixed(1).replace('.', ',')} ★` : '—', av.total ? `${av.total} avaliaç${av.total === 1 ? 'ão' : 'ões'}` : 'sem avaliações'],
+      caps.length && [milhar(caps.length), caps.length === 1 ? 'capítulo' : 'capítulos'],
+      caps.length && [milhar(caps.reduce((s, c) => s + c.palavras, 0)), 'palavras'],
+      !caps.length && mesAno(o.publicado_em) && [mesAno(o.publicado_em), 'lançamento'],
+      o.no_site_em && [dia(o.no_site_em), 'no Entrelinhas desde'],
+    ].filter(Boolean);
+    return `<div class="livro-numeros">${itens.map(([v, r]) => `<div><b>${esc(v)}</b><span>${esc(r)}</span></div>`).join('')}</div>`;
   }
 
   function desenhar() {
@@ -114,36 +128,40 @@
     const pedida = location.hash.slice(1);
     if (pedida === 'denunciar') { history.replaceState(null, '', location.pathname + location.search); setTimeout(denunciar, 0); }
     const ativa = abas.some(([k]) => k === pedida) ? pedida : 'detalhes';
-    const lojas = [o.link && { rotulo: /amazon\.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer', url: o.link }, ...(o.lojas || [])].filter(Boolean);
+    const lojas = [o.link && { rotulo: /amazon\./i.test(o.link) ? 'Amazon' : /uiclap/i.test(o.link) ? 'Uiclap' : 'Comprar', url: o.link }, ...(o.lojas || [])].filter(Boolean);
     const aqui = location.origin + location.pathname + location.search;
+    const caps = D.capitulos || [];
+    let lendo = 0;
+    try { lendo = Number(localStorage.getItem('el:lendo:' + obraId)) || 0; } catch { /* sem armazenamento */ }
+    const continuar = o.url && lendo && caps.some((c) => c.n === lendo) && lendo !== caps[0].n;
+    const generos = String(o.genero || '').split(/\s*[·,/]\s*/).filter(Boolean);
+    const fx = FAIXAS.find((x) => x[0] === o.faixa);
     root.innerHTML = `
     <section class="page active livro">
-      <p class="ler-trilha"><a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a> · livros</p>
-      <h2 class="livro-titulo">${esc(o.titulo)} ${faixa(o.faixa)}</h2>
-      ${p.alt_titulos ? `<p class="livro-alt">${esc(p.alt_titulos)}</p>` : ''}
-      <div class="livro-grade">
-        <aside class="livro-lado">
-          ${o.capa ? `<img class="ler-capa" src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}">` : `<div class="typo">${initial(o.titulo)}</div>`}
+      <div class="livro-hero">
+        <div class="livro-capa">${o.capa ? `<img class="ler-capa" src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}">` : `<div class="typo">${initial(o.titulo)}</div>`}</div>
+        <div class="livro-cab">
+          <h2 class="livro-titulo">${esc(o.titulo)}</h2>
+          ${p.alt_titulos ? `<p class="livro-alt">${esc(p.alt_titulos)}</p>` : ''}
+          <p class="livro-por">por <a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a></p>
+          <div class="livro-chips">${o.status ? `<span class="chip-st">${esc(o.status)}</span>` : ''}${generos.map((g) => `<span>${esc(g)}</span>`).join('')}</div>
+          ${fx || p.aviso ? `<div class="livro-cw">${faixa(o.faixa)}<p>${p.aviso ? `<b>Aviso de conteúdo:</b> ${esc(p.aviso)} ` : ''}${fx ? esc(fx[1]) + '.' : ''}</p></div>` : ''}
           <div class="livro-acoes">
-            ${o.url ? `<a class="btn btn-primary" href="${esc(o.url)}${D.capitulos && D.capitulos.length ? '&c=' + D.capitulos[0].n : ''}">Começar a ler</a>` : ''}
-            ${lojas.map((l) => `<a class="btn btn-ghost" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.rotulo)}</a>`).join('')}
+            ${o.url && caps.length ? `<a class="btn btn-primary" href="${esc(o.url)}&c=${caps[0].n}">&#9654; Iniciar leitura</a>` : ''}
+            ${continuar ? `<a class="btn btn-ghost" href="${esc(o.url)}&c=${lendo}">Continuar lendo (cap. ${lendo})</a>` : ''}
+            <button type="button" class="livro-ico" data-copiar title="Copiar link" aria-label="Copiar link">&#128279;</button>
+            <a class="livro-ico" href="https://wa.me/?text=${encodeURIComponent(o.titulo + ' — ' + aqui)}" target="_blank" rel="noopener noreferrer" title="Compartilhar no WhatsApp" aria-label="Compartilhar no WhatsApp">&#128172;</a>
+            ${D.dono ? '' : '<button type="button" class="livro-ico livro-flag" data-denunciar title="Denunciar este livro" aria-label="Denunciar este livro">&#128681;</button>'}
           </div>
-          <div class="livro-share" aria-label="Compartilhar">
-            <button type="button" class="btn btn-ghost" data-copiar>Copiar link</button>
-            <a class="btn btn-ghost" href="https://wa.me/?text=${encodeURIComponent(o.titulo + ' — ' + aqui)}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-            <a class="btn btn-ghost" href="https://x.com/intent/post?text=${encodeURIComponent(o.titulo)}&url=${encodeURIComponent(aqui)}" target="_blank" rel="noopener noreferrer">X</a>
-          </div>
-          <h3>Informações</h3>
-          ${info()}
-          ${D.dono ? '<p><button type="button" class="btn btn-primary" data-editar>Editar página do livro</button></p>' : '<p><button type="button" class="livro-denunciar" data-denunciar>Denunciar este livro</button></p>'}
-        </aside>
-        <div class="livro-main">
-          ${D.dono && D.denuncias && D.denuncias.length ? `<div class="livro-aviso" role="status"><b>Este livro tem denúncias em análise pela moderação:</b> ${D.denuncias.map((x) => `${esc(x.rotulo)} (${x.n})`).join(' · ')}. Se tiver algo a esclarecer, fale com um moderador do coletivo.</div>` : ''}
-          <nav class="livro-abas" role="tablist">${abas.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === ativa}">${esc(r)}</button>`).join('')}</nav>
-          <div class="livro-painel" role="tabpanel">${painel(ativa)}</div>
-          ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
+          ${lojas.length ? `<p class="livro-lojas"><span>Disponível em:</span>${lojas.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
+          ${D.dono ? '<p><button type="button" class="btn btn-ghost" data-editar>Editar página do livro</button></p>' : ''}
         </div>
       </div>
+      ${numeros()}
+      ${D.dono && D.denuncias && D.denuncias.length ? `<div class="livro-aviso" role="status"><b>Este livro tem denúncias em análise pela moderação:</b> ${D.denuncias.map((x) => `${esc(x.rotulo)} (${x.n})`).join(' · ')}. Se tiver algo a esclarecer, fale com um moderador do coletivo.</div>` : ''}
+      <nav class="livro-abas" role="tablist">${abas.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === ativa}">${esc(r)}</button>`).join('')}</nav>
+      <div class="livro-painel" role="tabpanel">${painel(ativa)}</div>
+      ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para escrever o aviso de conteúdo, contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
     </section>`;
     if (ativa === 'avaliacoes') EL.reviews.mount(root.querySelector('.livro-rev'), { autor, obra: o.id });
   }
@@ -214,6 +232,7 @@
     const p = JSON.parse(JSON.stringify(D.pagina));
     const f = el(`<form class="el-form livro-ed">
       <label class="fld"><span>Títulos alternativos (outros idiomas, título original...)</span><input name="alt" maxlength="200" value="${esc(p.alt_titulos)}"></label>
+      <label class="fld"><span>Aviso de conteúdo (opcional)</span><input name="aviso" maxlength="300" value="${esc(p.aviso || '')}" placeholder="Ex.: cenas de violência, morte e temas sensíveis"><small class="hint">Aparece no topo da página, junto da faixa etária.</small></label>
       <label class="fld"><span>Bastidores</span><textarea name="contexto" rows="5" maxlength="4000" placeholder="Como a história nasceu, inspirações, curiosidades, prêmios...">${esc(p.contexto)}</textarea></label>
       <label class="fld"><span>Estilo e tom</span><textarea name="estilo" rows="3" maxlength="1500" placeholder="Ex.: narrador em primeira pessoa, capítulos curtos, tom sombrio com humor...">${esc(p.estilo)}</textarea></label>
       <fieldset class="blk"><legend>Personagens (até 16)</legend><div data-lista="personagens"></div><button type="button" class="btn btn-ghost" data-add="personagens">Adicionar personagem</button></fieldset>
@@ -269,7 +288,7 @@
       } catch (err) { avisar(err.message); }
     });
     const salvar = botao('Salvar', 'btn-primary', async () => {
-      p.alt_titulos = f.alt.value; p.contexto = f.contexto.value; p.estilo = f.estilo.value;
+      p.alt_titulos = f.alt.value; p.aviso = f.aviso.value; p.contexto = f.contexto.value; p.estilo = f.estilo.value;
       salvar.disabled = true; avisar('Salvando...', true);
       try {
         const r = await api(`/api/livro/${obraId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: p }) });

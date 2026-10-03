@@ -5,7 +5,7 @@ import { VISIVEL } from './leitura.js';
 const OBRA_RE = /^[a-f0-9]{12}$/;
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 export const LIM_PAGINA = { personagens: 16, imagens: 12, materiais: 10, bytes: 40000 };
-const vazia = () => ({ alt_titulos: '', contexto: '', estilo: '', personagens: [], imagens: [], materiais: [] });
+const vazia = () => ({ alt_titulos: '', aviso: '', contexto: '', estilo: '', personagens: [], imagens: [], materiais: [] });
 const safe = (s) => { try { const o = JSON.parse(s); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
 
 // imagens usadas nas paginas do autor (para a limpeza de imagens sem uso nao apagar)
@@ -55,10 +55,12 @@ export async function getLivro(env, req, autor, obraId, h) {
   if (!obra) return h.fail('Livro não encontrado.', 404);
 
   const pg = await env.DB.prepare('SELECT data FROM book_pages WHERE obra_id = ? AND user_id = ?').bind(obraId, prof.user_id).first();
+  const av = await env.DB.prepare('SELECT COUNT(*) AS n, AVG(nota) AS media FROM reviews WHERE author_slug = ? AND obra_id = ? AND hidden = 0').bind(autor, obraId).first();
   const viewer = await h.currentUser(env, req);
   return h.json({
     tipo, obra, capitulos, pagina: pg ? { ...vazia(), ...safe(pg.data) } : vazia(),
     autor: { slug: autor, nome: pdata.nome || autor },
+    avaliacoes: { total: av.n, media: av.n ? Math.round(av.media * 10) / 10 : 0 },
     dono: !!viewer && viewer.id === prof.user_id,
     // so o dono ve que ha denuncias em analise (motivos e quantidade, nunca quem denunciou)
     denuncias: viewer && viewer.id === prof.user_id ? await h.denunciasAbertas(env, obraId) : undefined,
@@ -75,6 +77,7 @@ export async function putLivro(env, req, user, obraId, h) {
   if (!d) return h.fail('Requisição inválida.');
   const out = vazia();
   out.alt_titulos = h.str(d.alt_titulos, 200);
+  out.aviso = h.str(d.aviso, 300); // aviso de conteudo (violencia, temas sensiveis...)
   out.contexto = h.str(d.contexto, 4000);
   out.estilo = h.str(d.estilo, 1500);
   for (const p of (Array.isArray(d.personagens) ? d.personagens : []).slice(0, LIM_PAGINA.personagens)) {
