@@ -43,7 +43,7 @@ a.tab{text-decoration:none;display:inline-block}
 .links{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.2rem}
 .prose{max-width:62ch;margin:0 auto 2.5rem;padding:0 1.5rem}
 .prose p{color:#b6b6bf;margin-bottom:1rem}
-.works{display:grid;gap:1.1rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));max-width:1200px;margin:0 auto 3rem;padding:0 1.5rem}
+.works{display:grid;gap:1.1rem;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));max-width:1200px;margin:0 auto 3rem;padding:0 1.5rem}
 .work{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem;display:flex;flex-direction:column;gap:.35rem}
 .work img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;margin-bottom:.5rem}
 .work h3{font-family:'Playfair Display',serif;font-weight:500;font-size:1.1rem}
@@ -169,7 +169,7 @@ a.tab{text-decoration:none;display:inline-block}
 
 /* ler.html: leitura publica das obras do Estudio */
 .ler{max-width:1000px;margin:0 auto;padding:2rem 1.5rem 3rem}
-.ler-obra{display:grid;grid-template-columns:minmax(0,220px) 1fr;gap:2rem;align-items:start;margin-bottom:2.5rem}
+.ler-obra{display:grid;grid-template-columns:minmax(0,var(--capa-w,200px)) 1fr;gap:2rem;align-items:start;margin-bottom:2.5rem}
 .ler-obra h2{font-family:'Playfair Display',serif;font-weight:500;font-size:clamp(1.7rem,4vw,2.5rem);margin:.4rem 0}
 .ler-capa{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .ler-autor a,.ler-trilha a{color:var(--accent);text-decoration:none}
@@ -212,3 +212,12 @@ a.tab{text-decoration:none;display:inline-block}
 .mod-codigo{font-family:ui-monospace,monospace;letter-spacing:.08em;color:var(--accent)}
 .mod-conv-ul{list-style:none;padding:0;margin:.4rem 0 0}
 .mod-conv-ul li{padding:.4rem 0;border-bottom:1px solid var(--line);font-size:.88rem}
+
+/* capas padronizadas: todas no mesmo tamanho (como na Biblioteca), sem esticar com poucas obras ou no celular */
+:root{--capa-w:200px}
+.work img,.work .typo{width:100%;max-width:var(--capa-w);align-self:center}
+.work .typo{font-size:4rem}
+.ler-capa{max-width:var(--capa-w)}
+.work .btn{max-width:100%;white-space:normal;text-align:center;line-height:1.35}
+.work .buy{display:flex;flex-wrap:wrap;gap:.5rem}
+.work .buy .btn{margin-top:.6rem}
