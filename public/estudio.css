@@ -126,7 +126,7 @@ body.st-workspace { overflow: hidden; }
 .estudio-prosa p { margin: 0 0 1.05em; }
 .estudio-prosa h1, .estudio-prosa h2, .estudio-prosa h3 { font-family: 'Playfair Display', serif; font-weight: 500; line-height: 1.3; margin: 1.6em 0 .6em; }
 .estudio-prosa h1 { font-size: 1.9rem; } .estudio-prosa h2 { font-size: 1.5rem; } .estudio-prosa h3 { font-size: 1.2rem; }
-.estudio-prosa blockquote { border-left: 3px solid var(--accent); margin: 1em 0; padding: .1em 1em; color: #cfcfd4; font-style: italic; }
+.estudio-prosa blockquote { border-left: 3px solid var(--accent); margin: 1em 0; padding: .1em 1em; color: var(--text-2); font-style: italic; }
 .estudio-prosa hr { border: 0; border-top: 1px solid var(--accent); width: 26%; margin: 2.2em auto; opacity: .7; height: 0; }
 .estudio-prosa ul, .estudio-prosa ol { margin: 0 0 1em 1.4em; }
 .estudio-prosa a { color: var(--accent); }

@@ -10,13 +10,12 @@
   const linkAttrs = (u) => isExternal(u) ? ' target="_blank" rel="noopener noreferrer"' : '';
   const TINTS = { preto: '#17171c', azul: '#112442', vinho: '#3a1322', verde: '#0f2f26', grafite: '#2a2a30' };
   const hexOk = (c) => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '#d9a94a';
-  const hexRgba = (c, a) => { const n = parseInt(hexOk(c).slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
 
+  // cor e fundo escolhidos pelo autor; o CSS (.tinta-autor em extra.css) adapta ao modo claro/escuro
   function theme(el, d){
-    const cor = hexOk(d.cor);
-    el.style.setProperty('--accent', cor);
-    el.style.setProperty('--accent-dim', hexRgba(cor, .14));
-    el.style.background = `radial-gradient(900px 420px at 50% 0, ${TINTS[d.fundo] || TINTS.preto}, transparent 70%)`;
+    el.classList.add('tinta-autor');
+    el.style.setProperty('--cor-autor', hexOk(d.cor));
+    el.style.setProperty('--tinta', TINTS[d.fundo] || TINTS.preto);
   }
   function initial(nome){ return esc((nome || '?').trim().charAt(0).toUpperCase()); }
 
