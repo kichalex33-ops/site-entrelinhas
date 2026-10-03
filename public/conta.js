@@ -287,7 +287,16 @@
       if (me.role === 'leitor') return readerView(me);
       const p = await api('/api/profile/' + slug);
       P = p.data; editorView(); openFromHash();
-    } catch (e) { authView('login'); }
+    } catch (e) {
+      // link de convite (conta.html#convite=CODIGO): abre o cadastro de autor com o codigo preenchido.
+      // O codigo fica no fragmento (#), que o navegador nao envia ao servidor.
+      const conv = /^#convite=([A-Z0-9-]{5,40})$/i.exec(location.hash);
+      if (!conv) return authView('login');
+      history.replaceState(null, '', location.pathname);
+      authView('register');
+      document.querySelector('#authForm input[name=convite]').value = conv[1].toUpperCase();
+      document.querySelector('#authForm input[name=nome]').focus();
+    }
   }
   load();
 })();

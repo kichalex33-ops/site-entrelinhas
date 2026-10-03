@@ -170,8 +170,9 @@ async function register(env, req) {
   if (senha.length < 10 || senha.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
 
   const codeHash = await sha256Hex(str(b.convite, 100).toUpperCase());
-  const inv = await env.DB.prepare('SELECT claim_slug, used_by, reusable FROM invites WHERE code_hash = ?').bind(codeHash).first();
+  const inv = await env.DB.prepare('SELECT claim_slug, used_by, reusable, expires_at FROM invites WHERE code_hash = ?').bind(codeHash).first();
   if (!inv || (inv.used_by && !inv.reusable)) { await recordFail(env, key); return fail('Convite inválido ou já usado.', 403); }
+  if (inv.expires_at && inv.expires_at < now()) return fail('Este convite expirou. Peça um novo a um moderador.', 403);
 
   let slug, claimed = false;
   if (inv.claim_slug) {
@@ -351,6 +352,39 @@ async function enviarEmailReset(env, email, link) {
       }),
     });
   } catch { /* falha de envio nao vaza para quem pediu */ }
+}
+
+// ---------- convites (painel de moderacao) ----------
+// Codigo de uso unico, valido por 14 dias. So o hash vai para o banco: o codigo aparece uma vez, para o moderador.
+const CONVITE_DIAS = 14;
+const ALF = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem I, O, 0, 1 (faceis de confundir)
+
+async function criarConvite(env, req, user) {
+  if (!user.is_admin) return fail('Apenas moderadores.', 403);
+  const b = (await body(req)) || {};
+  const recentes = await env.DB.prepare('SELECT COUNT(*) AS n FROM invites WHERE created_by = ? AND created_at > ?').bind(user.id, now() - 86400).first();
+  if (recentes.n >= 30) return fail('Limite de 30 convites por dia atingido.', 429);
+  const pick = (n) => [...rand(n)].map((x) => ALF[x % ALF.length]).join('');
+  const codigo = `${pick(5)}-${pick(5)}-${pick(5)}`;
+  const t = now();
+  await env.DB.prepare('INSERT INTO invites (code_hash, claim_slug, reusable, created_at, created_by, para, expires_at) VALUES (?, NULL, 0, ?, ?, ?, ?)')
+    .bind(await sha256Hex(codigo), t, user.id, str(b.para, 80), t + CONVITE_DIAS * 86400).run();
+  return json({ codigo, link: `${new URL(req.url).origin}/conta.html#convite=${codigo}`, expira_em_dias: CONVITE_DIAS });
+}
+
+async function listarConvites(env, req) {
+  const u = await currentUser(env, req);
+  if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+  const r = await env.DB.prepare(
+    `SELECT i.para, i.created_at, i.expires_at, i.used_by, uu.slug AS usado_slug,
+       COALESCE(NULLIF(c.nome, ''), json_extract(cp.data, '$.nome'), c.slug) AS criador
+     FROM invites i LEFT JOIN users c ON c.id = i.created_by LEFT JOIN profiles cp ON cp.user_id = c.id LEFT JOIN users uu ON uu.id = i.used_by
+     WHERE i.created_by IS NOT NULL ORDER BY i.created_at DESC LIMIT 20`
+  ).all();
+  return json(r.results.map((i) => ({
+    para: i.para, criado_em: i.created_at, por: i.criador,
+    situacao: i.used_by ? 'usado' : i.expires_at && i.expires_at < now() ? 'expirado' : 'aberto', usado_por: i.usado_slug || null,
+  })));
 }
 
 // lista de contas para o painel de moderacao (recuperacao de senha)
@@ -633,6 +667,7 @@ export default {
         }
         if (path === '/api/chat') return listChat(env, req, url);
         if (path === '/api/admin/contas') return adminAccounts(env, req);
+        if (path === '/api/admin/convites') return listarConvites(env, req);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
           const p = await getProfile(env, m[1], publicacao);
@@ -662,6 +697,7 @@ export default {
       }
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
       if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
+      if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
       if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
       const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
       if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));

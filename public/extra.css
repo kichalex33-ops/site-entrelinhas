@@ -207,3 +207,8 @@ a.tab{text-decoration:none;display:inline-block}
 .ler-comentarios{max-width:65ch;margin:3.5rem auto 0}
 .ler-comentarios .section-head{padding:0;margin-bottom:.6rem}
 #disqus_thread{margin-top:1rem}
+#mod-convites summary{cursor:pointer;color:var(--accent);font-weight:500}
+.mod-conv-ok textarea{width:100%;padding:.6rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.85rem;margin:.4rem 0}
+.mod-codigo{font-family:ui-monospace,monospace;letter-spacing:.08em;color:var(--accent)}
+.mod-conv-ul{list-style:none;padding:0;margin:.4rem 0 0}
+.mod-conv-ul li{padding:.4rem 0;border-bottom:1px solid var(--line);font-size:.88rem}
