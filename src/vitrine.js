@@ -47,5 +47,27 @@ export async function vitrine(env, h) {
     const x = notas.get(`${l.autor.slug}/${l.id}`);
     l.avaliacoes = { total: x ? x.n : 0, media: x ? Math.round(x.media * 10) / 10 : 0 };
   }
+
+  // popularidade por periodo: visitas unicas (uma por pessoa por dia) + 3 x favoritos + 2 x avaliacoes recebidas no periodo.
+  // Favoritar e avaliar exigem conta; a visita ja vem deduplicada. Nada aqui conta clique repetido.
+  const hoje = Math.floor(t / 86400), DIAS = { semana: 7, mes: 30, ano: 365 };
+  const pop = new Map();
+  const somar = (rows, peso) => {
+    for (const r of rows) {
+      const p = pop.get(r.obra_id) || { semana: 0, mes: 0, ano: 0 };
+      p.semana += peso * r.semana; p.mes += peso * r.mes; p.ano += peso * r.ano;
+      pop.set(r.obra_id, p);
+    }
+  };
+  // contagem por periodo numa consulta so: ?1 = inicio da semana, ?2 = do mes, ?3 = do ano
+  const contar = (tabela, col, extra = '') => env.DB.prepare(
+    `SELECT obra_id, SUM(${col} >= ?1) AS semana, SUM(${col} >= ?2) AS mes, COUNT(*) AS ano FROM ${tabela} WHERE ${col} >= ?3 ${extra} GROUP BY obra_id`
+  );
+  const emDias = [DIAS.semana, DIAS.mes, DIAS.ano].map((d) => hoje - d + 1);
+  const emSegundos = [DIAS.semana, DIAS.mes, DIAS.ano].map((d) => t - d * 86400);
+  somar((await contar('book_views', 'dia').bind(...emDias).all()).results, 1);
+  somar((await contar('book_favorites', 'created_at').bind(...emSegundos).all()).results, 3);
+  somar((await contar('reviews', 'created_at', 'AND hidden = 0').bind(...emSegundos).all()).results, 2);
+  for (const l of livros) l.popular = pop.get(l.id) || { semana: 0, mes: 0, ano: 0 };
   return h.json({ livros });
 }

@@ -67,6 +67,23 @@
       <button class="car-btn next" id="recNext" aria-label="Próximo">&#8250;</button>
     </div>
 
+    <div class="section-head" id="em-alta">
+      <div><span class="eyebrow">Em alta</span><h2>Populares do momento</h2></div>
+      <div class="line"></div>
+      <a class="veja-mais" href="#biblioteca" id="popVejaMais">Veja mais &rarr;</a>
+    </div>
+    <div class="pop-periodos" role="group" aria-label="Período">
+      <button type="button" class="chip active" data-periodo="semana">Semana</button>
+      <button type="button" class="chip" data-periodo="mes">Mês</button>
+      <button type="button" class="chip" data-periodo="ano">Ano</button>
+    </div>
+    <div class="carousel">
+      <button class="car-btn prev" id="popPrev" aria-label="Anterior">&#8249;</button>
+      <div class="car-track" id="populares"></div>
+      <button class="car-btn next" id="popNext" aria-label="Próximo">&#8250;</button>
+    </div>
+    <p class="section-lead pop-nota">A popularidade soma visitas (uma por pessoa por dia), favoritos e avaliações do período.</p>
+
     <div class="section-head">
       <div><span class="eyebrow">Notícias</span><h2>Do coletivo</h2></div>
       <div class="line"></div>
@@ -85,7 +102,17 @@
     <div class="hero" style="padding-bottom:.5rem">
       <span class="eyebrow">Acervo completo</span>
       <h2>Nossa <em>Biblioteca</em></h2>
-      <p>Todos os livros do coletivo, em ordem alfabética. Clique em uma capa para abrir a página do livro.</p>
+      <p>Todos os livros do coletivo. Clique em uma capa para abrir a página do livro.</p>
+    </div>
+    <div class="bib-ordem">
+      <label for="ordem">Ordenar por</label>
+      <select id="ordem">
+        <option value="az">Título (A–Z)</option>
+        <option value="pop-semana">Mais populares da semana</option>
+        <option value="pop-mes">Mais populares do mês</option>
+        <option value="pop-ano">Mais populares do ano</option>
+        <option value="recentes">Mais recentes</option>
+      </select>
     </div>
     <div class="chips reveal" id="chips"></div>
     <div class="grid" id="libraryGrid"></div>

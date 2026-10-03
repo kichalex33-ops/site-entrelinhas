@@ -28,3 +28,28 @@ test('vitrine: livros publicados dos perfis e obras do Estudio, com nota media; 
   const est = v.j.livros.find((x) => x.tipo === 'estudio');
   assert.match(est.ler, /^ler\.html\?a=/);
 });
+
+test('vitrine: popularidade por semana, mes e ano (visitas + 3 x favoritos + 2 x avaliacoes)', async () => {
+  const app = makeApp();
+  const a = app.addUser({ nome: 'Ana' });
+  const r = await app.call('PUT', '/api/profile', { tok: a.tok, body: { data: { nome: 'Ana', links: [], secoes: [], obras: [
+    { titulo: 'Quente', status: 'Publicado' }, { titulo: 'Antigo', status: 'Publicado' }, { titulo: 'Quieto', status: 'Publicado' },
+  ] } } });
+  const [quente, antigo] = r.j.data.obras.map((o) => o.id);
+  const l = app.addUser({ role: 'leitor' });
+  await app.call('POST', `/api/livro/${a.slug}/${quente}/visita`, { ip: '2.2.2.2' });
+  await app.call('POST', `/api/livro/${a.slug}/${quente}/visita`, { ip: '3.3.3.3' });
+  await app.call('POST', `/api/livro/${a.slug}/${quente}/favorito`, { tok: l.tok });
+  await app.call('PUT', '/api/reviews', { tok: l.tok, body: { autor: a.slug, obra: quente, nota: 5, texto: 'Muito bom mesmo, recomendo.' } });
+  // movimento antigo: 20 dias atras (fora da semana) e 200 dias atras (so no ano)
+  const dia = Math.floor(Date.now() / 86400000);
+  app.db.prepare('INSERT INTO book_views (obra_id, visitante, dia) VALUES (?, ?, ?)').run(antigo, 'v1', dia - 20);
+  app.db.prepare('INSERT INTO book_views (obra_id, visitante, dia) VALUES (?, ?, ?)').run(antigo, 'v2', dia - 200);
+  app.db.prepare('INSERT INTO book_views (obra_id, visitante, dia) VALUES (?, ?, ?)').run(antigo, 'v3', dia - 400);
+
+  const v = (await app.call('GET', '/api/vitrine')).j.livros;
+  const pop = (t) => v.find((x) => x.titulo === t).popular;
+  assert.deepEqual(pop('Quente'), { semana: 7, mes: 7, ano: 7 }, '2 visitas + 3 do favorito + 2 da avaliacao');
+  assert.deepEqual(pop('Antigo'), { semana: 0, mes: 1, ano: 2 }, 'o de 400 dias nao conta');
+  assert.deepEqual(pop('Quieto'), { semana: 0, mes: 0, ano: 0 });
+});

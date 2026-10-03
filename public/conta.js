@@ -86,7 +86,9 @@
             ${field('Nova senha (mínimo 10 caracteres)', '<input name="nova" type="password" autocomplete="new-password" minlength="10" required>')}
             <button class="btn btn-ghost" type="submit">Trocar senha</button><span id="pwNote"></span>
           </form></details>
+        ${apagarHtml(false)}
       </div>`;
+    bindApagar();
     document.getElementById('logout').addEventListener('click', async () => { await api('/api/logout', { method: 'POST' }); authView('login'); });
     document.getElementById('pwForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -162,8 +164,34 @@
           ${field('Nova senha (mínimo 10 caracteres)', '<input name="nova" type="password" autocomplete="new-password" minlength="10" required>')}
           <button class="btn btn-ghost" type="submit">Trocar senha</button><span id="pwNote"></span>
         </form>
-      </details>`;
+      </details>
+      ${apagarHtml(true)}`;
     bindEditor();
+    bindApagar();
+  }
+
+  // ---------- apagar conta (leitor e autor) ----------
+  function apagarHtml(autor){
+    return `<details class="blk pw apagar-conta"><summary>Apagar minha conta</summary>
+      <p class="hint">${autor
+        ? 'Apaga de vez a sua conta, a sua página pública, os seus livros, o que está no Estúdio, as imagens e as avaliações que leitores deixaram nos seus livros. Não tem como desfazer. Se quiser guardar algo, exporte do Estúdio antes.'
+        : 'Apaga de vez a sua conta, as suas avaliações e os seus favoritos. Não tem como desfazer.'}</p>
+      <form id="apagarForm">
+        ${field('Sua senha', '<input name="senha" type="password" autocomplete="current-password" required>')}
+        ${field('Digite APAGAR para confirmar', '<input name="confirmar" autocomplete="off" required pattern="APAGAR">')}
+        <button class="btn btn-ghost btn-perigo" type="submit">Apagar minha conta para sempre</button><span id="apagarNote"></span>
+      </form></details>`;
+  }
+  function bindApagar(){
+    document.getElementById('apagarForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const n = document.getElementById('apagarNote');
+      try {
+        await api('/api/conta/apagar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+        P = null;
+        app.innerHTML = '<div class="auth-box"><p>Sua conta foi apagada. Obrigado por ter feito parte do Entrelinhas.</p><p style="margin-top:1rem"><a class="btn btn-ghost" href="index.html">Ir para o início</a></p></div>';
+      } catch (err) { n.innerHTML = note(err.message); }
+    });
   }
 
   const getAt = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);

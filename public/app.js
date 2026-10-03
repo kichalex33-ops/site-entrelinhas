@@ -23,7 +23,7 @@
   const doBanco = (l) => ({
     titulo: l.titulo, autorNome: l.autor.nome, genero: l.genero, gen1: primeiroGenero(l.genero), capa: l.capa,
     c1: '#1c2f4a', c2: '#070b14', href: `obra.html?a=${encodeURIComponent(l.autor.slug)}&o=${encodeURIComponent(l.id)}`,
-    faixa: l.faixa, data: l.no_site_em || 0, lancamento: l.lancamento, ler: l.ler || '', aval: l.avaliacoes,
+    faixa: l.faixa, data: l.no_site_em || 0, lancamento: l.lancamento, ler: l.ler || '', aval: l.avaliacoes, pop: l.popular,
   });
   // reserva: o arquivo antigo (so usado se a API falhar)
   const doArquivo = (b) => ({
@@ -36,6 +36,31 @@
   const quando = (b) => b.data ? `No Entrelinhas desde ${dia(b.data)}` : b.json && b.json.lancamento ? b.json.lancamento : '';
   const novo = (b) => b.data && Date.now() / 1000 - b.data < 30 * 86400;
   const relCard = (b) => `<article class="rel-card">${b.href ? `<a class="cover-link" href="${esc(b.href)}" aria-label="${esc(b.titulo)}">${cover(b)}</a>` : cover(b)}${novo(b) ? '<span class="badge-new">Novo</span>' : ''}<h3>${esc(b.titulo)} ${faixa(b.faixa)}</h3><p class="by">${esc(b.autorNome)}${b.genero ? ' · ' + esc(b.genero) : ''}</p><p class="when">${esc(quando(b))}</p>${b.href ? `<a class="btn btn-ghost" href="${esc(b.href)}">Ver o livro</a>` : `<button class="btn btn-ghost" data-open ${bookAttrs(b)}>Ler sinopse</button>`}</article>`;
+
+  // popularidade (calculada no servidor: visitas unicas + favoritos + avaliacoes do periodo)
+  const pop = (b, p) => (b.pop && b.pop[p]) || 0;
+  const QUANDO = { semana: 'nesta semana', mes: 'neste mês', ano: 'neste ano' };
+  let periodo = 'semana', ordem = 'az';
+
+  function desenharPopulares(){
+    const lista = LIVROS.filter((b) => pop(b, periodo) > 0).sort((a, b) => pop(b, periodo) - pop(a, periodo)).slice(0, 12);
+    $('#populares').innerHTML = lista.map(relCard).join('') || `<p class="muted-note">Ainda não há leituras ${QUANDO[periodo]}.</p>`;
+  }
+
+  // Biblioteca: ordem escolhida + filtro de genero (o filtro vale de novo depois de reordenar)
+  function desenharGrade(){
+    const az = (a, b) => a.titulo.localeCompare(b.titulo, 'pt');
+    const p = ordem.startsWith('pop-') ? ordem.slice(4) : '';
+    const livros = LIVROS.slice().sort(p ? (a, b) => pop(b, p) - pop(a, p) || az(a, b) : ordem === 'recentes' ? (a, b) => b.data - a.data || az(a, b) : az);
+    $('#libraryGrid').innerHTML = livros.map(b =>
+      `<article class="book-card reveal in" data-genre="${esc(b.gen1)}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p><span class="tag">${esc(b.genero || b.gen1)}</span>${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
+      || '<p class="muted-note">Nenhum livro publicado ainda.</p>';
+    filtrar();
+  }
+  function filtrar(){
+    const c = document.querySelector('#chips .chip.active'), f = c ? c.dataset.filter : 'all';
+    document.querySelectorAll('#libraryGrid .book-card').forEach((k) => { k.style.display = (f === 'all' || k.dataset.genre === f) ? '' : 'none'; });
+  }
 
   function render(){
     const livros = LIVROS.slice().sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt'));
@@ -59,9 +84,8 @@
     $('#chips').innerHTML = generos.map((g, i) =>
       `<button class="chip${i ? '' : ' active'}" data-filter="${i ? esc(g) : 'all'}">${esc(g)}</button>`).join('');
 
-    $('#libraryGrid').innerHTML = livros.map(b =>
-      `<article class="book-card reveal in" data-genre="${esc(b.gen1)}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p><span class="tag">${esc(b.genero || b.gen1)}</span>${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
-      || '<p class="muted-note">Nenhum livro publicado ainda.</p>';
+    desenharGrade();
+    desenharPopulares();
 
     $('#projects').innerHTML = DATA.projetos.map(p =>
       `<article class="project reveal"><div class="project-visual" style="--c1:${esc(p.c1)};--c2:${esc(p.c2)}"><span class="project-status">${esc(p.etapa)} · ${esc(p.pct)}%</span></div><div class="project-body"><h3>${esc(p.titulo)}</h3><p class="by">${esc(author(p.autor).nome)} · ${esc(p.genero)}</p><p>${esc(p.sinopse)}</p>${p.trecho ? `<blockquote class="excerpt">${esc(p.trecho)}</blockquote>` : ''}<div class="progress"><span style="width:${Number(p.pct) || 0}%"></span></div><div class="progress-label"><span>${esc(p.pct)}% concluído</span><span>Previsão: ${esc(p.previsao)}</span></div></div></article>`).join('');
@@ -104,7 +128,7 @@
     }
 
     // carrosseis com setas (Recem-publicadas na pagina inicial e Lancamentos)
-    for (const [trilho, ant, prox] of [['#releases', '#carPrev', '#carNext'], ['#recentes', '#recPrev', '#recNext']]) {
+    for (const [trilho, ant, prox] of [['#releases', '#carPrev', '#carNext'], ['#recentes', '#recPrev', '#recNext'], ['#populares', '#popPrev', '#popNext']]) {
       const car = $(trilho);
       const step = () => { const c = car.querySelector('.rel-card'); return c ? c.offsetWidth + 24 : 300; };
       $(ant).addEventListener('click', () => car.scrollBy({ left: -step() }));
@@ -153,12 +177,25 @@
     modal.addEventListener('click', e => { if (e.target.hasAttribute('data-close')) close(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('open')) close(); });
 
-    const chips = document.querySelectorAll('.chip'), cards = document.querySelectorAll('#libraryGrid .book-card');
+    const chips = document.querySelectorAll('#chips .chip');
     chips.forEach(c => c.addEventListener('click', () => {
       chips.forEach(x => x.classList.remove('active'));
       c.classList.add('active');
-      cards.forEach(k => { k.style.display = (c.dataset.filter === 'all' || k.dataset.genre === c.dataset.filter) ? '' : 'none'; });
+      filtrar();
     }));
+
+    // Populares: semana / mes / ano; "Veja mais" abre a Biblioteca ja ordenada pelo periodo escolhido
+    const periodos = document.querySelectorAll('[data-periodo]');
+    periodos.forEach((c) => c.addEventListener('click', () => {
+      periodos.forEach((x) => x.classList.toggle('active', x === c));
+      periodo = c.dataset.periodo; desenharPopulares();
+    }));
+    const sel = $('#ordem');
+    sel.addEventListener('change', () => { ordem = sel.value; desenharGrade(); });
+    $('#popVejaMais').addEventListener('click', (e) => {
+      e.preventDefault();
+      ordem = sel.value = 'pop-' + periodo; desenharGrade(); goTo('biblioteca');
+    });
   }
 
   // livros reais do banco; projetos, noticias, selos e servicos ainda vem do data.json

@@ -289,6 +289,40 @@ async function changePassword(env, req, user) {
   return json({ ok: true });
 }
 
+// ---------- apagar conta (LGPD) ----------
+// Exige a senha e a palavra APAGAR. Tudo num lote so (o D1 executa o batch como transacao).
+// Autor: some o perfil publico, as obras (perfil e Estudio), imagens, paginas de livro e tudo que
+// leitores deixaram nessas obras (avaliacoes, favoritos, visualizacoes, denuncias).
+// Mensagens no chat da moderacao ficam, sem autor (ON DELETE SET NULL).
+async function deleteAccount(env, req, user) {
+  const b = await body(req);
+  if (!b || b.confirmar !== 'APAGAR') return fail('Digite APAGAR para confirmar.');
+  const row = await env.DB.prepare('SELECT pass_hash, pass_salt FROM users WHERE id = ?').bind(user.id).first();
+  const h = await hashPassword(typeof b.senha === 'string' ? b.senha.slice(0, 200) : '', unb64(row.pass_salt));
+  if (!safeEqual(h, row.pass_hash)) return fail('Senha incorreta.', 401);
+
+  const obras = new Set();
+  const p = await env.DB.prepare('SELECT data FROM profiles WHERE user_id = ?').bind(user.id).first();
+  try { for (const o of JSON.parse(p ? p.data : '{}').obras || []) if (o.id) obras.add(o.id); } catch { /* perfil invalido */ }
+  for (const w of (await env.DB.prepare('SELECT id FROM studio_works WHERE user_id = ?').bind(user.id).all()).results) obras.add(w.id);
+  const ids = [...obras];
+
+  const st = (sql, ...a) => env.DB.prepare(sql).bind(...a);
+  const porObra = (sql) => ids.map((id) => st(sql, id));
+  await env.DB.batch([
+    ...porObra('DELETE FROM book_favorites WHERE obra_id = ?'),
+    ...porObra('DELETE FROM book_views WHERE obra_id = ?'),
+    ...porObra('DELETE FROM book_reports WHERE obra_id = ?'),
+    st('DELETE FROM reviews WHERE author_slug = ?', user.slug),
+    st('DELETE FROM profiles WHERE user_id = ? OR slug = ?', user.id, user.slug),
+    st('DELETE FROM images WHERE user_id = ?', user.id),
+    st('UPDATE invites SET used_by = NULL WHERE used_by = ?', user.id),
+    st("DELETE FROM login_fails WHERE key = 'em|' || ?", user.email),
+    st('DELETE FROM users WHERE id = ?', user.id), // o resto sai em cascata (sessoes, Estudio, reviews feitas, favoritos, ajuda...)
+  ]);
+  return json({ ok: true }, 200, { 'Set-Cookie': cookie('', 0) });
+}
+
 // ---------- recuperacao de senha ----------
 // Modo 1: moderador gera o link e entrega por um canal confiavel. Modo 2: a pessoa pede pelo e-mail
 // (so envia se RESEND_API_KEY existir). O banco guarda so o hash do token; link de uso unico, 30 min.
@@ -730,6 +764,7 @@ export default {
         if (rm[2] === 'denunciar' && req.method === 'POST') return reportReview(env, req, user, rid);
       }
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
+      if (path === '/api/conta/apagar' && req.method === 'POST') return deleteAccount(env, req, user);
       if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
       const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
