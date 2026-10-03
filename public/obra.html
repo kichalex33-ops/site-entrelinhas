@@ -54,7 +54,7 @@
   const root = document.getElementById('root');
   const q = new URLSearchParams(location.search);
   const autor = q.get('a') || '', obraId = q.get('o') || '';
-  const ABAS = [['detalhes', 'Sinopse'], ['capitulos', 'Capítulos'], ['personagens', 'Personagens'], ['galeria', 'Galeria'], ['materiais', 'Materiais'], ['avaliacoes', 'Avaliações']];
+  const ABAS = [['detalhes', 'Sinopse'], ['capitulos', 'Capítulos'], ['personagens', 'Personagens'], ['galeria', 'Galeria'], ['materiais', 'Materiais'], ['avaliacoes', 'Avaliações'], ['extras', 'Extras e Notas']];
   const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
   const paras = (t) => String(t || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
@@ -67,21 +67,14 @@
   async function carregar() {
     try { D = await api(`/api/livro/${autor}/${obraId}`); } catch (e) { return msg(e.status === 404 ? 'Este livro não está disponível.' : 'Não foi possível carregar o livro.'); }
     desenhar();
-  }
-
-  function info() {
-    const o = D.obra, f = FAIXAS.find((x) => x[0] === o.faixa);
-    const linhas = [
-      ['Tipo', D.tipo === 'estudio' ? 'Obra publicada no Entrelinhas' : 'Livro'],
-      ['Gênero', o.genero], ['Situação', o.status],
-      ['Classificação', f ? f[1] : ''],
-      ['Lançamento', mesAno(o.publicado_em)],
-      ['No site desde', o.no_site_em ? dia(o.no_site_em) : ''],
-      ['Capítulos', D.capitulos ? milhar(D.capitulos.length) : ''],
-      ['Palavras', D.capitulos ? milhar(D.capitulos.reduce((s, c) => s + c.palavras, 0)) : ''],
-      ['Créditos', o.creditos],
-    ].filter((l) => l[1]);
-    return `<dl class="livro-info"><div><dt>Autor</dt><dd><a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a></dd></div>${linhas.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+    // visualizacao: o servidor conta uma por visitante por dia (e ignora o dono)
+    if (D.dono) return;
+    try {
+      const n = (await api(`/api/livro/${autor}/${obraId}/visita`, { method: 'POST' })).visualizacoes;
+      D.numeros.visualizacoes = n;
+      const box = root.querySelector('[data-num=visualizacoes]');
+      if (box) box.innerHTML = `<b>${milhar(n)}</b><span>${n === 1 ? 'visualização' : 'visualizações'}</span>`;
+    } catch { /* contagem nao e essencial */ }
   }
 
   function painel(aba) {
@@ -90,7 +83,8 @@
       <div class="livro-sinopse">${paras(o.sinopse) || '<p class="hint">O autor ainda não escreveu a sinopse.</p>'}</div>
       ${p.contexto ? `<h3>Bastidores</h3>${paras(p.contexto)}` : ''}
       ${p.estilo ? `<h3>Estilo e tom</h3>${paras(p.estilo)}` : ''}
-      <h3>Informações</h3>${info()}`;
+      ${o.creditos ? `<p class="hint livro-creditos">Créditos: ${esc(o.creditos)}</p>` : ''}`;
+    if (aba === 'extras') return extras();
     if (aba === 'capitulos') return `<ol class="ler-sumario">${(D.capitulos || []).map((c) => `<li><a href="${esc(o.url)}&c=${c.n}"><span>${esc(c.titulo)}</span><small>${milhar(c.palavras)} palavras</small></a></li>`).join('')}</ol>`;
     if (aba === 'personagens') return `<div class="livro-pers">${p.personagens.map((c) => `<article class="pers">
         <div class="pers-foto">${c.imagem ? `<img src="${esc(imgUrl(c.imagem))}" alt="${esc(c.nome)}" loading="lazy">` : `<span>${initial(c.nome)}</span>`}</div>
@@ -103,23 +97,93 @@
 
   function abasVisiveis() {
     const p = D.pagina;
-    const tem = { detalhes: true, capitulos: !!(D.capitulos && D.capitulos.length), personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: true };
-    const n = { capitulos: D.capitulos && D.capitulos.length, personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: D.avaliacoes.total };
+    const tem = { detalhes: true, capitulos: !!(D.capitulos && D.capitulos.length), personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: true, extras: D.posts.length || D.dono };
+    const n = { capitulos: D.capitulos && D.capitulos.length, personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: D.avaliacoes.total, extras: D.posts.length };
     return ABAS.filter(([k]) => tem[k]).map(([k, r]) => [k, n[k] ? `${r} (${n[k]})` : r]);
   }
 
-  // numeros reais apenas (visualizacoes e favoritos entram quando forem contados)
+  // lancamento: livro divulgado = mes/ano informado pelo autor; obra do Estudio = dia em que foi publicada no site
+  const lancamento = () => mesAno(D.obra.publicado_em) || (D.tipo === 'estudio' && D.obra.no_site_em ? dia(D.obra.no_site_em) : '');
+
   function numeros() {
-    const o = D.obra, av = D.avaliacoes, caps = D.capitulos || [];
+    const av = D.avaliacoes, caps = D.capitulos || [], nu = D.numeros, um = (n, s, p) => (n === 1 ? s : p);
     const itens = [
+      [milhar(nu.visualizacoes), um(nu.visualizacoes, 'visualização', 'visualizações'), 'visualizacoes'],
+      [milhar(nu.favoritos), um(nu.favoritos, 'favorito', 'favoritos'), 'favoritos'],
       [av.total ? `${av.media.toFixed(1).replace('.', ',')} ★` : '—', av.total ? `${av.total} avaliaç${av.total === 1 ? 'ão' : 'ões'}` : 'sem avaliações'],
-      caps.length && [milhar(caps.length), caps.length === 1 ? 'capítulo' : 'capítulos'],
+      caps.length && [milhar(caps.length), um(caps.length, 'capítulo', 'capítulos')],
       caps.length && [milhar(caps.reduce((s, c) => s + c.palavras, 0)), 'palavras'],
-      !caps.length && mesAno(o.publicado_em) && [mesAno(o.publicado_em), 'lançamento'],
-      o.no_site_em && [dia(o.no_site_em), 'no Entrelinhas desde'],
+      lancamento() && [lancamento(), 'lançado em'],
+      [milhar(nu.denuncias), um(nu.denuncias, 'denúncia', 'denúncias')],
     ].filter(Boolean);
-    return `<div class="livro-numeros">${itens.map(([v, r]) => `<div><b>${esc(v)}</b><span>${esc(r)}</span></div>`).join('')}</div>`;
+    return `<div class="livro-numeros">${itens.map(([v, r, k]) => `<div${k ? ` data-num="${k}"` : ''}><b>${esc(v)}</b><span>${esc(r)}</span></div>`).join('')}</div>`;
   }
+
+  // ---------- Extras e Notas: novidades, imagens e spoilers do autor; comentarios pelo Disqus ----------
+  function extras() {
+    const a = D.autor;
+    const avatar = a.retrato ? `<img class="extra-avatar" src="${esc(imgUrl(a.retrato))}" alt="">` : `<span class="extra-avatar">${initial(a.nome)}</span>`;
+    const novo = D.dono ? `<form class="el-form extra-novo">
+        <label class="fld"><span>Novo extra</span><textarea name="texto" rows="3" maxlength="3000" placeholder="Novidades do livro, curiosidades, arte promocional, spoilers..."></textarea></label>
+        <div class="extra-novo-img" hidden></div>
+        <div class="extra-novo-acoes">
+          <label class="btn btn-ghost ed-up">Imagem<input type="file" accept="image/jpeg,image/png,image/webp" data-upextra hidden></label>
+          <label class="extra-spoiler-op"><input type="checkbox" name="spoiler"> Contém spoiler</label>
+          <button type="button" class="btn btn-primary" data-publicar>Publicar</button>
+        </div>
+        <div class="el-estado" role="status"></div></form>` : '';
+    const post = (x) => `<article class="extra" id="extra-${x.id}">
+        <header class="extra-cab">${avatar}<div><b>${esc(a.nome)}</b><span class="hint">${dia(x.created_at)}</span></div>${x.spoiler ? '<span class="extra-tag-spoiler">Spoiler</span>' : ''}</header>
+        <div class="extra-corpo${x.spoiler ? ' spoiler' : ''}">
+          ${x.spoiler ? '<button type="button" class="extra-revelar" data-revelar>Contém spoiler. Clique para revelar</button>' : ''}
+          ${paras(x.texto)}${x.imagem ? `<img class="extra-img" src="${esc(imgUrl(x.imagem))}" alt="" loading="lazy">` : ''}
+        </div>
+        <footer class="extra-rodape">
+          <button type="button" class="extra-bt" data-curtir="${x.id}" aria-pressed="${x.curti}">${x.curti ? '&#10084;&#65039;' : '&#129293;'} <span>${x.curtidas}</span></button>
+          <button type="button" class="extra-bt" data-comentar="${x.id}">&#128172; Comentários</button>
+          ${D.dono ? `<button type="button" class="rm" data-apagar="${x.id}">Apagar</button>` : ''}
+        </footer>
+        <div class="extra-comentarios" hidden></div>
+      </article>`;
+    return `${novo}<div class="extras">${D.posts.map(post).join('') || '<p class="hint">Nenhum extra publicado ainda. Use o campo acima para contar novidades, mostrar artes ou soltar spoilers (marcados, eles ficam escondidos até o leitor clicar).</p>'}</div>`;
+  }
+
+  // Disqus: um so quadro na pagina; abre no extra escolhido (DISQUS.reset troca a conversa)
+  let disqusNome;
+  async function comentar(id, box) {
+    if (disqusNome === undefined) { try { disqusNome = (await api('/api/config')).disqus || null; } catch { disqusNome = null; } }
+    document.querySelectorAll('.extra-comentarios').forEach((b) => { if (b !== box) { b.hidden = true; b.replaceChildren(); } });
+    box.hidden = false;
+    if (!disqusNome) { box.innerHTML = '<p class="hint">Os comentários ainda não estão ativados no site.</p>'; return; }
+    box.innerHTML = '<p class="hint">Os comentários usam o Disqus, um serviço de fora do Entrelinhas, que pode exibir anúncios e usar cookies próprios.</p><div id="disqus_thread"></div>';
+    const config = function () {
+      this.page.url = `${location.origin}/obra.html?a=${encodeURIComponent(autor)}&o=${obraId}#extra-${id}`;
+      this.page.identifier = `livro-post-${id}`;
+      this.page.title = `Extra de ${D.obra.titulo}`;
+      this.language = 'pt_BR';
+    };
+    if (window.DISQUS) return window.DISQUS.reset({ reload: true, config });
+    window.disqus_config = config;
+    const s = document.createElement('script');
+    s.src = `https://${disqusNome}.disqus.com/embed.js`;
+    s.setAttribute('data-timestamp', String(Date.now()));
+    s.async = true;
+    document.body.append(s);
+  }
+
+  let novaImagem = '';
+  async function publicarExtra(f) {
+    const estado = f.querySelector('.el-estado'), bt = f.querySelector('[data-publicar]');
+    bt.disabled = true;
+    try {
+      const r = await api(`/api/livro/${obraId}/posts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: f.texto.value, imagem: novaImagem, spoiler: f.spoiler.checked }) });
+      D.posts = r.posts; novaImagem = ''; desenhar();
+    } catch (err) { estado.innerHTML = `<p class="note err">${esc(err.message)}</p>`; bt.disabled = false; }
+  }
+
+  const pedirLogin = (titulo, texto) => {
+    const d = janela(titulo, el(`<p>${esc(texto)} Leitores podem criar uma conta grátis.</p>`), [botao('Fechar', 'btn-ghost', () => d.close()), el('<a class="btn btn-primary" href="conta.html">Entrar</a>')]);
+  };
 
   function desenhar() {
     const o = D.obra, p = D.pagina;
@@ -127,13 +191,15 @@
     const abas = abasVisiveis();
     const pedida = location.hash.slice(1);
     if (pedida === 'denunciar') { history.replaceState(null, '', location.pathname + location.search); setTimeout(denunciar, 0); }
-    const ativa = abas.some(([k]) => k === pedida) ? pedida : 'detalhes';
-    const lojas = [o.link && { rotulo: /amazon\./i.test(o.link) ? 'Amazon' : /uiclap/i.test(o.link) ? 'Uiclap' : 'Comprar', url: o.link }, ...(o.lojas || [])].filter(Boolean);
-    const aqui = location.origin + location.pathname + location.search;
+    const extraPedido = /^extra-\d+$/.test(pedida) && D.posts.some((x) => 'extra-' + x.id === pedida);
+    const ativa = extraPedido ? 'extras' : abas.some(([k]) => k === pedida) ? pedida : 'detalhes';
+    const lojas = [o.link && { rotulo: /amazon\./i.test(o.link) ? 'Amazon' : /uiclap/i.test(o.link) ? 'Uiclap' : 'Comprar', url: o.link }, ...(o.lojas || []), ...p.lojas]
+      .filter((l, i, t) => l && t.findIndex((x) => x && x.url === l.url) === i);
     const caps = D.capitulos || [];
+    // "continuar lendo": ultimo capitulo aberto neste aparelho (gravado pelo ler.html)
     let lendo = 0;
     try { lendo = Number(localStorage.getItem('el:lendo:' + obraId)) || 0; } catch { /* sem armazenamento */ }
-    const continuar = o.url && lendo && caps.some((c) => c.n === lendo) && lendo !== caps[0].n;
+    const continuar = o.url && lendo && caps.some((c) => c.n === lendo);
     const generos = String(o.genero || '').split(/\s*[·,/]\s*/).filter(Boolean);
     const fx = FAIXAS.find((x) => x[0] === o.faixa);
     root.innerHTML = `
@@ -146,12 +212,13 @@
           <p class="livro-por">por <a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a></p>
           <div class="livro-chips">${o.status ? `<span class="chip-st">${esc(o.status)}</span>` : ''}${generos.map((g) => `<span>${esc(g)}</span>`).join('')}</div>
           ${fx || p.aviso ? `<div class="livro-cw">${faixa(o.faixa)}<p>${p.aviso ? `<b>Aviso de conteúdo:</b> ${esc(p.aviso)} ` : ''}${fx ? esc(fx[1]) + '.' : ''}</p></div>` : ''}
+          ${p.tags.length ? `<p class="livro-tags">${p.tags.map((t) => `<span>#${esc(t)}</span>`).join('')}</p>` : ''}
           <div class="livro-acoes">
-            ${o.url && caps.length ? `<a class="btn btn-primary" href="${esc(o.url)}&c=${caps[0].n}">&#9654; Iniciar leitura</a>` : ''}
-            ${continuar ? `<a class="btn btn-ghost" href="${esc(o.url)}&c=${lendo}">Continuar lendo (cap. ${lendo})</a>` : ''}
+            ${continuar ? `<a class="btn btn-primary" href="${esc(o.url)}&c=${lendo}">&#9654; Continuar lendo (cap. ${lendo})</a>` : ''}
+            ${o.url && caps.length ? `<a class="btn ${continuar ? 'btn-ghost' : 'btn-primary'}" href="${esc(o.url)}&c=${caps[0].n}">${continuar ? 'Ler do início' : '&#9654; Iniciar leitura'}</a>` : ''}
+            <button type="button" class="livro-ico livro-fav" data-favoritar aria-pressed="${D.favorito}" title="${D.favorito ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'}" aria-label="${D.favorito ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'}">${D.favorito ? '&#10084;&#65039;' : '&#129293;'}</button>
             <button type="button" class="livro-ico" data-copiar title="Copiar link" aria-label="Copiar link">&#128279;</button>
-            <a class="livro-ico" href="https://wa.me/?text=${encodeURIComponent(o.titulo + ' — ' + aqui)}" target="_blank" rel="noopener noreferrer" title="Compartilhar no WhatsApp" aria-label="Compartilhar no WhatsApp">&#128172;</a>
-            ${D.dono ? '' : '<button type="button" class="livro-ico livro-flag" data-denunciar title="Denunciar este livro" aria-label="Denunciar este livro">&#128681;</button>'}
+            <button type="button" class="livro-ico livro-flag" data-denunciar ${D.dono ? 'disabled title="Você não pode denunciar o próprio livro"' : 'title="Denunciar este livro"'} aria-label="Denunciar este livro">&#128681;</button>
           </div>
           ${lojas.length ? `<p class="livro-lojas"><span>Disponível em:</span>${lojas.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
           ${D.dono ? '<p><button type="button" class="btn btn-ghost" data-editar>Editar página do livro</button></p>' : ''}
@@ -161,9 +228,10 @@
       ${D.dono && D.denuncias && D.denuncias.length ? `<div class="livro-aviso" role="status"><b>Este livro tem denúncias em análise pela moderação:</b> ${D.denuncias.map((x) => `${esc(x.rotulo)} (${x.n})`).join(' · ')}. Se tiver algo a esclarecer, fale com um moderador do coletivo.</div>` : ''}
       <nav class="livro-abas" role="tablist">${abas.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === ativa}">${esc(r)}</button>`).join('')}</nav>
       <div class="livro-painel" role="tabpanel">${painel(ativa)}</div>
-      ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para escrever o aviso de conteúdo, contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
+      ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para escrever o aviso de conteúdo, pôr tags e lojas, contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
     </section>`;
     if (ativa === 'avaliacoes') EL.reviews.mount(root.querySelector('.livro-rev'), { autor, obra: o.id });
+    if (extraPedido) document.getElementById(pedida).scrollIntoView({ block: 'start' });
   }
 
   // link direto para uma aba (obra.html?...#personagens) com a pagina ja aberta
@@ -174,9 +242,58 @@
     if (!t) return;
     if (t.dataset.aba) { history.replaceState(null, '', '#' + t.dataset.aba); desenhar(); }
     else if (t.dataset.foto) ampliar(Number(t.dataset.foto));
-    else if (t.dataset.copiar !== undefined) { try { await navigator.clipboard.writeText(location.origin + location.pathname + location.search); t.textContent = 'Link copiado'; } catch { /* sem permissao */ } }
+    else if (t.dataset.copiar !== undefined) { try { await navigator.clipboard.writeText(location.origin + location.pathname + location.search); t.innerHTML = '&#10003;'; t.title = 'Link copiado'; } catch { /* sem permissao */ } }
     else if (t.dataset.editar !== undefined) editar();
     else if (t.dataset.denunciar !== undefined) denunciar();
+    else if (t.dataset.favoritar !== undefined) {
+      if (!D.logado) return pedirLogin('Favoritar', 'Entre na sua conta para guardar este livro nos favoritos.');
+      t.disabled = true;
+      try {
+        const r = await api(`/api/livro/${autor}/${obraId}/favorito`, { method: 'POST' });
+        D.favorito = r.favorito; D.numeros.favoritos = r.total;
+        t.setAttribute('aria-pressed', r.favorito); t.innerHTML = r.favorito ? '&#10084;&#65039;' : '&#129293;';
+        t.title = r.favorito ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'; t.setAttribute('aria-label', t.title);
+        const n = root.querySelector('[data-num=favoritos]');
+        if (n) n.innerHTML = `<b>${milhar(r.total)}</b><span>${r.total === 1 ? 'favorito' : 'favoritos'}</span>`;
+      } catch { /* mantem como estava */ }
+      t.disabled = false;
+    }
+    else if (t.dataset.curtir) {
+      if (!D.logado) return pedirLogin('Curtir', 'Entre na sua conta para curtir os extras do autor.');
+      t.disabled = true;
+      try {
+        const r = await api(`/api/livro/posts/${t.dataset.curtir}/curtir`, { method: 'POST' });
+        Object.assign(D.posts.find((x) => String(x.id) === t.dataset.curtir), { curti: r.curti, curtidas: r.curtidas });
+        t.setAttribute('aria-pressed', r.curti); t.innerHTML = `${r.curti ? '&#10084;&#65039;' : '&#129293;'} <span>${r.curtidas}</span>`;
+      } catch { /* mantem como estava */ }
+      t.disabled = false;
+    }
+    else if (t.dataset.revelar !== undefined) { t.parentElement.classList.remove('spoiler'); t.remove(); }
+    else if (t.dataset.comentar) {
+      const box = t.closest('.extra').querySelector('.extra-comentarios');
+      if (!box.hidden) { box.hidden = true; box.replaceChildren(); } else comentar(t.dataset.comentar, box);
+    }
+    else if (t.dataset.publicar !== undefined) publicarExtra(t.closest('form'));
+    else if (t.dataset.tirarimg !== undefined) { novaImagem = ''; const b = t.closest('.extra-novo-img'); b.hidden = true; b.replaceChildren(); }
+    else if (t.dataset.apagar) {
+      const d = janela('Apagar este extra?', el('<p>O texto, a imagem e as curtidas somem. Os comentários do Disqus ficam guardados lá.</p>'), [botao('Cancelar', 'btn-ghost', () => d.close()), botao('Apagar', 'btn-primary', async () => {
+        try { D.posts = (await api(`/api/livro/${obraId}/posts/${t.dataset.apagar}`, { method: 'DELETE' })).posts; d.close(); desenhar(); } catch (err) { d.close(); }
+      })]);
+    }
+  });
+
+  // imagem do novo extra: envia ja na escolha e mostra a previa
+  root.addEventListener('change', async (e) => {
+    const t = e.target;
+    if (t.dataset.upextra === undefined || !t.files[0]) return;
+    const f = t.closest('form'), estado = f.querySelector('.el-estado'), prev = f.querySelector('.extra-novo-img');
+    estado.innerHTML = '<p class="note ok">Enviando a imagem...</p>';
+    try {
+      novaImagem = await EL.enviarImagem(t.files[0]);
+      prev.innerHTML = `<img src="${esc(imgUrl(novaImagem))}" alt=""><button type="button" class="rm" data-tirarimg>Tirar imagem</button>`;
+      prev.hidden = false; estado.innerHTML = '';
+    } catch (err) { estado.innerHTML = `<p class="note err">${esc(err.message)}</p>`; }
+    t.value = '';
   });
 
   function janela(titulo, corpo, rodape, largo) {
@@ -233,6 +350,8 @@
     const f = el(`<form class="el-form livro-ed">
       <label class="fld"><span>Títulos alternativos (outros idiomas, título original...)</span><input name="alt" maxlength="200" value="${esc(p.alt_titulos)}"></label>
       <label class="fld"><span>Aviso de conteúdo (opcional)</span><input name="aviso" maxlength="300" value="${esc(p.aviso || '')}" placeholder="Ex.: cenas de violência, morte e temas sensíveis"><small class="hint">Aparece no topo da página, junto da faixa etária.</small></label>
+      <label class="fld"><span>Tags (separadas por vírgula, até 12)</span><input name="tags" maxlength="400" value="${esc(p.tags.join(', '))}" placeholder="Ex.: suspense, mistério, ficção científica"></label>
+      <fieldset class="blk"><legend>Disponível em: lojas (até 6)</legend><p class="hint">Amazon, Google Play, Uiclap, Kobo... Aparecem no topo da página, junto do link de compra do perfil.</p><div data-lista="lojas"></div><button type="button" class="btn btn-ghost" data-add="lojas">Adicionar loja</button></fieldset>
       <label class="fld"><span>Bastidores</span><textarea name="contexto" rows="5" maxlength="4000" placeholder="Como a história nasceu, inspirações, curiosidades, prêmios...">${esc(p.contexto)}</textarea></label>
       <label class="fld"><span>Estilo e tom</span><textarea name="estilo" rows="3" maxlength="1500" placeholder="Ex.: narrador em primeira pessoa, capítulos curtos, tom sombrio com humor...">${esc(p.estilo)}</textarea></label>
       <fieldset class="blk"><legend>Personagens (até 16)</legend><div data-lista="personagens"></div><button type="button" class="btn btn-ghost" data-add="personagens">Adicionar personagem</button></fieldset>
@@ -242,7 +361,7 @@
     </form>`);
     const estado = f.querySelector('.el-estado');
     const avisar = (t, ok) => { estado.innerHTML = `<p class="note ${ok ? 'ok' : 'err'}">${esc(t)}</p>`; };
-    const LIM = { personagens: 16, imagens: 12, materiais: 10 };
+    const LIM = { personagens: 16, imagens: 12, materiais: 10, lojas: 6 };
     const desenharListas = () => {
       f.querySelector('[data-lista=personagens]').innerHTML = p.personagens.map((c, i) => `<div class="item ed-pers">
           <div class="pers-foto">${c.imagem ? `<img src="${esc(imgUrl(c.imagem))}" alt="">` : '<span>foto</span>'}</div>
@@ -262,7 +381,11 @@
           <label class="fld"><span>Link (https://...)</span><input data-k="materiais.${i}.url" type="url" maxlength="300" value="${esc(m.url)}"></label>
           <label class="fld"><span>Descrição curta</span><input data-k="materiais.${i}.descricao" maxlength="200" value="${esc(m.descricao)}"></label>
           <button type="button" class="rm" data-rm="materiais.${i}">Remover material</button></div>`).join('');
-      for (const k of ['personagens', 'materiais']) f.querySelector(`[data-add=${k}]`).hidden = p[k].length >= LIM[k];
+      f.querySelector('[data-lista=lojas]').innerHTML = p.lojas.map((l, i) => `<div class="item">
+          <label class="fld"><span>Loja</span><input data-k="lojas.${i}.rotulo" maxlength="40" value="${esc(l.rotulo)}" placeholder="Ex.: Google Play"></label>
+          <label class="fld"><span>Link (https://...)</span><input data-k="lojas.${i}.url" type="url" maxlength="300" value="${esc(l.url)}"></label>
+          <button type="button" class="rm" data-rm="lojas.${i}">Remover loja</button></div>`).join('');
+      for (const k of ['personagens', 'materiais', 'lojas']) f.querySelector(`[data-add=${k}]`).hidden = p[k].length >= LIM[k];
       f.querySelector('.ed-up:has([data-upgaleria])').hidden = p.imagens.length >= LIM.imagens;
     };
     desenharListas();
@@ -275,6 +398,7 @@
       const t = e.target;
       if (t.dataset.add === 'personagens') { p.personagens.push({ nome: '', papel: '', descricao: '', imagem: '' }); desenharListas(); }
       else if (t.dataset.add === 'materiais') { p.materiais.push({ rotulo: '', url: '', descricao: '' }); desenharListas(); }
+      else if (t.dataset.add === 'lojas') { p.lojas.push({ rotulo: '', url: '' }); desenharListas(); }
       else if (t.dataset.rm) { const [lista, i] = t.dataset.rm.split('.'); p[lista].splice(Number(i), 1); desenharListas(); }
     });
     f.addEventListener('change', async (e) => {
@@ -288,7 +412,7 @@
       } catch (err) { avisar(err.message); }
     });
     const salvar = botao('Salvar', 'btn-primary', async () => {
-      p.alt_titulos = f.alt.value; p.aviso = f.aviso.value; p.contexto = f.contexto.value; p.estilo = f.estilo.value;
+      p.alt_titulos = f.alt.value; p.aviso = f.aviso.value; p.tags = f.tags.value.split(','); p.contexto = f.contexto.value; p.estilo = f.estilo.value;
       salvar.disabled = true; avisar('Salvando...', true);
       try {
         const r = await api(`/api/livro/${obraId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: p }) });

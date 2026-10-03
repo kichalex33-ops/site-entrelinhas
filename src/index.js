@@ -3,7 +3,7 @@
 
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
-import { getLivro, putLivro, imagensDasPaginas } from './livro.js';
+import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine } from './vitrine.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
@@ -708,6 +708,8 @@ export default {
       if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
       if (path === '/api/recuperar' && req.method === 'POST') return requestReset(env, req);
       if (path === '/api/redefinir' && req.method === 'POST') return doReset(env, req);
+      const vi = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/visita$/);
+      if (vi && req.method === 'POST') return visitarLivro(env, req, vi[1], vi[2], { json, fail, now, currentUser, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
 
       const user = await currentUser(env, req);
       if (!user) return fail('Faça login para continuar.', 401);
@@ -726,6 +728,17 @@ export default {
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
       const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
       if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+      const fv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/favorito$/);
+      if (fv && req.method === 'POST') return favoritarLivro(env, user, fv[1], fv[2], { json, fail, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+      const ps = path.match(/^\/api\/livro\/([a-f0-9]{12})\/posts(?:\/(\d{1,12}))?$/);
+      if (ps && !ps[2] && req.method === 'POST') return criarPost(env, req, user, ps[1], { json, fail, str, body, now, ownsImage });
+      if (ps && ps[2] && req.method === 'DELETE') {
+        const r = await apagarPost(env, user, ps[1], Number(ps[2]), { json, fail });
+        if (r.ok) await limparImagens(env, user.id);
+        return r;
+      }
+      const cp = path.match(/^\/api\/livro\/posts\/(\d{1,12})\/curtir$/);
+      if (cp && req.method === 'POST') return curtirPost(env, user, Number(cp[1]), { json, fail });
       const dd = path.match(/^\/api\/admin\/denuncias-livros\/(\d{1,12})$/);
       if (dd && req.method === 'POST') return user.is_admin ? decidirDenunciaLivro(env, req, user, Number(dd[1]), { json, fail, str, body, now }) : fail('Apenas moderadores.', 403);
       const lp = path.match(/^\/api\/livro\/([a-f0-9]{12})$/);

@@ -66,7 +66,7 @@
     : [EL.mesAno(o.publicado_em) && `Lançado em ${EL.mesAno(o.publicado_em)}`, o.no_site_em && `No site desde ${dia(o.no_site_em)}`]).filter(Boolean).map(esc).join(' · ');
   const obra = (o) => `
     <article class="work">
-      ${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : `<div class="typo">${initial(o.titulo)}</div>`}
+      ${((c) => o.id ? `<a class="work-capa" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">${c}</a>` : c)(o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : `<div class="typo">${initial(o.titulo)}</div>`)}
       <span class="status${o.status === 'Publicado' ? ' on' : ''}">${esc(o.status)}</span>
       <h3>${o.id ? `<a class="work-link" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">${esc(o.titulo)}</a>` : esc(o.titulo)} ${EL.faixa(o.faixa)}</h3>
       ${o.genero ? `<p class="by">${esc(o.genero)}</p>` : ''}

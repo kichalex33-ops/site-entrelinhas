@@ -21,10 +21,15 @@ test('pagina do livro: o dono preenche personagens, galeria e materiais; o publi
   const p = a.pagina;
   await p.goto(url);
   await p.waitForSelector('.livro-titulo');
-  assert.match(await p.innerText('.livro-info'), /Lançamento\s+mai\. de 2024|Lançamento\s+mai\. 2024/);
+  assert.match(await p.innerText('.livro-numeros'), /mai\.( de)? 2024\s+lançado em/i);
+  assert.equal(await p.locator('[data-denunciar]').isDisabled(), true, 'o dono nao denuncia o proprio livro');
   await p.click('[data-editar]');
   const dlg = p.locator('dialog.el-dialogo:has(h2:text("Página do livro"))');
   await dlg.locator('textarea[name=contexto]').fill('Nasceu de um sonho.');
+  await dlg.locator('input[name=tags]').fill('#Fantasia Sombria, rio');
+  await dlg.locator('[data-add=lojas]').click();
+  await dlg.locator('[data-k="lojas.0.rotulo"]').fill('Google Play');
+  await dlg.locator('[data-k="lojas.0.url"]').fill('https://play.google.com/livro');
   await dlg.locator('[data-add=personagens]').click();
   await dlg.locator('[data-k="personagens.0.nome"]').fill('Kayla');
   await dlg.locator('[data-k="personagens.0.papel"]').fill('Protagonista');
@@ -38,6 +43,15 @@ test('pagina do livro: o dono preenche personagens, galeria e materiais; o publi
   await p.waitForSelector('.livro-abas button:has-text("Personagens (1)")');
   assert.match(await p.innerText('.livro-painel'), /Nasceu de um sonho\./);
 
+  // Extras e Notas: o dono publica um spoiler com imagem
+  await p.click('.livro-abas button:has-text("Extras e Notas")');
+  await p.fill('.extra-novo textarea[name=texto]', 'O rio guarda um segredo.');
+  await p.locator('[data-upextra]').setInputFiles(capa);
+  await p.locator('.extra-novo-img img').waitFor();
+  await p.check('.extra-novo input[name=spoiler]');
+  await p.click('[data-publicar]');
+  await p.waitForSelector('.livro-abas button:has-text("Extras e Notas (1)")');
+
   // publico: ve as abas, nao ve o botao de editar
   const ctx = await E2E.navegador.newContext();
   const v = await ctx.newPage();
@@ -47,7 +61,18 @@ test('pagina do livro: o dono preenche personagens, galeria e materiais; o publi
   await v.waitForSelector('.livro-abas');
   assert.equal(await v.locator('[data-editar]').count(), 0);
   const abas = await v.locator('.livro-abas button').allInnerTexts();
-  assert.deepEqual(abas, ['Sinopse', 'Personagens (1)', 'Galeria (1)', 'Materiais (1)', 'Avaliações']);
+  assert.deepEqual(abas, ['Sinopse', 'Personagens (1)', 'Galeria (1)', 'Materiais (1)', 'Avaliações', 'Extras e Notas (1)']);
+  assert.deepEqual(await v.locator('.livro-tags span').allInnerTexts(), ['#fantasia-sombria', '#rio']);
+  assert.equal(await v.locator('.livro-lojas a:has-text("Google Play")').count(), 1);
+  assert.equal(await v.locator('[data-denunciar]').isDisabled(), false);
+  await v.click('[data-favoritar]');
+  await v.waitForSelector('dialog :text("Entre na sua conta para guardar")');
+  await v.click('dialog button:has-text("Fechar")');
+  await v.click('.livro-abas button:has-text("Extras e Notas")');
+  await v.waitForSelector('.extra-corpo.spoiler');
+  await v.click('[data-revelar]');
+  assert.equal(await v.locator('.extra-corpo.spoiler').count(), 0);
+  assert.match(await v.innerText('.extra-corpo'), /O rio guarda um segredo\./);
   await v.click('.livro-abas button:has-text("Personagens")');
   assert.match(await v.innerText('.livro-pers'), /Kayla\s+Protagonista/);
   await v.click('.livro-abas button:has-text("Galeria")');

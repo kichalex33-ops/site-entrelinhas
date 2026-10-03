@@ -35,7 +35,7 @@
   const bookAttrs = (b) => b.href ? `data-href="${esc(b.href)}"` : `data-id="${esc(b.titulo)}"`;
   const quando = (b) => b.data ? `No Entrelinhas desde ${dia(b.data)}` : b.json && b.json.lancamento ? b.json.lancamento : '';
   const novo = (b) => b.data && Date.now() / 1000 - b.data < 30 * 86400;
-  const relCard = (b) => `<article class="rel-card">${cover(b)}${novo(b) ? '<span class="badge-new">Novo</span>' : ''}<h3>${esc(b.titulo)} ${faixa(b.faixa)}</h3><p class="by">${esc(b.autorNome)}${b.genero ? ' · ' + esc(b.genero) : ''}</p><p class="when">${esc(quando(b))}</p>${b.href ? `<a class="btn btn-ghost" href="${esc(b.href)}">Ver o livro</a>` : `<button class="btn btn-ghost" data-open ${bookAttrs(b)}>Ler sinopse</button>`}</article>`;
+  const relCard = (b) => `<article class="rel-card">${b.href ? `<a class="cover-link" href="${esc(b.href)}" aria-label="${esc(b.titulo)}">${cover(b)}</a>` : cover(b)}${novo(b) ? '<span class="badge-new">Novo</span>' : ''}<h3>${esc(b.titulo)} ${faixa(b.faixa)}</h3><p class="by">${esc(b.autorNome)}${b.genero ? ' · ' + esc(b.genero) : ''}</p><p class="when">${esc(quando(b))}</p>${b.href ? `<a class="btn btn-ghost" href="${esc(b.href)}">Ver o livro</a>` : `<button class="btn btn-ghost" data-open ${bookAttrs(b)}>Ler sinopse</button>`}</article>`;
 
   function render(){
     const livros = LIVROS.slice().sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt'));

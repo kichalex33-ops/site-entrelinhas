@@ -45,7 +45,7 @@ test('denunciar livro: leitor denuncia, autor ve o aviso, moderador decide no pa
   await autora.pagina.waitForSelector('.livro-aviso');
   const aviso = await autora.pagina.innerText('.livro-aviso');
   assert.match(aviso, /Plágio/); assert.doesNotMatch(aviso, /Leitora/);
-  assert.equal(await autora.pagina.locator('[data-denunciar]').count(), 0);
+  assert.equal(await autora.pagina.locator('[data-denunciar]').isDisabled(), true);
 
   // moderador decide no painel
   const mod = await E2E.novoAutor({ nome: 'Moderadora' });
