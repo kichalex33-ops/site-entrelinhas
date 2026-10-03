@@ -19,6 +19,15 @@ test('leitor: estante pela pagina do livro, segue o autor, ve tudo no perfil e p
   const erros = [];
   p.on('pageerror', (e) => erros.push(e.message));
 
+  // menu: "Meu perfil" so para o leitor, marcado na propria pagina de perfil
+  await p.goto(`${E2E.url}/index.html`);
+  await p.waitForSelector(`.site-header .tabs a.tab[href="leitor.html?u=${l.slug}"]:has-text("Meu perfil")`);
+  await a.pagina.goto(`${E2E.url}/index.html`);
+  await a.pagina.waitForTimeout(500);
+  assert.equal(await a.pagina.locator('.tabs a:has-text("Meu perfil")').count(), 0, 'autor nao ganha o item');
+  await p.goto(`${E2E.url}/leitor.html?u=${l.slug}`);
+  await p.waitForSelector('.tabs a.tab.active:has-text("Meu perfil")');
+
   // estante pela pagina do livro
   await p.goto(`${E2E.url}/obra.html?a=${a.slug}&o=${obra}`);
   await p.click('[data-estante]');

@@ -715,7 +715,13 @@ export default {
       if (req.method === 'GET') {
         if (path === '/api/me') {
           const u = await currentUser(env, req);
-          return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: u.nome }) : fail('Não autenticado.', 401);
+          if (!u) return fail('Não autenticado.', 401);
+          // foto para o topo da pagina: leitor usa a do perfil de leitor; autor, o retrato do perfil de autor
+          const ex = await env.DB.prepare(
+            "SELECT u.foto, json_extract(p.data, '$.retrato') AS retrato, json_extract(p.data, '$.nome') AS pnome FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?"
+          ).bind(u.id).first();
+          const autor = u.role === 'autor';
+          return json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: (autor && ex.pnome) || u.nome, foto: (autor ? ex.retrato : ex.foto) || '' });
         }
         if (path === '/api/reviews') return listReviews(env, req, url);
         // leitura publica das obras publicadas no Estudio

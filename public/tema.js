@@ -24,10 +24,13 @@
   document.addEventListener('DOMContentLoaded', function () {
     var cab = document.querySelector('.site-header');
     if (!cab) return;
+    // canto superior direito: tema + conta (menu.js poe o "Entrar" ou a foto ao lado)
+    var topo = cab.querySelector('.topo-acoes');
+    if (!topo) { topo = document.createElement('div'); topo.className = 'topo-acoes'; cab.appendChild(topo); }
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'tema-bt';
-    cab.appendChild(b);
+    topo.insertBefore(b, topo.firstChild);
     aplicar(tema);
     b.addEventListener('click', function () {
       aplicar(tema === 'claro' ? 'escuro' : 'claro');

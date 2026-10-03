@@ -572,9 +572,21 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
    MODO CLARO / ESCURO (tema.js poe data-tema no <html>)
    O escuro e o original; o claro so redefine as variaveis.
    ============================================================ */
-.tema-bt{position:absolute;top:1rem;right:1rem;width:2.4rem;height:2.4rem;border-radius:50%;border:1px solid var(--line-strong);background:var(--panel);color:var(--text);font-size:1.05rem;line-height:1;cursor:pointer;z-index:2}
+.topo-acoes{position:absolute;top:1rem;right:1rem;display:flex;gap:.5rem;align-items:center;z-index:5}
+.tema-bt{width:2.4rem;height:2.4rem;border-radius:50%;border:1px solid var(--line-strong);background:var(--panel);color:var(--text);font-size:1.05rem;line-height:1;cursor:pointer}
 .tema-bt:hover{border-color:var(--accent);color:var(--accent)}
-@media (max-width:600px){.tema-bt{top:.6rem;right:.6rem;width:2.1rem;height:2.1rem}}
+.topo-entrar{display:inline-flex;align-items:center;height:2.4rem;padding:0 1.1rem;border-radius:999px;background:var(--accent);color:#0a0700;font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-decoration:none}
+.topo-entrar:hover{filter:brightness(1.08)}
+:root[data-tema="claro"] .topo-entrar{color:#fff}
+.topo-conta{position:relative}
+.topo-foto{width:2.4rem;height:2.4rem;border-radius:50%;border:2px solid var(--accent);padding:0;overflow:hidden;cursor:pointer;background:linear-gradient(160deg,#1c2f4a,#070b14);color:#d9a94a;font-family:'Playfair Display',serif;font-size:1.05rem;display:flex;align-items:center;justify-content:center}
+.topo-foto img{width:100%;height:100%;object-fit:cover}
+.topo-menu{position:absolute;right:0;top:calc(100% + .5rem);min-width:200px;background:var(--panel-2);border:1px solid var(--line-strong);border-radius:12px;padding:.4rem;display:grid;box-shadow:0 18px 40px -12px rgba(0,0,0,.6)}
+.topo-menu[hidden]{display:none}
+.topo-nome{font-family:'Playfair Display',serif;padding:.45rem .7rem .55rem;border-bottom:1px solid var(--line);margin-bottom:.25rem;color:var(--text)}
+.topo-menu a,.topo-menu button{display:block;text-align:left;padding:.5rem .7rem;border-radius:8px;color:var(--text);text-decoration:none;font:inherit;font-size:.88rem;background:none;border:0;cursor:pointer}
+.topo-menu a:hover,.topo-menu button:hover{background:var(--accent-dim);color:var(--accent)}
+@media (max-width:600px){.topo-acoes{top:.6rem;right:.6rem;gap:.35rem}.tema-bt,.topo-foto{width:2.1rem;height:2.1rem}.topo-entrar{height:2.1rem;padding:0 .8rem;font-size:.66rem}}
 
 /* cor do autor (perfil e cartoes de autores): escolhida no perfil, adaptada ao tema */
 .tinta-autor,.author-card{--accent:var(--cor-autor,#d9a94a);--accent-dim:color-mix(in srgb,var(--cor-autor,#d9a94a) 14%,transparent)}
