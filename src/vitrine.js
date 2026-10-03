@@ -7,6 +7,11 @@ const safe = (s) => { try { const o = JSON.parse(s); return o && typeof o === 'o
 const capaUrl = (id) => (!id ? '' : id.charAt(0) === '/' ? id : `/img/${id}?v=2`);
 
 export async function vitrine(env, h) {
+  return h.json({ livros: await livrosPublicos(env, h) });
+}
+
+// todos os livros visiveis no site (usado tambem pelas estantes e favoritos do perfil de leitor)
+export async function livrosPublicos(env, h) {
   const t = h.now();
   const livros = [];
   const perfis = await env.DB.prepare('SELECT slug, data FROM profiles WHERE published = 1 AND user_id IS NOT NULL').all();
@@ -69,5 +74,5 @@ export async function vitrine(env, h) {
   somar((await contar('book_favorites', 'created_at').bind(...emSegundos).all()).results, 3);
   somar((await contar('reviews', 'created_at', 'AND hidden = 0').bind(...emSegundos).all()).results, 2);
   for (const l of livros) l.popular = pop.get(l.id) || { semana: 0, mes: 0, ano: 0 };
-  return h.json({ livros });
+  return livros;
 }

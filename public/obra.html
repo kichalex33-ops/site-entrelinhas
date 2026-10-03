@@ -217,6 +217,7 @@
             ${continuar ? `<a class="btn btn-primary" href="${esc(o.url)}&c=${lendo}">&#9654; Continuar lendo (cap. ${lendo})</a>` : ''}
             ${o.url && caps.length ? `<a class="btn ${continuar ? 'btn-ghost' : 'btn-primary'}" href="${esc(o.url)}&c=${caps[0].n}">${continuar ? 'Ler do início' : '&#9654; Iniciar leitura'}</a>` : ''}
             <button type="button" class="livro-ico livro-fav" data-favoritar aria-pressed="${D.favorito}" title="${D.favorito ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'}" aria-label="${D.favorito ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'}">${D.favorito ? '&#10084;&#65039;' : '&#129293;'}</button>
+            <button type="button" class="livro-ico" data-estante title="Pôr na estante" aria-label="Pôr na estante">&#128218;</button>
             <button type="button" class="livro-ico" data-copiar title="Copiar link" aria-label="Copiar link">&#128279;</button>
             <button type="button" class="livro-ico livro-flag" data-denunciar ${D.dono ? 'disabled title="Você não pode denunciar o próprio livro"' : 'title="Denunciar este livro"'} aria-label="Denunciar este livro">&#128681;</button>
           </div>
@@ -245,6 +246,10 @@
     else if (t.dataset.copiar !== undefined) { try { await navigator.clipboard.writeText(location.origin + location.pathname + location.search); t.innerHTML = '&#10003;'; t.title = 'Link copiado'; } catch { /* sem permissao */ } }
     else if (t.dataset.editar !== undefined) editar();
     else if (t.dataset.denunciar !== undefined) denunciar();
+    else if (t.dataset.estante !== undefined) {
+      if (!D.logado) return pedirLogin('Estante', 'Entre na sua conta para guardar livros nas suas estantes.');
+      estanteDialogo();
+    }
     else if (t.dataset.favoritar !== undefined) {
       if (!D.logado) return pedirLogin('Favoritar', 'Entre na sua conta para guardar este livro nos favoritos.');
       t.disabled = true;
@@ -312,6 +317,46 @@
   function ampliar(n) {
     const i = D.pagina.imagens[n];
     const d = janela(i.legenda || D.obra.titulo, el(`<img class="livro-zoom" src="${esc(imgUrl(i.id))}" alt="${esc(i.legenda)}">`), botao('Fechar', 'btn-ghost', () => d.close()), true);
+  }
+
+  // ---------- estante: uma das cinco fixas (Lendo, Quero ler...) e quantas listas proprias quiser ----------
+  async function estanteDialogo() {
+    let listas;
+    try { listas = (await api('/api/estantes')).listas; } catch (err) { return; }
+    const corpo = el('<div class="est-dlg"></div>');
+    const desenharEst = () => {
+      const fixas = listas.filter((l) => l.chave), proprias = listas.filter((l) => !l.chave);
+      const naFixa = fixas.find((l) => l.obras.includes(obraId));
+      corpo.innerHTML = `<fieldset class="est-fixas"><legend>Situação</legend>
+          ${fixas.map((l) => `<label><input type="radio" name="fixa" value="${l.id}" ${naFixa === l ? 'checked' : ''}> ${esc(l.nome)}</label>`).join('')}
+          <label><input type="radio" name="fixa" value="" ${naFixa ? '' : 'checked'}> Nenhuma</label></fieldset>
+        <fieldset class="est-proprias"><legend>Minhas listas</legend>
+          ${proprias.map((l) => `<label><input type="checkbox" value="${l.id}" ${l.obras.includes(obraId) ? 'checked' : ''}> ${esc(l.nome)}</label>`).join('') || '<p class="hint">Você ainda não criou listas.</p>'}
+          <form class="est-nova"><input name="nome" maxlength="60" placeholder="Nova lista" aria-label="Nome da nova lista"><button class="btn btn-ghost" type="submit">Criar</button></form></fieldset>
+        <div class="el-estado" role="status"></div>`;
+    };
+    const alternar = async (id) => { listas = (await api(`/api/estantes/${id}/livro`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autor, obra: obraId }) })).listas; desenharEst(); };
+    corpo.addEventListener('change', async (e) => {
+      const t = e.target;
+      try {
+        if (t.name === 'fixa') {
+          const atual = listas.find((l) => l.chave && l.obras.includes(obraId));
+          if (t.value) await alternar(t.value); else if (atual) await alternar(atual.id);
+        } else if (t.type === 'checkbox') await alternar(t.value);
+      } catch (err) { corpo.querySelector('.el-estado').innerHTML = `<p class="note err">${esc(err.message)}</p>`; }
+    });
+    corpo.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nome = e.target.nome.value.trim(); if (!nome) return;
+      try {
+        listas = (await api('/api/estantes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }) })).listas;
+        await alternar(listas.filter((l) => !l.chave && l.nome === nome).pop().id);
+      } catch (err) { corpo.querySelector('.el-estado').innerHTML = `<p class="note err">${esc(err.message)}</p>`; }
+    });
+    desenharEst();
+    const d = janela('Pôr na estante', corpo, [el('<a class="btn btn-ghost" href="#">Ver minhas estantes</a>'), botao('Pronto', 'btn-primary', () => d.close())]);
+    const meu = await api('/api/me').catch(() => null);
+    if (meu) d.querySelector('.el-dialogo-rodape a').href = `leitor.html?u=${encodeURIComponent(meu.slug)}`;
   }
 
   // ---------- denuncia (qualquer conta logada, menos o dono) ----------

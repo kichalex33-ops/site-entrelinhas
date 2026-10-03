@@ -78,8 +78,18 @@
     subtitle.textContent = 'Conta de leitor.';
     app.innerHTML = `
       <div class="auth-box">
-        <p>Olá, <b>${esc(me.nome)}</b>! Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos nas páginas dos autores.</p>
-        <p style="margin:1rem 0"><a class="btn btn-primary" href="autores.html">Ver autores e obras</a> <button class="btn btn-ghost" id="logout" type="button">Sair</button></p>
+        <p>Olá, <b>${esc(me.nome)}</b>! Avalie livros, favorite, siga autores e monte suas estantes (Quero ler, Lendo, Lidos e listas suas).</p>
+        <p style="margin:1rem 0"><a class="btn btn-primary" href="leitor.html?u=${encodeURIComponent(me.slug)}">Ver meu perfil e estantes</a> <a class="btn btn-ghost" href="index.html#biblioteca">Biblioteca</a> <button class="btn btn-ghost" id="logout" type="button">Sair</button></p>
+        <form id="leitorForm"><fieldset class="blk">
+          <legend>Meu perfil de leitor</legend>
+          <div class="lt-edita-foto"><div class="lt-foto" id="ltFoto"><span>${esc((me.nome || '?').charAt(0).toUpperCase())}</span></div>
+            <div><label class="btn btn-ghost ed-up">Escolher foto<input type="file" accept="image/jpeg,image/png,image/webp" id="ltArquivo" hidden></label> <button type="button" class="rm" id="ltTirar">Tirar foto</button></div></div>
+          ${field('Nome (aparece nas suas avaliações)', `<input name="nome" maxlength="40" minlength="2" required value="${esc(me.nome)}">`)}
+          ${field('Sobre você (opcional)', '<textarea name="bio" rows="3" maxlength="600" placeholder="O que gosta de ler, autores preferidos..."></textarea>')}
+          ${field('Cidade (opcional)', '<input name="local" maxlength="60" placeholder="Ex.: São Paulo, SP">')}
+          <label class="lt-toggle"><span><b>Perfil privado</b><small>Visitantes veem só seu nome e foto. Estantes, avaliações e atividade ficam só para você.</small></span><input type="checkbox" name="privado"></label>
+          <button class="btn btn-primary" type="submit">Salvar perfil</button><span id="ltNote"></span>
+        </fieldset></form>
         <details class="blk pw"><summary>Trocar senha</summary>
           <form id="pwForm">
             ${field('Senha atual', '<input name="atual" type="password" autocomplete="current-password" required>')}
@@ -89,6 +99,7 @@
         ${apagarHtml(false)}
       </div>`;
     bindApagar();
+    bindPerfilLeitor(me);
     document.getElementById('logout').addEventListener('click', async () => { await api('/api/logout', { method: 'POST' }); authView('login'); });
     document.getElementById('pwForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -169,6 +180,28 @@
       ${apagarHtml(true)}`;
     bindEditor();
     bindApagar();
+  }
+
+  // ---------- perfil de leitor: nome, foto e bio (pagina publica em leitor.html) ----------
+  async function bindPerfilLeitor(me){
+    const f = document.getElementById('leitorForm'), box = document.getElementById('ltFoto'), nota = document.getElementById('ltNote');
+    let foto = '';
+    const mostrar = () => { box.innerHTML = foto ? `<img src="${esc(imgUrl(foto))}" alt="">` : `<span>${esc((f.nome.value || '?').charAt(0).toUpperCase())}</span>`; };
+    try { const p = await api(`/api/leitor/${me.slug}`); foto = p.foto; f.bio.value = p.bio; f.local.value = p.local; f.privado.checked = p.privado; mostrar(); } catch { /* segue com o basico */ }
+    document.getElementById('ltArquivo').addEventListener('change', async (e) => {
+      const arq = e.target.files[0]; if (!arq) return;
+      nota.innerHTML = note('Enviando a foto...', true);
+      try { foto = await EL.enviarImagem(arq); mostrar(); nota.innerHTML = note('Foto pronta. Clique em Salvar perfil.', true); } catch (err) { nota.innerHTML = note(err.message); }
+      e.target.value = '';
+    });
+    document.getElementById('ltTirar').addEventListener('click', () => { foto = ''; mostrar(); });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api('/api/leitor', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: f.nome.value, bio: f.bio.value, local: f.local.value, privado: f.privado.checked, foto }) });
+        nota.innerHTML = note('Perfil salvo.', true);
+      } catch (err) { nota.innerHTML = note(err.message); }
+    });
   }
 
   // ---------- apagar conta (leitor e autor) ----------

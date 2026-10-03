@@ -20,7 +20,7 @@
     const item = (r) => `
       <article class="rev-item" data-id="${r.id}">
         <div class="rev-head">
-          <b>${r.perfil ? `<a href="autor.html?a=${encodeURIComponent(r.perfil)}">${esc(r.nome)}</a>` : esc(r.nome)}</b>
+          <b>${r.perfil ? `<a href="autor.html?a=${encodeURIComponent(r.perfil)}">${esc(r.nome)}</a>` : r.leitor ? `<a href="leitor.html?u=${encodeURIComponent(r.leitor)}">${esc(r.nome)}</a>` : esc(r.nome)}</b>
           <span class="stars" aria-label="Nota ${r.nota} de 5">${stars(r.nota)}</span>
           <span class="rev-date">${esc(dia(r.em))}</span>
         </div>

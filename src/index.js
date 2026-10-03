@@ -6,7 +6,8 @@ import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
 import { movimentosDaLixeira, naLixeira, listarLixeira, restaurar, excluirDefinitivo, limparLixeiraVencida } from './lixeira.js';
 import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOferta } from './ajuda.js';
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
-import { vitrine } from './vitrine.js';
+import { vitrine, livrosPublicos } from './vitrine.js';
+import { verLeitor, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
 const SESSION_DAYS = 30;
@@ -315,6 +316,8 @@ async function deleteAccount(env, req, user) {
     ...porObra('DELETE FROM book_favorites WHERE obra_id = ?'),
     ...porObra('DELETE FROM book_views WHERE obra_id = ?'),
     ...porObra('DELETE FROM book_reports WHERE obra_id = ?'),
+    ...porObra('DELETE FROM reader_list_items WHERE obra_id = ?'),
+    st('DELETE FROM follows WHERE seguido_slug = ?', user.slug),
     st('DELETE FROM reviews WHERE author_slug = ?', user.slug),
     st('DELETE FROM profiles WHERE user_id = ? OR slug = ?', user.id, user.slug),
     st('DELETE FROM images WHERE user_id = ?', user.id),
@@ -514,7 +517,7 @@ async function uploadImage(env, req, user) {
   const buf = await req.arrayBuffer();
   if (buf.byteLength === 0 || buf.byteLength > MAX_IMG) return fail('A imagem deve ter até 600 KB.');
   const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM images WHERE user_id = ?').bind(user.id).first();
-  if (n.n >= MAX_IMGS_PER_USER) return fail('Limite de imagens atingido. Remova obras antigas.');
+  if (n.n >= (user.role === 'autor' ? MAX_IMGS_PER_USER : 3)) return fail(user.role === 'autor' ? 'Limite de imagens atingido. Remova obras antigas.' : 'Limite de imagens atingido. Salve o perfil com a foto escolhida.');
   const id = toHex(rand(12));
   await env.DB.prepare('INSERT INTO images (id, user_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, user.id, type, buf, now()).run();
   return json({ ok: true, id });
@@ -568,6 +571,7 @@ async function listReviews(env, req, url) {
       id: r.id, nota: r.nota, texto: r.texto, spoiler: !!r.spoiler, em: r.created_at,
       nome: r.role === 'autor' ? (r.pdata ? JSON.parse(r.pdata).nome : '') || 'Autor' : r.nome || 'Leitor',
       perfil: r.role === 'autor' ? r.uslug : null,
+      leitor: r.role === 'autor' ? null : r.uslug,
       uteis: r.uteis, meu_voto: !!r.meu_voto,
       minha: !!viewer && r.user_id === viewer.id,
       ...(viewer && viewer.is_admin ? { denuncias: r.denuncias } : {}),
@@ -736,6 +740,14 @@ export default {
         }
         if (path === '/api/chat') return listChat(env, req, url);
         if (path === '/api/vitrine') return vitrine(env, { json, now, publicacao });
+        const lt = path.match(/^\/api\/leitor\/([a-z0-9-]{1,40})$/);
+        if (lt) return verLeitor(env, req, lt[1], { json, fail, now, currentUser, livros: () => livrosPublicos(env, { now, publicacao }) });
+        const sg = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
+        if (sg) return seguir(env, await currentUser(env, req), sg[1], false, { json, fail, now });
+        if (path === '/api/estantes') {
+          const u = await currentUser(env, req);
+          return u ? estantes(env, u, { json, now }) : fail('Faça login para continuar.', 401);
+        }
         if (path === '/api/admin/contas') return adminAccounts(env, req);
         const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
         if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao, denunciasAbertas });
@@ -775,7 +787,19 @@ export default {
       const user = await currentUser(env, req);
       if (!user) return fail('Faça login para continuar.', 401);
       if (path === '/api/profile' && req.method === 'PUT') return user.role === 'autor' ? saveProfile(env, req, user) : fail('Apenas autores editam perfil.', 403);
-      if (path === '/api/image' && req.method === 'POST') return user.role === 'autor' ? uploadImage(env, req, user) : fail('Apenas autores enviam imagens.', 403);
+      if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
+      if (path === '/api/leitor' && req.method === 'PUT') return salvarLeitor(env, req, user, { json, fail, str, body, ownsImage });
+      const sgp = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
+      if (sgp && req.method === 'POST') return seguir(env, user, sgp[1], true, { json, fail, now });
+      if (path === '/api/estantes' || path.startsWith('/api/estantes/')) {
+        const he = { json, fail, str, body, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) };
+        if (path === '/api/estantes' && req.method === 'POST') return criarLista(env, req, user, he);
+        const es = path.match(/^\/api\/estantes\/(\d{1,12})(\/livro)?$/);
+        if (es && es[2] && req.method === 'POST') return alternarLivro(env, req, user, Number(es[1]), he);
+        if (es && !es[2] && req.method === 'PATCH') return mudarLista(env, req, user, Number(es[1]), he);
+        if (es && !es[2] && req.method === 'DELETE') return apagarLista(env, user, Number(es[1]), he);
+        return fail('Não encontrado.', 404);
+      }
       if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user, publicacao);
       const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
       if (rm) {

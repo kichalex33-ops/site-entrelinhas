@@ -102,6 +102,7 @@
         ${paras(d.bio)}
         ${d.citacao ? `<p class="quote-line">${esc(d.citacao)}</p>` : ''}
         ${p.badges.length ? `<div class="badges">${p.badges.map(b => `<span class="badge-pill">${esc(b)}</span>`).join('')}</div>` : ''}
+        <p class="seguir-linha"><span id="seguidores" class="hint"></span>${isOwner ? '' : `<button type="button" class="btn btn-primary" id="seguirBtn" hidden>+ Seguir</button>`}</p>
         ${d.links.length ? `<p class="links">${d.links.map((l, i) => `<a class="btn ${i ? 'btn-ghost' : 'btn-primary'}" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
         ${viewerMod ? '<p class="links"><a class="btn btn-primary mod-chat-btn" href="chat.html">&#9733; Entrar no chat da moderação</a><a class="btn btn-ghost" href="https://mail.proton.me/" target="_blank" rel="noopener noreferrer">Abrir a caixa de e-mails</a></p>' : ''}
       </div>
@@ -111,6 +112,21 @@
     <p style="text-align:center;margin:3rem 0 0"><a class="btn btn-ghost" href="autores.html">Ver todos os autores</a></p>
   </section>`;
   theme(root, d);
+
+  // seguir o autor (leitores e outros autores); quem nao entrou e levado ao login
+  const segBtn = document.getElementById('seguirBtn'), segN = document.getElementById('seguidores');
+  const mostrarSeg = (r) => {
+    segN.textContent = `${r.seguidores} ${r.seguidores === 1 ? 'seguidor' : 'seguidores'}`;
+    if (segBtn) { segBtn.hidden = false; segBtn.textContent = r.seguindo ? 'Seguindo' : '+ Seguir'; segBtn.className = 'btn ' + (r.seguindo ? 'btn-ghost' : 'btn-primary'); }
+  };
+  try { mostrarSeg(await api(`/api/seguir/${encodeURIComponent(slug)}`)); } catch (e) { /* contagem nao e essencial */ }
+  if (segBtn) segBtn.addEventListener('click', async () => {
+    if (!me) { location.href = 'conta.html'; return; }
+    segBtn.disabled = true;
+    try { mostrarSeg(await api(`/api/seguir/${encodeURIComponent(slug)}`, { method: 'POST' })); } catch (e) { /* mantem */ }
+    segBtn.disabled = false;
+  });
+
   root.querySelectorAll('.rev-toggle').forEach((b) => b.addEventListener('click', () => {
     const box = b.parentElement.querySelector('.rev-box');
     box.hidden = !box.hidden;

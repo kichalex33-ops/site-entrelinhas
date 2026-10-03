@@ -37,6 +37,7 @@ function rastros(env, slug, obraId) {
     st('DELETE FROM book_reports WHERE obra_id = ?', obraId),
     st('DELETE FROM book_posts WHERE obra_id = ?', obraId), // curtidas saem em cascata
     st('DELETE FROM book_pages WHERE obra_id = ?', obraId),
+    st('DELETE FROM reader_list_items WHERE obra_id = ?', obraId),
   ];
 }
 

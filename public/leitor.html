@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitor | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main id="root"><section class="page active"><p class="muted-note">Carregando...</p></section></main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Minha conta</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script>
+// Perfil de leitor: leitor.html?u=slug[#aba]. Abas: Estante, Avaliações, Atividade, Seguindo.
+// O dono tem a engrenagem (perfil público/privado, listas, editar, sair) e ve as listas ocultas.
+(function () {
+  'use strict';
+  const { esc, imgUrl, api, initial } = window.EL;
+  const root = document.getElementById('root');
+  const slug = new URLSearchParams(location.search).get('u') || '';
+  const mes = (t) => new Date(t * 1000).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
+  const estrelas = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
+  const ICONE = { lendo: '📖', quero: '🔖', lidos: '✅', pausado: '⏸', abandonado: '✕' };
+  const ABAS = [['estante', 'Estante'], ['avaliacoes', 'Avaliações'], ['atividade', 'Atividade'], ['seguindo', 'Seguindo']];
+  let D = null, filtro = 'todos';
+
+  if (!/^[a-z0-9-]{1,40}$/.test(slug)) { root.innerHTML = '<section class="page active"><p class="muted-note">Perfil não informado.</p></section>'; return; }
+  carregar();
+  async function carregar() {
+    try { D = await api(`/api/leitor/${slug}`); } catch (e) { root.innerHTML = `<section class="page active"><p class="muted-note">${esc(e.status === 404 ? 'Este perfil não existe.' : 'Não foi possível carregar o perfil.')}</p></section>`; return; }
+    document.title = `${D.nome} | Entrelinhas`;
+    desenhar();
+  }
+
+  const avatar = (foto, nome, cls) => `<span class="${cls}">${foto ? `<img src="${esc(imgUrl(foto))}" alt="">` : initial(nome)}</span>`;
+
+  function cab() {
+    const acoes = D.dono
+      ? '<a class="btn btn-ghost" href="conta.html">Editar perfil</a>'
+      : D.logado ? `<button type="button" class="btn ${D.eu_sigo ? 'btn-ghost' : 'btn-primary'}" data-seguir>${D.eu_sigo ? 'Seguindo' : '+ Seguir'}</button>` : '<a class="btn btn-primary" href="conta.html">Entre para seguir</a>';
+    return `<div class="lt-cab">
+      <div class="lt-foto">${D.foto ? `<img src="${esc(imgUrl(D.foto))}" alt="Foto de ${esc(D.nome)}">` : `<span>${initial(D.nome)}</span>`}</div>
+      <div class="lt-cab-info">
+        <div class="lt-nome"><h2>${esc(D.nome)}</h2>${/^leitor-/.test(D.slug) ? '' : `<span class="hint">@${esc(D.slug)}</span>`}
+          ${D.privado ? '<span class="aj-tag" title="Só você vê o conteúdo deste perfil">🔒 privado</span>' : ''}
+          ${D.dono ? '<button type="button" class="lt-engrenagem" data-config title="Configurações do perfil" aria-label="Configurações do perfil">⚙</button>' : ''}</div>
+        ${D.bio ? `<p class="lt-bio">${esc(D.bio).replace(/\n/g, '<br>')}</p>` : D.dono && !D.bloqueado ? '<p class="hint">Conte um pouco sobre você e o que gosta de ler em “Editar perfil”.</p>' : ''}
+        <p class="lt-meta">${D.local ? `<span>📍 ${esc(D.local)}</span>` : ''}<span>🗓 No Entrelinhas desde ${mes(D.desde)}</span></p>
+        ${D.selos && D.selos.length ? `<div class="badges">${D.selos.map((b) => `<span class="badge-pill">${esc(b)}</span>`).join('')}</div>` : ''}
+        <div class="lt-contadores">
+          <div><b data-n="seguidores">${milhar(D.seguidores)}</b><span>${D.seguidores === 1 ? 'Seguidor' : 'Seguidores'}</span></div>
+          <div><b>${milhar(D.seguindo_total)}</b><span>Seguindo</span></div>
+          ${D.numeros ? `<div><b>${milhar(D.numeros.favoritos)}</b><span>Favoritos</span></div>` : ''}
+        </div>
+        <p class="lt-acoes">${acoes}</p>
+      </div>
+    </div>`;
+  }
+
+  function capa(l, chave) {
+    return `<a class="lt-livro" href="${esc(l.href)}" title="${esc(l.titulo)} · ${esc(l.autor.nome)}">
+      ${l.capa ? `<img src="${esc(l.capa)}" alt="Capa de ${esc(l.titulo)}" loading="lazy">` : `<span class="lt-sem-capa">${esc(l.titulo)}</span>`}
+      <b>${esc(l.titulo)}</b><small>${esc(l.autor.nome)}</small>
+      ${chave ? `<span class="lt-status lt-${chave}">${ICONE[chave] || ''} ${esc(D.listas.find((x) => x.chave === chave).nome)}</span>` : ''}</a>`;
+  }
+
+  function estante() {
+    const fixas = D.listas.filter((l) => l.chave), proprias = D.listas.filter((l) => !l.chave);
+    // "Todos": cada livro uma vez, com o status da estante fixa em que esta
+    const status = new Map();
+    for (const l of fixas) for (const b of l.livros) status.set(b.id, l.chave);
+    const todos = new Map();
+    for (const l of D.listas) for (const b of l.livros) if (!todos.has(b.id)) todos.set(b.id, b);
+    const chip = (k, rot, qtd) => `<button type="button" class="chip${filtro === k ? ' active' : ''}" data-filtro="${k}">${rot} <span class="lt-qtd">${qtd}</span></button>`;
+    let livros, vazio;
+    if (filtro === 'todos') { livros = [...todos.values()]; vazio = D.dono ? 'Sua estante está vazia. Na página de um livro, use o botão “Estante” para guardá-lo aqui.' : 'Nenhum livro à vista.'; }
+    else if (filtro === 'favoritos') { livros = D.favoritos; vazio = 'Nenhum favorito ainda.'; }
+    else { const l = D.listas.find((x) => String(x.id) === filtro); livros = l ? l.livros : []; vazio = 'Nenhum livro nesta estante.'; }
+    const lista = D.listas.find((x) => String(x.id) === filtro);
+    return `<div class="chips lt-chips">
+        ${chip('todos', 'Todos', todos.size)}
+        ${fixas.map((l) => chip(String(l.id), `${ICONE[l.chave]} ${esc(l.nome)}${l.publica ? '' : ' 🔒'}`, l.livros.length)).join('')}
+        ${chip('favoritos', '❤ Favoritos', D.favoritos.length)}
+        ${proprias.map((l) => chip(String(l.id), `${esc(l.nome)}${l.publica ? '' : ' 🔒'}`, l.livros.length)).join('')}
+      </div>
+      ${lista && !lista.publica ? '<p class="hint">🔒 Esta lista está oculta: só você a vê. Mude em ⚙ Configurações.</p>' : ''}
+      ${livros.length ? `<div class="lt-grade">${livros.map((b) => capa(b, filtro === 'todos' || filtro === 'favoritos' || (lista && !lista.chave) ? status.get(b.id) : '')).join('')}</div>` : `<p class="muted-note">${vazio}</p>`}`;
+  }
+
+  function avaliacoes() {
+    return D.avaliacoes.map((r) => `<article class="lt-review">
+        <a class="lt-mini" href="${esc(r.livro.href)}">${r.livro.capa ? `<img src="${esc(r.livro.capa)}" alt="">` : `<span>${initial(r.livro.titulo)}</span>`}</a>
+        <div><p><a href="${esc(r.livro.href)}"><b>${esc(r.livro.titulo)}</b></a> <span class="hint">de ${esc(r.livro.autor.nome)}</span></p>
+        <p class="stars" aria-label="${r.nota} de 5">${estrelas(r.nota)}</p>
+        ${r.spoiler ? `<details><summary>Contém spoiler. Mostrar</summary><p>${esc(r.texto)}</p></details>` : `<p>${esc(r.texto)}</p>`}
+        <p class="hint">Avaliado em ${dia(r.em)}</p></div>
+      </article>`).join('') || '<p class="muted-note">Nenhuma avaliação ainda.</p>';
+  }
+
+  function atividade() {
+    const frase = (a) => {
+      const t = `<a href="${esc(a.livro.href)}"><b>${esc(a.livro.titulo)}</b></a>`;
+      if (a.tipo === 'avaliou') return ['⭐', `Avaliou ${t} com ${a.nota} estrela${a.nota === 1 ? '' : 's'}.`, a.texto];
+      if (a.tipo === 'favoritou') return ['❤', `Favoritou ${t}.`, ''];
+      if (a.chave === 'lendo') return ['📖', `Começou a ler ${t}.`, ''];
+      if (a.chave === 'lidos') return ['✅', `Terminou de ler ${t}.`, ''];
+      return [ICONE[a.chave] || '📚', `Pôs ${t} na estante “${esc(a.lista)}”.`, ''];
+    };
+    return D.atividade.length ? `<ol class="lt-atividade">${D.atividade.map((a) => { const [ic, txt, cit] = frase(a); return `<li><span class="lt-ic">${ic}</span><div><p>${txt}</p>${cit ? `<em>“${esc(cit.length > 160 ? cit.slice(0, 160) + '…' : cit)}”</em>` : ''}<span class="hint">${dia(a.em)}</span></div></li>`; }).join('')}</ol>`
+      : '<p class="muted-note">Nenhuma atividade ainda.</p>';
+  }
+
+  function seguindo() {
+    return D.seguindo.length ? `<div class="lt-seguindo">${D.seguindo.map((a) => `<a href="${a.tipo === 'autor' ? `autor.html?a=${encodeURIComponent(a.slug)}` : `leitor.html?u=${encodeURIComponent(a.slug)}`}">${avatar(a.foto, a.nome, 'lt-av')}<span>${esc(a.nome)}</span></a>`).join('')}</div>`
+      : '<p class="muted-note">Ainda não segue ninguém.</p>';
+  }
+
+  function desenhar() {
+    if (D.bloqueado) {
+      root.innerHTML = `<section class="page active leitor">${cab()}<div class="lt-privado"><span>🔒</span><h3>Este perfil é privado</h3><p>As estantes, avaliações e atividade de ${esc(D.nome)} só aparecem para ${esc(D.nome)}.</p></div></section>`;
+      return;
+    }
+    const pedida = location.hash.slice(1), aba = ABAS.some(([k]) => k === pedida) ? pedida : 'estante';
+    const corpo = { estante, avaliacoes, atividade, seguindo }[aba]();
+    root.innerHTML = `<section class="page active leitor">
+      ${cab()}
+      <div class="livro-numeros lt-numeros">
+        <div><b>${milhar(D.numeros.lidos)}</b><span>Livros lidos</span></div>
+        <div><b>${milhar(D.numeros.favoritos)}</b><span>Favoritos</span></div>
+        <div><b>${milhar(D.numeros.avaliacoes)}</b><span>Avaliações</span></div>
+        <div><b>${milhar(D.seguindo_total)}</b><span>Seguindo</span></div>
+      </div>
+      <nav class="livro-abas" role="tablist">${ABAS.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === aba}">${r}</button>`).join('')}</nav>
+      <div class="lt-painel">${corpo}</div>
+    </section>`;
+  }
+
+  // ---------- engrenagem: configuracoes do dono ----------
+  function configuracoes() {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'el-dialogo lt-config';
+    const desenharCfg = () => {
+      dlg.innerHTML = `<h2>Configurações</h2>
+        <div class="el-dialogo-corpo">
+          <label class="lt-toggle"><span><b>Perfil público</b><small>Desligado, visitantes veem só seu nome e foto. Estantes, avaliações e atividade ficam só para você.</small></span>
+            <input type="checkbox" data-privado ${D.privado ? '' : 'checked'}></label>
+          <h3>Estantes e listas</h3>
+          <p class="hint">Escolha o que aparece no seu perfil. Listas ocultas continuam funcionando, só ninguém mais vê.</p>
+          <ul class="lt-cfg-listas">${D.listas.map((l) => `<li><span>${l.chave ? ICONE[l.chave] + ' ' : ''}${esc(l.nome)}</span>
+            <label class="lt-mini-toggle"><input type="checkbox" data-visivel="${l.id}" ${l.publica ? 'checked' : ''}> à vista</label>
+            ${l.chave ? '' : `<button type="button" class="rm" data-renomear="${l.id}">Renomear</button><button type="button" class="rm" data-apagar="${l.id}">Apagar</button>`}</li>`).join('')}</ul>
+          <form class="lt-nova"><input name="nome" maxlength="60" required placeholder="Nova lista (ex.: Para as férias)" aria-label="Nome da nova lista"><button class="btn btn-ghost" type="submit">Criar lista</button></form>
+          <div class="el-estado" role="status"></div>
+        </div>
+        <div class="el-dialogo-rodape"><a class="btn btn-ghost" href="conta.html">Editar perfil</a><button type="button" class="btn btn-ghost" data-sair>Sair da conta</button><button type="button" class="btn btn-primary" data-fechar>Fechar</button></div>`;
+    };
+    const erro = (m) => { dlg.querySelector('.el-estado').innerHTML = `<p class="note err">${esc(m)}</p>`; };
+    const json = (metodo, corpo) => ({ method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+    const atualizar = async () => { D = await api(`/api/leitor/${slug}`); desenharCfg(); desenhar(); };
+    desenharCfg();
+    dlg.addEventListener('change', async (e) => {
+      try {
+        if (e.target.dataset.privado !== undefined) await api('/api/leitor', json('PUT', { privado: !e.target.checked }));
+        else if (e.target.dataset.visivel) await api(`/api/estantes/${e.target.dataset.visivel}`, json('PATCH', { publica: e.target.checked }));
+        await atualizar();
+      } catch (err) { erro(err.message); }
+    });
+    dlg.addEventListener('click', async (e) => {
+      const t = e.target.closest('button'); if (!t) return;
+      try {
+        if (t.dataset.fechar !== undefined) return dlg.close();
+        if (t.dataset.sair !== undefined) { await api('/api/logout', { method: 'POST' }); location.href = 'index.html'; return; }
+        if (t.dataset.apagar) {
+          if (t.dataset.certeza !== '1') { t.dataset.certeza = '1'; t.textContent = 'Clique de novo para apagar'; return; }
+          await api(`/api/estantes/${t.dataset.apagar}`, { method: 'DELETE' }); await atualizar();
+        } else if (t.dataset.renomear) {
+          const li = t.closest('li'), atual = D.listas.find((l) => String(l.id) === t.dataset.renomear).nome;
+          li.innerHTML = `<form class="lt-nova" data-renomeia="${t.dataset.renomear}"><input name="nome" maxlength="60" required value="${esc(atual)}" aria-label="Novo nome"><button class="btn btn-ghost" type="submit">Salvar</button></form>`;
+          li.querySelector('input').focus();
+        }
+      } catch (err) { erro(err.message); }
+    });
+    dlg.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      try {
+        if (f.dataset.renomeia) await api(`/api/estantes/${f.dataset.renomeia}`, json('PATCH', { nome: f.nome.value }));
+        else await api('/api/estantes', json('POST', { nome: f.nome.value }));
+        await atualizar();
+      } catch (err) { erro(err.message); }
+    });
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg); dlg.showModal();
+  }
+
+  root.addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.aba) { history.replaceState(null, '', '#' + t.dataset.aba); desenhar(); }
+    else if (t.dataset.filtro) { filtro = t.dataset.filtro; desenhar(); }
+    else if (t.dataset.config !== undefined) configuracoes();
+    else if (t.dataset.seguir !== undefined) {
+      t.disabled = true;
+      try { const r = await api(`/api/seguir/${slug}`, { method: 'POST' }); D.eu_sigo = r.seguindo; D.seguidores = r.seguidores; desenhar(); } catch { t.disabled = false; }
+    }
+  });
+  window.addEventListener('hashchange', () => { if (D) desenhar(); });
+})();
+</script>
+</body>
+</html>
