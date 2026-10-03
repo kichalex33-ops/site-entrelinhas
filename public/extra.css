@@ -332,3 +332,18 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .work-link{color:inherit;text-decoration:none}
 .work-link:hover{color:var(--accent)}
 .el-dialogo .el-dialogo-rodape{position:sticky;bottom:-1.4rem;background:var(--panel-2);padding:.8rem 0 .2rem;margin-bottom:-.2rem;border-top:1px solid var(--line)}
+.livro-denunciar{background:none;border:0;padding:0;color:var(--muted);font:inherit;font-size:.78rem;text-decoration:underline;cursor:pointer}
+.livro-denunciar:hover{color:#e58a8a}
+.livro-aviso{border:1px solid #8a5a1a;background:rgba(217,169,74,.08);border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem;font-size:.88rem}
+.den-motivos{display:grid;gap:.35rem}
+.den-motivos label{display:flex;gap:.5rem;align-items:center;font-size:.9rem;cursor:pointer}
+.den-motivos input{accent-color:var(--accent)}
+#mod-denuncias summary{cursor:pointer;color:var(--accent);font-weight:500}
+.mod-badge{display:inline-block;min-width:1.4rem;padding:0 .35rem;border-radius:999px;background:#db2827;color:#fff;font-size:.72rem;text-align:center;margin-left:.3rem}
+.mod-todas{display:flex;gap:.4rem;align-items:center;font-size:.85rem;margin:.4rem 0 .8rem}
+.mod-den-grupo{border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem;margin-bottom:.8rem}
+.mod-den-grupo a{color:var(--accent)}
+.mod-den{border-top:1px solid var(--line);padding:.6rem 0}
+.mod-den-txt{white-space:pre-line;font-size:.88rem;color:#c8c8d0}
+.mod-den-acoes{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}
+.mod-den-nota{flex:1 1 200px;min-width:0;padding:.5rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.85rem}

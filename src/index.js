@@ -4,6 +4,7 @@
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
 import { getLivro, putLivro, imagensDasPaginas } from './livro.js';
+import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
 const SESSION_DAYS = 30;
 const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
@@ -684,7 +685,12 @@ export default {
         if (path === '/api/chat') return listChat(env, req, url);
         if (path === '/api/admin/contas') return adminAccounts(env, req);
         const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
-        if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao });
+        if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao, denunciasAbertas });
+        if (path === '/api/admin/denuncias-livros') {
+          const u = await currentUser(env, req);
+          if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+          return listarDenunciasLivros(env, url, { json });
+        }
         if (path === '/api/admin/convites') return listarConvites(env, req);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
@@ -716,6 +722,10 @@ export default {
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
       if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
+      const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
+      if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+      const dd = path.match(/^\/api\/admin\/denuncias-livros\/(\d{1,12})$/);
+      if (dd && req.method === 'POST') return user.is_admin ? decidirDenunciaLivro(env, req, user, Number(dd[1]), { json, fail, str, body, now }) : fail('Apenas moderadores.', 403);
       const lp = path.match(/^\/api\/livro\/([a-f0-9]{12})$/);
       if (lp && req.method === 'PUT') {
         const r = await putLivro(env, req, user, lp[1], { json, fail, str, body, now, isUrl, ownsImage });

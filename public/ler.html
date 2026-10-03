@@ -79,6 +79,7 @@ async function sumario() {
         <p class="ler-meta">${o.capitulos.length} capítulo${o.capitulos.length === 1 ? '' : 's'} · ${milhar(o.palavras)} palavras${o.publicado_em ? ` · no Entrelinhas desde ${new Date(o.publicado_em * 1000).toLocaleDateString('pt-BR')}` : ''}</p>
         ${EL.FAIXAS.find((x) => x[0] === o.faixa) ? `<p class="ler-meta">${esc(EL.FAIXAS.find((x) => x[0] === o.faixa)[1])}</p>` : ''}
         <p class="livro-acoes">${o.capitulos.length ? `<a class="btn btn-primary" href="${base}&c=${o.capitulos[0].n}">Começar a ler</a>` : ''}<a class="btn btn-ghost" href="obra.html?a=${encodeURIComponent(autor)}&o=${esc(o.id)}">Página do livro</a></p>
+        <p><a class="livro-denunciar" href="obra.html?a=${encodeURIComponent(autor)}&o=${esc(o.id)}#denunciar">Denunciar este livro</a></p>
         ${o.creditos ? `<p class="ler-creditos">${esc(o.creditos)}</p>` : ''}
       </div>
     </div>

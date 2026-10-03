@@ -115,7 +115,55 @@
     });
   }
 
-  new MutationObserver(() => { montar(); montarConvites(); }).observe(app, { childList: true });
+  // ---------- denuncias de livros ----------
+  let montandoDen = false;
+  async function montarDenuncias() {
+    const conv = document.getElementById('mod-convites');
+    if (montandoDen || document.getElementById('mod-denuncias') || !conv) return;
+    montandoDen = true;
+    const sec = document.createElement('details');
+    sec.id = 'mod-denuncias';
+    sec.className = 'blk';
+    sec.innerHTML = `<summary>Moderação · denúncias de livros <span class="mod-badge" hidden></span></summary>
+      <p class="hint">Plágio, pirataria, IA sem aviso, classificação errada... Analise, fale com o autor se preciso e registre a decisão. O autor vê os motivos em análise, nunca quem denunciou.</p>
+      <label class="mod-todas"><input type="checkbox" id="mod-den-todas"> Mostrar também as já decididas</label>
+      <div id="mod-den-lista"><p class="hint">Carregando...</p></div>`;
+    conv.after(sec);
+    montandoDen = false;
+    const lista = sec.querySelector('#mod-den-lista'), badge = sec.querySelector('.mod-badge'), todas = sec.querySelector('#mod-den-todas');
+    const recarregar = async () => {
+      let ds = [];
+      try { ds = await api('/api/admin/denuncias-livros' + (todas.checked ? '?todas=1' : '')); } catch (e) { lista.innerHTML = `<p class="note err">${esc(e.message)}</p>`; return; }
+      const abertas = ds.filter((d) => d.status === 'aberta').length;
+      badge.hidden = !abertas; badge.textContent = abertas;
+      if (!ds.length) { lista.innerHTML = '<p class="hint">Nenhuma denúncia aberta. 🎉</p>'; return; }
+      const grupos = new Map();
+      for (const d of ds) { const k = d.autor_slug + '/' + d.obra_id; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(d); }
+      lista.innerHTML = [...grupos.entries()].map(([k, itens]) => {
+        const [a, o] = k.split('/');
+        return `<div class="mod-den-grupo"><p><a href="obra.html?a=${encodeURIComponent(a)}&o=${encodeURIComponent(o)}" target="_blank" rel="noopener"><b>Ver o livro</b></a> <span class="hint">de ${esc(a)} · ${itens.length} denúncia(s)</span></p>
+          ${itens.map((d) => `<div class="mod-den" data-id="${d.id}">
+            <p><b>${esc(d.rotulo)}</b> <span class="hint">· por ${esc(d.quem)} em ${data(d.created_at)}${d.status !== 'aberta' ? ` · ${d.status} por ${esc(d.moderador || '?')}` : ''}</span></p>
+            ${d.detalhe ? `<p class="mod-den-txt">${esc(d.detalhe)}</p>` : ''}
+            ${d.link ? `<p><a href="${esc(d.link)}" target="_blank" rel="noopener noreferrer nofollow">Link do original indicado &#8599;</a></p>` : ''}
+            ${d.status === 'aberta' ? `<div class="mod-den-acoes"><input class="mod-den-nota" maxlength="500" placeholder="Anotação da decisão (opcional)" aria-label="Anotação"><button type="button" class="btn btn-primary" data-acao="resolver">Ação tomada</button><button type="button" class="btn btn-ghost" data-acao="arquivar">Arquivar (sem problema)</button></div>` : d.nota ? `<p class="hint">Nota: ${esc(d.nota)}</p>` : ''}
+          </div>`).join('')}</div>`;
+      }).join('');
+    };
+    todas.addEventListener('change', recarregar);
+    lista.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-acao]'); if (!b) return;
+      const box = b.closest('.mod-den');
+      b.disabled = true;
+      try {
+        await api('/api/admin/denuncias-livros/' + box.dataset.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: b.dataset.acao, nota: box.querySelector('.mod-den-nota').value }) });
+        recarregar();
+      } catch (err) { b.disabled = false; box.insertAdjacentHTML('beforeend', `<p class="note err">${esc(err.message)}</p>`); }
+    });
+    recarregar();
+  }
+
+  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); }).observe(app, { childList: true });
   // o painel de senha monta de forma assincrona; quando ele entra em #app, o observador monta o de convites
   montar();
 })();

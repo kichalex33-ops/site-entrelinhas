@@ -60,6 +60,9 @@ export async function getLivro(env, req, autor, obraId, h) {
     tipo, obra, capitulos, pagina: pg ? { ...vazia(), ...safe(pg.data) } : vazia(),
     autor: { slug: autor, nome: pdata.nome || autor },
     dono: !!viewer && viewer.id === prof.user_id,
+    // so o dono ve que ha denuncias em analise (motivos e quantidade, nunca quem denunciou)
+    denuncias: viewer && viewer.id === prof.user_id ? await h.denunciasAbertas(env, obraId) : undefined,
+    logado: !!viewer,
   });
 }
 

@@ -112,6 +112,7 @@
     document.title = `${o.titulo} | Entrelinhas`;
     const abas = abasVisiveis();
     const pedida = location.hash.slice(1);
+    if (pedida === 'denunciar') { history.replaceState(null, '', location.pathname + location.search); setTimeout(denunciar, 0); }
     const ativa = abas.some(([k]) => k === pedida) ? pedida : 'detalhes';
     const lojas = [o.link && { rotulo: /amazon\.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer', url: o.link }, ...(o.lojas || [])].filter(Boolean);
     const aqui = location.origin + location.pathname + location.search;
@@ -134,9 +135,10 @@
           </div>
           <h3>Informações</h3>
           ${info()}
-          ${D.dono ? '<p><button type="button" class="btn btn-primary" data-editar>Editar página do livro</button></p>' : ''}
+          ${D.dono ? '<p><button type="button" class="btn btn-primary" data-editar>Editar página do livro</button></p>' : '<p><button type="button" class="livro-denunciar" data-denunciar>Denunciar este livro</button></p>'}
         </aside>
         <div class="livro-main">
+          ${D.dono && D.denuncias && D.denuncias.length ? `<div class="livro-aviso" role="status"><b>Este livro tem denúncias em análise pela moderação:</b> ${D.denuncias.map((x) => `${esc(x.rotulo)} (${x.n})`).join(' · ')}. Se tiver algo a esclarecer, fale com um moderador do coletivo.</div>` : ''}
           <nav class="livro-abas" role="tablist">${abas.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === ativa}">${esc(r)}</button>`).join('')}</nav>
           <div class="livro-painel" role="tabpanel">${painel(ativa)}</div>
           ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
@@ -156,6 +158,7 @@
     else if (t.dataset.foto) ampliar(Number(t.dataset.foto));
     else if (t.dataset.copiar !== undefined) { try { await navigator.clipboard.writeText(location.origin + location.pathname + location.search); t.textContent = 'Link copiado'; } catch { /* sem permissao */ } }
     else if (t.dataset.editar !== undefined) editar();
+    else if (t.dataset.denunciar !== undefined) denunciar();
   });
 
   function janela(titulo, corpo, rodape, largo) {
@@ -174,6 +177,36 @@
   function ampliar(n) {
     const i = D.pagina.imagens[n];
     const d = janela(i.legenda || D.obra.titulo, el(`<img class="livro-zoom" src="${esc(imgUrl(i.id))}" alt="${esc(i.legenda)}">`), botao('Fechar', 'btn-ghost', () => d.close()), true);
+  }
+
+  // ---------- denuncia (qualquer conta logada, menos o dono) ----------
+  const MOTIVOS = [['plagio', 'Plágio ou cópia de outra obra'], ['pirataria', 'Pirataria ou violação de direitos autorais'], ['ia', 'Texto gerado por IA sem aviso'],
+    ['classificacao', 'Classificação etária errada'], ['ofensivo', 'Conteúdo ofensivo ou ilegal'], ['spam', 'Spam ou propaganda'], ['outro', 'Outro motivo']];
+  function denunciar() {
+    if (D.dono) return;
+    if (!D.logado) {
+      const d = janela('Denunciar este livro', el('<p>Para denunciar, entre na sua conta (leitores podem criar uma conta grátis). Assim a moderação consegue falar com você se precisar.</p>'),
+        [botao('Fechar', 'btn-ghost', () => d.close()), el('<a class="btn btn-primary" href="conta.html">Entrar</a>')]);
+      return;
+    }
+    const f = el(`<form class="el-form">
+      <p class="hint">A denúncia vai para os moderadores do coletivo. O autor fica sabendo do motivo, mas não de quem denunciou.</p>
+      <div class="fld"><span>Motivo</span><div class="den-motivos">${MOTIVOS.map(([v, r]) => `<label><input type="radio" name="motivo" value="${v}"> ${esc(r)}</label>`).join('')}</div></div>
+      <label class="fld"><span>O que está acontecendo?</span><textarea name="detalhe" rows="4" maxlength="1000" placeholder="Para plágio ou pirataria: qual obra foi copiada, que partes, como você sabe."></textarea></label>
+      <label class="fld"><span>Link do original (opcional)</span><input name="link" type="url" maxlength="300" placeholder="https://..."></label>
+      <div class="el-estado" role="status"></div></form>`);
+    f.addEventListener('submit', (e) => e.preventDefault());
+    const estado = f.querySelector('.el-estado');
+    const enviar = botao('Enviar denúncia', 'btn-primary', async () => {
+      if (!f.motivo.value) { estado.innerHTML = '<p class="note err">Escolha o motivo.</p>'; return; }
+      enviar.disabled = true;
+      try {
+        await api(`/api/livro/${autor}/${obraId}/denuncia`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ motivo: f.motivo.value, detalhe: f.detalhe.value, link: f.link.value }) });
+        dlg.close();
+        const d = janela('Denúncia enviada', el('<p>Obrigado. Os moderadores vão analisar e tomar as providências necessárias.</p>'), botao('Fechar', 'btn-ghost', () => d.close()));
+      } catch (err) { estado.innerHTML = `<p class="note err">${esc(err.message)}</p>`; enviar.disabled = false; }
+    });
+    const dlg = janela('Denunciar este livro', f, [botao('Cancelar', 'btn-ghost', () => dlg.close()), enviar]);
   }
 
   // ---------- edicao (so o dono) ----------
