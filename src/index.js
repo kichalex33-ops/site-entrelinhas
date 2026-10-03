@@ -2,6 +2,7 @@
 // Rotas /api/* e /img/* passam por aqui; o resto vem dos arquivos estaticos.
 
 import { studioApi } from './studio.js';
+import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
 
 const SESSION_DAYS = 30;
 const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
@@ -280,7 +281,7 @@ async function changePassword(env, req, user) {
   return json({ ok: true });
 }
 
-async function getProfile(env, slug) {
+async function getProfile(env, slug, publicacao) {
   const p = await env.DB.prepare(
     'SELECT p.slug, p.data, p.badges, p.published, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.slug = ?'
   ).bind(slug).first();
@@ -297,7 +298,16 @@ async function getProfile(env, slug) {
     const a = byObra.get(o.id);
     o.reviews = { total: a ? a.n : 0, media: a ? Math.round(a.media * 10) / 10 : 0 };
   }
-  return { slug: p.slug, data, badges: JSON.parse(p.badges), mod: !!p.mod };
+  // obras publicadas pelo Estudio (copia publica), com a mesma nota media das reviews
+  let publicadas = [];
+  if (publicacao) {
+    publicadas = await publicadasDoAutor(env, slug, now());
+    for (const o of publicadas) {
+      const a = byObra.get(o.id);
+      o.reviews = { total: a ? a.n : 0, media: a ? Math.round(a.media * 10) / 10 : 0 };
+    }
+  }
+  return { slug: p.slug, data, badges: JSON.parse(p.badges), mod: !!p.mod, publicadas };
 }
 
 async function saveProfile(env, req, user) {
@@ -308,6 +318,8 @@ async function saveProfile(env, req, user) {
   await env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug).run();
   // limpa imagens do autor sem uso (com mais de 1h, para nao apagar upload recem-feito)
   const used = new Set([data.retrato, ...data.obras.map((o) => o.capa)].filter(Boolean));
+  const capas = await env.DB.prepare('SELECT meta, pub_meta FROM studio_works WHERE user_id = ?').bind(user.id).all();
+  for (const w of capas.results) for (const j of [w.meta, w.pub_meta]) { try { const c = JSON.parse(j || '{}').capa; if (c) used.add(c); } catch { /* json invalido */ } }
   const imgs = await env.DB.prepare('SELECT id FROM images WHERE user_id = ? AND created_at < ?').bind(user.id, now() - 3600).all();
   for (const r of imgs.results) if (!used.has(r.id)) await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(r.id).run();
   return json({ ok: true, data });
@@ -347,9 +359,10 @@ const MOTIVOS = ['spoiler', 'ofensivo', 'spam'];
 const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 const OBRA_RE = /^[a-f0-9]{12}$/;
 
-async function obraExists(env, autor, obraId) {
+async function obraExists(env, autor, obraId, publicacao) {
   const p = await env.DB.prepare('SELECT data FROM profiles WHERE slug = ? AND published = 1').bind(autor).first();
-  return !!p && (JSON.parse(p.data).obras || []).some((o) => o.id === obraId);
+  if (p && (JSON.parse(p.data).obras || []).some((o) => o.id === obraId)) return true;
+  return !!publicacao && obraPublicada(env, autor, obraId, now());
 }
 
 // publico: lista as reviews de uma obra. Se houver login, marca as proprias e os votos.
@@ -380,7 +393,7 @@ async function listReviews(env, req, url) {
   });
 }
 
-async function putReview(env, req, user) {
+async function putReview(env, req, user, publicacao) {
   const b = await body(req);
   if (!b) return fail('Requisição inválida.');
   const rl = 'rv|' + user.id;
@@ -391,7 +404,7 @@ async function putReview(env, req, user) {
   if (!Number.isInteger(nota) || nota < 1 || nota > 5) return fail('Escolha uma nota de 1 a 5.');
   if (texto.length < 10) return fail('Escreva pelo menos 10 caracteres na review.');
   if (user.slug === autor) return fail('Você não pode avaliar a sua própria obra.', 403);
-  if (!(await obraExists(env, autor, obra))) return fail('Obra não encontrada.', 404);
+  if (!(await obraExists(env, autor, obra, publicacao))) return fail('Obra não encontrada.', 404);
   const t = now();
   await env.DB.prepare(
     'INSERT INTO reviews (author_slug, obra_id, user_id, nota, texto, spoiler, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ' +
@@ -495,6 +508,9 @@ export default {
     // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
     if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
 
+    // publicacao do Estudio: so com a chave ligada (wrangler.jsonc: ESTUDIO_PUBLICACAO = "on")
+    const publicacao = env.ESTUDIO_PUBLICACAO === 'on';
+
     try {
       // Estudio Entrelinhas (privado): autenticacao aqui, regras de dono dentro do modulo
       if (path.startsWith('/api/studio/')) {
@@ -509,6 +525,12 @@ export default {
           return u ? json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: u.nome }) : fail('Não autenticado.', 401);
         }
         if (path === '/api/reviews') return listReviews(env, req, url);
+        // leitura publica das obras publicadas no Estudio
+        if (path === '/api/biblioteca' || path.startsWith('/api/leitura/')) {
+          if (!publicacao) return fail('Não encontrado.', 404);
+          const r = await leituraPublica(req, env, url, { json, fail, now });
+          if (r) return r;
+        }
         // configuracao publica para o navegador (a chave do captcha nao e segredo)
         if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null });
         if (path === '/api/authors') {
@@ -526,7 +548,7 @@ export default {
         if (path === '/api/chat') return listChat(env, req, url);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
-          const p = await getProfile(env, m[1]);
+          const p = await getProfile(env, m[1], publicacao);
           return p ? json(p) : fail('Perfil não encontrado.', 404);
         }
         return fail('Não encontrado.', 404);
@@ -541,7 +563,7 @@ export default {
       if (!user) return fail('Faça login para continuar.', 401);
       if (path === '/api/profile' && req.method === 'PUT') return user.role === 'autor' ? saveProfile(env, req, user) : fail('Apenas autores editam perfil.', 403);
       if (path === '/api/image' && req.method === 'POST') return user.role === 'autor' ? uploadImage(env, req, user) : fail('Apenas autores enviam imagens.', 403);
-      if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user);
+      if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user, publicacao);
       const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
       if (rm) {
         const rid = Number(rm[1]);

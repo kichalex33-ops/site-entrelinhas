@@ -33,8 +33,8 @@ export function acharChrome() {
   return achado;
 }
 
-export async function iniciar() {
-  const app = makeApp({ ASSETS: { fetch: estatico } });
+export async function iniciar(extraEnv = {}) {
+  const app = makeApp({ ASSETS: { fetch: estatico }, ...extraEnv });
   const servidor = http.createServer(async (req, res) => {
     try {
       const chunks = []; for await (const c of req) chunks.push(c);

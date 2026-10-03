@@ -6,15 +6,28 @@ cd /d "%~dp0"
 echo.
 echo  Entrelinhas - servidor local
 echo  ------------------------------------------
-echo  Preparando o banco local (so o seu computador, nao mexe no site real)...
-echo y | call npx --yes wrangler@latest d1 migrations apply entrelinhas-db --local
-echo.
-echo  Abrindo o navegador em http://localhost:8799 em alguns segundos.
-echo  Paginas: /  /autores.html  /conta.html  /chat.html
-echo  Para parar: feche esta janela ou aperte Ctrl+C.
-echo.
-start "" cmd /c "timeout /t 15 /nobreak >nul & start http://localhost:8799/"
-call npx --yes wrangler@latest dev --local --port 8799
+echo  Roda so neste computador. Nao mexe no site real.
+
+where node >nul 2>nul
+if errorlevel 1 (
+  echo.
+  echo  O Node.js nao esta instalado. Tentando instalar com o winget...
+  winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+  if errorlevel 1 goto semnode
+  set "PATH=%PATH%;%ProgramFiles%\nodejs"
+  where node >nul 2>nul
+  if errorlevel 1 goto semnode
+)
+
+node scripts\iniciar-local.mjs
 echo.
 echo  Servidor encerrado.
+pause
+exit /b
+
+:semnode
+echo.
+echo  Nao foi possivel instalar o Node.js automaticamente.
+echo  Baixe e instale a versao LTS em https://nodejs.org e abra este arquivo de novo.
+start "" https://nodejs.org/
 pause

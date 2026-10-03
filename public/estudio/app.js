@@ -6,6 +6,7 @@ import { h, dialogo, confirmar, perguntar, relativo, dataHora, milhar, TIPOS_OBR
 import { abrirBusca, abrirPaleta } from './palette.js';
 import { importarManuscrito } from './importar-ui.js';
 import { abrirExportacao } from './exportar-ui.js';
+import { abrirPublicacao } from './publicar-ui.js';
 
 const raiz = document.getElementById('estudio');
 const lsGet = (k, v) => { try { const x = localStorage.getItem(k); return x === null ? v : JSON.parse(x); } catch { return v; } };
@@ -163,6 +164,7 @@ function montarWorkspace() {
     h('button', { type: 'button', class: 'st-tb', id: 'st-tg-exp', 'aria-label': 'Mostrar ou esconder o explorador', 'aria-pressed': 'true', onclick: () => alternarPainel('exp') }, '☰'),
     h('a', { class: 'st-bar-voltar', href: '#/' }, 'Estúdio'), h('span', { class: 'st-bar-sep', 'aria-hidden': 'true' }, '/'), E.barTitulo,
     h('span', { class: 'st-bar-espaco' }),
+    h('button', { type: 'button', class: 'btn btn-primary st-bar-btn', onclick: publicarObra }, 'Publicar'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoObra }, 'Obra'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: exportarObra }, 'Exportar'),
     h('button', { type: 'button', class: 'btn btn-ghost st-bar-btn', onclick: dialogoLixeira }, 'Lixeira'),
@@ -400,7 +402,7 @@ function renderExplorador() {
         h('button', { type: 'button', class: 'st-tb', 'aria-label': 'Nova nota na raiz da obra', title: 'Nova nota', onclick: () => criarItem(null, 'doc', 'nota') }, '＋'),
         h('button', { type: 'button', class: 'st-tb', 'aria-label': 'Nova pasta', title: 'Nova pasta', onclick: () => criarItem(null, 'pasta') }, '🗀'))),
     h('p', { class: 'st-exp-obra' }, S.obra.titulo),
-    filtroTags(),
+    filtroTags() || '', // replaceChildren escreveria "null" na tela
     nivel(null, 1),
     h('p', { class: 'hint st-exp-dica' }, 'Arraste para reorganizar. F2 renomeia, Delete envia para a lixeira.'));
   if (foco) { const el = E.explorador.querySelector(`[data-id="${foco}"]`); if (el) el.focus(); }
@@ -587,8 +589,8 @@ function renderContexto() {
         linha('Tipo', TIPOS_DOC[d.tipo] || d.tipo), linha('Palavras', milhar(ultimasStats.palavras), 'palavras'),
         linha('Versão salva', `v${d.versao}`), d.atualizadoEm ? linha('Última gravação', dataHora(d.atualizadoEm)) : null))
       : h('p', { class: 'hint' }, 'Abra um documento para ver as propriedades.'),
-    d ? secaoTags(d) : null,
-    d ? secaoConexoes(d) : null,
+    (d && secaoTags(d)) || '', // replaceChildren escreveria "null" na tela
+    d ? secaoConexoes(d) : '',
     h('section', { 'aria-labelledby': 'ctx-obra' }, h('h3', { id: 'ctx-obra' }, 'A obra'),
       h('dl', { class: 'st-props' },
         linha('Manuscrito', `${milhar(total)} palavras`),
@@ -823,6 +825,7 @@ function comandos() {
     c('Pesquisar na obra', 'Ctrl+K', abrirBuscaObra),
     c('Alternar modo foco', 'Ctrl+Shift+F', alternarFoco),
     c('Alternar visual e Markdown', 'Editor', alternarModo),
+    c('Publicar ou atualizar a publicação', 'Obra', publicarObra),
     c('Importar manuscrito', 'Arquivo', () => importarNaPasta(pastaDe('manuscrito') || null)), c('Exportar', 'Arquivo', exportarObra),
     c('Informações da obra', 'Obra', dialogoObra), c('Abrir a lixeira', 'Obra', dialogoLixeira),
     c('Mostrar ou esconder o explorador', 'Painéis', () => alternarPainel('exp')), c('Mostrar ou esconder o contexto', 'Painéis', () => alternarPainel('ctx')),
@@ -838,6 +841,22 @@ async function importarNaPasta(pasta) {
   if (pasta) S.expandidas.add(pasta.id);
   await recarregarArvore();
   if (r.primeiro) abrirDoc(r.primeiro);
+}
+// a copia publica sai do servidor: so segue se TUDO estiver gravado (espera salvamentos em andamento)
+async function salvarTudoOuFalhar() {
+  if (docAtivo()) guardarAtivo();
+  await saver.todos();
+  for (let i = 0; i < 40 && saver.estadoGeral().estado === 'salvando'; i++) await new Promise((r) => setTimeout(r, 250));
+  await saver.todos();
+  const g = saver.estadoGeral();
+  if (g.estado !== 'salvo') throw new Error(`Há texto que ainda não foi gravado no servidor (${g.texto}). Resolva isso antes de continuar.`);
+}
+function publicarObra() {
+  if (docAtivo()) guardarAtivo();
+  abrirPublicacao({
+    obraId: S.obraId, obra: S.obra, itens: S.itens, antes: salvarTudoOuFalhar,
+    aoMudar: (status) => { if (S) { S.obra.status = status; renderContexto(); } },
+  });
 }
 function exportarObra() {
   if (docAtivo()) guardarAtivo();

@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entrelinhas | Coletivo de escritores independentes</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<meta property="og:image" content="/marca/simbolo.jpg">
 <meta name="description" content="Entrelinhas, coletivo de escritores independentes: livros, projetos em andamento e notícias assinadas pelos autores.">
 <meta name="robots" content="noindex,nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,6 +21,7 @@
 
 <header class="site-header">
   <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
     <h1>ENTRE<b>LINHAS</b></h1>
     <p class="tagline">Coletivo de Escritores Independentes</p>
   </div>
@@ -34,6 +40,7 @@
 
   <section class="page active" id="home">
     <div class="hero">
+      <img class="hero-simbolo reveal" src="/marca/simbolo.jpg" alt="Raposa dourada, símbolo do Entrelinhas: curiosidade entre as linhas" width="476" height="442">
       <span class="eyebrow reveal">Bem-vindo ao nosso acervo</span>
       <h2 class="reveal">Histórias escritas<br><em>a muitas mãos.</em></h2>
       <p class="reveal">Somos um coletivo de escritores independentes. Aqui reunimos nossos livros, mostramos o que está sendo escrito e levamos você até o perfil de cada autor.</p>
@@ -68,6 +75,10 @@
       <span class="eyebrow">Acervo completo</span>
       <h2>Nossa <em>Biblioteca</em></h2>
       <p>Todos os livros do coletivo, em ordem alfabética. Clique em uma capa para ler a sinopse.</p>
+    </div>
+    <div id="lerAqui" hidden>
+      <div class="section-head"><div><span class="eyebrow">Publicadas no Estúdio</span><h2>Leia no Entrelinhas</h2></div><div class="line"></div></div>
+      <div class="works" id="lerAquiGrid"></div>
     </div>
     <div class="chips reveal" id="chips"></div>
     <div class="grid" id="libraryGrid"></div>
@@ -140,5 +151,23 @@
 </div>
 
 <script src="app.js"></script>
+<script>
+// obras publicadas pelo Estudio (leitura no proprio site). Sem publicacao ligada, a API responde 404 e nada aparece.
+fetch('/api/biblioteca').then((r) => r.ok ? r.json() : null).then((d) => {
+  if (!d || !d.obras.length) return;
+  const ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
+  const img = (id) => !id ? '' : id.charAt(0) === '/' ? id : '/img/' + id + '?v=2';
+  document.getElementById('lerAquiGrid').innerHTML = d.obras.map((o) => `
+    <article class="work">
+      ${o.capa ? `<img src="${esc(img(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : ''}
+      <h3>${esc(o.titulo)}</h3>
+      <p class="by">${esc(o.autor.nome)}${o.genero ? ' · ' + esc(o.genero) : ''}</p>
+      ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
+      <a class="btn btn-primary" href="${esc(o.url)}">Ler · ${o.capitulos} cap.</a>
+    </article>`).join('');
+  document.getElementById('lerAqui').hidden = false;
+}).catch(() => {});
+</script>
 </body>
 </html>

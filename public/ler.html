@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ler | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab active" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main id="root"><section class="page active"><p class="muted-note">Carregando...</p></section></main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script src="reviews.js"></script>
+<script type="module">
+// Leitura publica de uma obra publicada no Estudio.
+//   ler.html?a=autor&o=obra       -> capa, sinopse e sumario
+//   ler.html?a=autor&o=obra&c=3   -> capitulo 3 (anterior / proximo)
+import { renderizar } from './vendor/estudio-leitura.js';
+
+const { esc, imgUrl, api } = window.EL;
+const root = document.getElementById('root');
+const q = new URLSearchParams(location.search);
+const autor = q.get('a') || '', obra = q.get('o') || '', cap = Number(q.get('c')) || 0;
+const base = `ler.html?a=${encodeURIComponent(autor)}&o=${encodeURIComponent(obra)}`;
+const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
+const msg = (t) => { root.innerHTML = `<section class="page active"><p class="muted-note">${esc(t)}</p><p style="text-align:center;margin-top:1.5rem"><a class="btn btn-ghost" href="index.html#biblioteca">Voltar à biblioteca</a></p></section>`; };
+
+if (!/^[a-z0-9-]{1,40}$/.test(autor) || !/^[a-z0-9-]{1,60}$/.test(obra)) msg('Obra não informada.');
+else if (cap) capitulo(); else sumario();
+
+async function sumario() {
+  let o;
+  try { o = await api(`/api/leitura/${autor}/${obra}`); } catch (e) { return msg(e.status === 404 ? 'Esta obra não está disponível.' : 'Não foi possível carregar a obra.'); }
+  document.title = `${o.titulo} | Entrelinhas`;
+  const autorLink = `<a href="autor.html?a=${encodeURIComponent(o.autor.slug)}">${esc(o.autor.nome)}</a>`;
+  root.innerHTML = `
+  <section class="page active ler">
+    <div class="ler-obra">
+      ${o.capa ? `<img class="ler-capa" src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}">` : ''}
+      <div>
+        <span class="eyebrow">${esc(o.genero || 'Obra publicada')}</span>
+        <h2>${esc(o.titulo)}</h2>
+        <p class="ler-autor">por ${autorLink}</p>
+        ${o.sinopse ? `<p class="ler-sinopse">${esc(o.sinopse)}</p>` : ''}
+        <p class="ler-meta">${o.capitulos.length} capítulo${o.capitulos.length === 1 ? '' : 's'} · ${milhar(o.palavras)} palavras</p>
+        ${o.capitulos.length ? `<p><a class="btn btn-primary" href="${base}&c=${o.capitulos[0].n}">Começar a ler</a></p>` : ''}
+        ${o.creditos ? `<p class="ler-creditos">${esc(o.creditos)}</p>` : ''}
+      </div>
+    </div>
+    <div class="section-head"><div><span class="eyebrow">Sumário</span><h2>Capítulos</h2></div><div class="line"></div></div>
+    <ol class="ler-sumario">${o.capitulos.map((c) => `<li><a href="${base}&c=${c.n}"><span>${esc(c.titulo)}</span><small>${milhar(c.palavras)} palavras</small></a></li>`).join('')}</ol>
+    <div class="section-head"><div><span class="eyebrow">Leitores</span><h2>Avaliações</h2></div><div class="line"></div></div>
+    <div class="ler-reviews rev-box"></div>
+  </section>`;
+  EL.reviews.mount(root.querySelector('.ler-reviews'), { autor, obra: o.id });
+}
+
+async function capitulo() {
+  let c;
+  try { c = await api(`/api/leitura/${autor}/${obra}/${cap}`); } catch (e) { return msg(e.status === 404 ? 'Capítulo não encontrado.' : 'Não foi possível carregar o capítulo.'); }
+  document.title = `${c.titulo} · ${c.obra.titulo} | Entrelinhas`;
+  const nav = () => `<nav class="ler-nav">
+      ${c.anterior ? `<a class="btn btn-ghost" href="${base}&c=${c.anterior}">&larr; Anterior</a>` : '<span></span>'}
+      <a class="btn btn-ghost" href="${base}">Sumário</a>
+      ${c.proximo ? `<a class="btn btn-primary" href="${base}&c=${c.proximo}">Próximo &rarr;</a>` : '<span></span>'}
+    </nav>`;
+  root.innerHTML = `
+  <section class="page active ler">
+    <p class="ler-trilha"><a href="${base}">${esc(c.obra.titulo)}</a> · <a href="autor.html?a=${encodeURIComponent(c.obra.autor.slug)}">${esc(c.obra.autor.nome)}</a> · capítulo ${c.n} de ${c.total}</p>
+    <article class="ler-texto"><h2>${esc(c.titulo)}</h2></article>
+    ${nav()}
+  </section>`;
+  root.querySelector('.ler-texto').append(renderizar(c.corpo));
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

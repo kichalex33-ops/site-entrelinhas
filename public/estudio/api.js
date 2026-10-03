@@ -24,4 +24,9 @@ export const api = {
   lixeira: (obra) => req('GET', `${base}/${obra}/trash`),
   restaurar: (obra, doc) => req('POST', `${base}/${obra}/docs/${doc}/restore`),
   apagarDefinitivo: (obra, doc) => req('DELETE', `${base}/${obra}/docs/${doc}?definitivo=1`),
+  publicacao: (obra) => req('GET', `${base}/${obra}/publicacao`),
+  publicar: (obra, dados) => req('POST', `${base}/${obra}/publicacao`, dados),
+  despublicar: (obra) => req('DELETE', `${base}/${obra}/publicacao`),
+  // capa: mesma rota de imagens do perfil (publica por id, ate 600 KB)
+  enviarImagem: (blob) => window.EL.api('/api/image', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob }),
 };

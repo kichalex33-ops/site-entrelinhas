@@ -105,6 +105,15 @@ export async function studioApi(req, env, url, user, h) {
 
   if (parts[2] === 'search' && parts.length === 3 && m === 'GET') return searchDocs(env, work, url, json);
 
+  // ---------- publicacao (copia publica, declaracao, agendamento) ----------
+  if (parts[2] === 'publicacao' && parts.length === 3) {
+    if (m === 'GET') return getPublicacao(env, work, user, h);
+    if (env.ESTUDIO_PUBLICACAO !== 'on') return fail('A publicação ainda não está liberada no Entrelinhas.', 403);
+    if (m === 'POST') return publicar(env, req, work, user, h);
+    if (m === 'DELETE') return despublicar(env, work, h);
+    return fail('Método não permitido.', 405);
+  }
+
   if (parts[2] === 'trash' && parts.length === 3 && m === 'GET') {
     const rows = await env.DB.prepare(
       'SELECT id, parent_id, kind, doc_type, title, deleted_at FROM studio_docs WHERE work_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC'
@@ -154,7 +163,7 @@ export async function studioApi(req, env, url, user, h) {
 // ---------------------------------------------------------------- obras
 async function listWorks(env, user, json) {
   const rows = await env.DB.prepare(
-    'SELECT w.id, w.title, w.kind, w.status, w.meta, w.created_at, w.updated_at, ' +
+    'SELECT w.id, w.title, w.kind, w.status, w.scheduled_at, w.meta, w.created_at, w.updated_at, ' +
     "(SELECT COUNT(*) FROM studio_docs d WHERE d.work_id = w.id AND d.kind = 'doc' AND d.deleted_at IS NULL) AS docs, " +
     "(SELECT COALESCE(SUM(d.words), 0) FROM studio_docs d WHERE d.work_id = w.id AND d.kind = 'doc' AND d.deleted_at IS NULL AND d.doc_type IN ('capitulo', 'cena')) AS palavras " +
     'FROM studio_works w WHERE w.user_id = ? AND w.deleted_at IS NULL ORDER BY w.updated_at DESC'
@@ -164,7 +173,7 @@ async function listWorks(env, user, json) {
       const meta = safeJson(w.meta);
       const meta_palavras = Number(meta.meta_palavras) || 0;
       return {
-        id: w.id, titulo: w.title, tipo: w.kind, status: w.status, docs: w.docs, palavras: w.palavras,
+        id: w.id, titulo: w.title, tipo: w.kind, status: statusEfetivo(w, agora()), docs: w.docs, palavras: w.palavras,
         progresso: meta_palavras ? Math.min(1, w.palavras / meta_palavras) : null,
         criada_em: w.created_at, atualizada_em: w.updated_at,
       };
@@ -203,7 +212,7 @@ async function getWork(env, work, json) {
   const porDoc = new Map(), contagem = new Map();
   for (const r of tg.results) { if (!porDoc.has(r.doc_id)) porDoc.set(r.doc_id, []); porDoc.get(r.doc_id).push(r.tag); contagem.set(r.tag, (contagem.get(r.tag) || 0) + 1); }
   return json({
-    obra: { id: work.id, titulo: work.title, tipo: work.kind, status: work.status, meta: safeJson(work.meta), atualizada_em: work.updated_at },
+    obra: { id: work.id, titulo: work.title, tipo: work.kind, status: statusEfetivo(work, agora()), meta: safeJson(work.meta), atualizada_em: work.updated_at },
     itens: rows.results.map((d) => ({
       id: d.id, pai: d.parent_id, tipo: d.kind, doc_tipo: d.doc_type, titulo: d.title,
       posicao: d.position, versao: d.version, palavras: d.words, atualizado_em: d.updated_at, tags: porDoc.get(d.id) || [],
@@ -524,6 +533,141 @@ async function searchDocs(env, work, url, json) {
   return json({
     resultados: rows.results.map((r) => ({ id: r.id, pai: r.parent_id, doc_tipo: r.doc_type, titulo: r.title, no_titulo: !!r.no_titulo, trecho: r.trecho, atualizado_em: r.updated_at })),
   });
+}
+
+// ---------------------------------------------------------------- publicacao
+// SALVAR nao e PUBLICAR: publicar tira uma copia (studio_pub_docs) dos capitulos escolhidos; o leitor so ve essa copia.
+// Editar o rascunho depois nao muda nada no ar ate o autor "atualizar a publicacao".
+const agora = () => Math.floor(Date.now() / 1000);
+const PUBLICAS = ['publicado', 'atualizado'];
+const LIM_PUB = { caps: 500, sinopse: 3000, genero: 80, creditos: 500, agendaMax: 366 * 86400 };
+const IMG_ID_RE = /^[a-f0-9]{24}$/;
+
+// agendada cuja hora ja chegou conta como publicada (o banco so muda quando o autor mexe de novo)
+export const statusEfetivo = (w, t) => (w.status === 'agendado' && w.scheduled_at && w.scheduled_at <= t ? 'publicado' : w.status);
+
+const slugObra = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'obra';
+async function slugLivre(env, userId, workId, titulo) {
+  const base = slugObra(titulo);
+  const r = await env.DB.prepare("SELECT pub_slug FROM studio_works WHERE user_id = ? AND id != ? AND pub_slug IS NOT NULL AND (pub_slug = ? OR pub_slug LIKE ? ESCAPE '\\')")
+    .bind(userId, workId, base, base.replace(/[\\%_]/g, '\\$&') + '-%').all();
+  const usados = new Set(r.results.map((x) => x.pub_slug));
+  let slug = base;
+  for (let i = 2; usados.has(slug); i++) slug = `${base.slice(0, 55)}-${i}`;
+  return slug;
+}
+
+async function declaracaoAtual(env) {
+  return env.DB.prepare('SELECT versao, texto, provisorio FROM studio_declarations ORDER BY versao DESC LIMIT 1').first();
+}
+
+async function getPublicacao(env, work, user, h) {
+  const t = h.now();
+  const dec = await declaracaoAtual(env);
+  const caps = await env.DB.prepare('SELECT ordem, doc_id, titulo, palavras FROM studio_pub_docs WHERE work_id = ? ORDER BY ordem').bind(work.id).all();
+  const meta = safeJson(work.meta), pub = safeJson(work.pub_meta);
+  return h.json({
+    ligada: env.ESTUDIO_PUBLICACAO === 'on',
+    declaracao: dec ? { versao: dec.versao, texto: dec.texto, provisoria: !!dec.provisorio } : null,
+    status: statusEfetivo(work, t),
+    no_ar: PUBLICAS.includes(statusEfetivo(work, t)),
+    slug: work.pub_slug, versao: work.pub_version, publicada_em: work.published_at, agendada_para: work.status === 'agendado' ? work.scheduled_at : null,
+    autor: user.slug,
+    // o que ja esta publicado (ou, na primeira vez, o que vem das informacoes da obra)
+    meta: {
+      titulo: pub.titulo || work.title, genero: pub.genero ?? meta.genero ?? '', sinopse: pub.sinopse ?? meta.sinopse ?? '',
+      creditos: pub.creditos || '', capa: pub.capa || meta.capa || '',
+    },
+    capitulos: caps.results.map((c) => ({ n: c.ordem, doc_id: c.doc_id, titulo: c.titulo, palavras: c.palavras })),
+  });
+}
+
+async function publicar(env, req, work, user, h) {
+  const b = await h.body(req);
+  if (!b) return h.fail('Requisição inválida.');
+  const t = h.now();
+  const acao = b.acao === 'agendar' ? 'agendar' : 'publicar';
+
+  // declaracao: o aceite precisa ser da versao em vigor
+  const dec = await declaracaoAtual(env);
+  if (!dec) return h.fail('A declaração de autoria não está disponível.', 503);
+  if (b.aceite !== dec.versao) return h.fail('Leia e aceite a declaração de autoria para publicar.', 400);
+
+  // metadados publicos
+  const m = b.meta && typeof b.meta === 'object' ? b.meta : {};
+  const meta = {
+    titulo: h.str(m.titulo, LIM.title), genero: h.str(m.genero, LIM_PUB.genero),
+    sinopse: h.str(m.sinopse, LIM_PUB.sinopse), creditos: h.str(m.creditos, LIM_PUB.creditos), capa: '',
+  };
+  if (!meta.titulo) return h.fail('Dê um título à obra publicada.');
+  if (!meta.sinopse) return h.fail('Escreva uma sinopse: é ela que apresenta a obra ao leitor.');
+  if (m.capa) {
+    if (!IMG_ID_RE.test(String(m.capa))) return h.fail('Capa inválida.');
+    const img = await env.DB.prepare('SELECT 1 FROM images WHERE id = ? AND user_id = ?').bind(m.capa, user.id).first();
+    if (!img) return h.fail('Capa inválida.');
+    meta.capa = m.capa;
+  }
+
+  // capitulos: ids da propria obra, documentos vivos, sem repeticao, na ordem enviada
+  const ids = Array.isArray(b.docs) ? b.docs.map(String) : [];
+  if (!ids.length) return h.fail('Escolha pelo menos um capítulo para publicar.');
+  if (ids.length > LIM_PUB.caps) return h.fail('No máximo ' + LIM_PUB.caps + ' capítulos por obra.');
+  if (new Set(ids).size !== ids.length || ids.some((id) => !ID_RE.test(id))) return h.fail('Lista de capítulos inválida.');
+  const vivos = await env.DB.prepare("SELECT id FROM studio_docs WHERE work_id = ? AND kind = 'doc' AND deleted_at IS NULL").bind(work.id).all();
+  const ok = new Set(vivos.results.map((r) => r.id));
+  if (ids.some((id) => !ok.has(id))) return h.fail('Algum capítulo escolhido não existe mais nesta obra. Recarregue e tente de novo.', 409);
+
+  // agendamento
+  const visivel = PUBLICAS.includes(statusEfetivo(work, t));
+  let status, scheduled = null, publishedAt = work.published_at;
+  if (acao === 'agendar') {
+    if (visivel) return h.fail('A obra já está no ar: atualize a publicação em vez de agendar.', 409);
+    const quando = Number(b.quando);
+    if (!Number.isInteger(quando) || quando < t + 60) return h.fail('Escolha uma data e hora no futuro.');
+    if (quando > t + LIM_PUB.agendaMax) return h.fail('O agendamento pode ser de no máximo um ano.');
+    status = 'agendado'; scheduled = quando; publishedAt = quando;
+  } else {
+    status = visivel || work.pub_version > 0 ? 'atualizado' : 'publicado';
+    if (!visivel) publishedAt = t; // (re)entra no ar agora
+  }
+
+  const slug = work.pub_slug || (await slugLivre(env, user.id, work.id, meta.titulo));
+  const versao = work.pub_version + 1;
+  // copia feita no proprio banco (INSERT ... SELECT): o texto nao passa pelo Worker, e cabe nos 10 ms de CPU.
+  // ate 48 capitulos por comando (D1: 100 parametros), entao ~11 comandos no maximo, numa transacao so (batch).
+  const stmts = [
+    env.DB.prepare('DELETE FROM studio_pub_docs WHERE work_id = ?').bind(work.id),
+  ];
+  for (let i = 0; i < ids.length; i += 48) {
+    const lote = ids.slice(i, i + 48);
+    stmts.push(env.DB.prepare(
+      `WITH escolha(ordem, id) AS (VALUES ${lote.map(() => '(?, ?)').join(', ')}) ` +
+      'INSERT INTO studio_pub_docs (work_id, ordem, doc_id, titulo, corpo, palavras) ' +
+      "SELECT d.work_id, escolha.ordem, d.id, d.title, d.body, d.words FROM escolha JOIN studio_docs d ON d.id = escolha.id AND d.work_id = ? AND d.kind = 'doc' AND d.deleted_at IS NULL"
+    ).bind(...lote.flatMap((id, k) => [i + k + 1, id]), work.id));
+  }
+  stmts.push(
+    env.DB.prepare('UPDATE studio_works SET status = ?, pub_slug = ?, pub_version = ?, pub_meta = ?, published_at = ?, scheduled_at = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .bind(status, slug, versao, JSON.stringify(meta), publishedAt, scheduled, t, work.id, user.id),
+    env.DB.prepare('INSERT INTO studio_acceptances (work_id, user_id, declaration_version, acao, pub_version, accepted_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(work.id, user.id, dec.versao, acao === 'agendar' ? 'agendar' : status === 'atualizado' ? 'atualizar' : 'publicar', versao, t),
+  );
+  await env.DB.batch(stmts);
+  return h.json({
+    ok: true, status, slug, versao, capitulos: ids.length, agendada_para: scheduled,
+    url: `ler.html?a=${encodeURIComponent(user.slug)}&o=${encodeURIComponent(slug)}`,
+  });
+}
+
+// tira do ar (ou cancela o agendamento). O endereco (slug) fica reservado para quando voltar.
+async function despublicar(env, work, h) {
+  if (!['agendado', ...PUBLICAS].includes(work.status)) return h.fail('Esta obra não está publicada.', 409);
+  const t = h.now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM studio_pub_docs WHERE work_id = ?').bind(work.id),
+    env.DB.prepare("UPDATE studio_works SET status = 'em_revisao', scheduled_at = NULL, updated_at = ? WHERE id = ?").bind(t, work.id),
+  ]);
+  return h.json({ ok: true, status: 'em_revisao' });
 }
 
 function safeJson(s) { try { const o = JSON.parse(s); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }

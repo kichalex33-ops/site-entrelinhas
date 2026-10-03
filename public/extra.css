@@ -160,3 +160,38 @@ a.tab{text-decoration:none;display:inline-block}
 .owner-bar{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1rem}
 .owner-edit{margin:.6rem 0 0}
 .rev-box a,.muted-note a{color:var(--accent)}
+
+/* simbolo: raposa no cabecalho e emblema na pagina inicial */
+.brand-mark{display:inline-block;margin-bottom:.5rem;line-height:0}
+.brand-mark img{width:clamp(38px,5vw,56px);height:auto;transition:transform .3s ease}
+.brand-mark:hover img{transform:scale(1.06)}
+.hero-simbolo{display:block;width:min(280px,70vw);height:auto;margin:0 auto 1.6rem;mix-blend-mode:lighten}
+
+/* ler.html: leitura publica das obras do Estudio */
+.ler{max-width:1000px;margin:0 auto;padding:2rem 1.5rem 3rem}
+.ler-obra{display:grid;grid-template-columns:minmax(0,220px) 1fr;gap:2rem;align-items:start;margin-bottom:2.5rem}
+.ler-obra h2{font-family:'Playfair Display',serif;font-weight:500;font-size:clamp(1.7rem,4vw,2.5rem);margin:.4rem 0}
+.ler-capa{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.ler-autor a,.ler-trilha a{color:var(--accent);text-decoration:none}
+.ler-sinopse{color:#c8c8d0;margin:1rem 0;max-width:60ch}
+.ler-meta,.ler-creditos,.ler-trilha{font-size:.8rem;color:var(--muted)}
+.ler-creditos{margin-top:1rem;white-space:pre-line}
+.ler-sumario{list-style:none;counter-reset:cap;padding:0;margin:0 0 2.5rem;border-top:1px solid var(--line)}
+.ler-sumario li{counter-increment:cap;border-bottom:1px solid var(--line)}
+.ler-sumario a{display:flex;gap:1rem;align-items:baseline;padding:.85rem .3rem;color:inherit;text-decoration:none}
+.ler-sumario a::before{content:counter(cap);color:var(--accent);font-family:'Playfair Display',serif;min-width:1.6rem}
+.ler-sumario a span{flex:1}
+.ler-sumario small{color:var(--muted);font-size:.72rem}
+.ler-sumario a:hover span{color:var(--accent)}
+.ler-trilha{text-align:center;margin-bottom:2rem}
+.ler-texto{max-width:65ch;margin:0 auto;font-size:1.08rem;line-height:1.85;color:#d6d6dc}
+.ler-texto h2{font-family:'Playfair Display',serif;font-weight:500;font-size:clamp(1.5rem,3.5vw,2.1rem);text-align:center;margin-bottom:2.2rem;color:var(--text,#f3f3f3)}
+.ler-texto h3,.ler-texto h4{font-family:'Playfair Display',serif;font-weight:500;margin:2rem 0 1rem}
+.ler-texto p{margin-bottom:1.1rem;white-space:pre-line}
+.ler-texto blockquote{border-left:2px solid var(--accent);padding-left:1rem;color:#b6b6bf;margin:1.4rem 0}
+.ler-texto ul,.ler-texto ol{padding-left:1.4rem;margin-bottom:1.1rem}
+.ler-texto hr.cena{border:0;text-align:center;margin:2.2rem 0}
+.ler-texto hr.cena::after{content:'* * *';color:var(--accent);letter-spacing:.6em}
+.ler-texto a{color:var(--accent)}
+.ler-nav{display:flex;justify-content:space-between;align-items:center;gap:.6rem;max-width:65ch;margin:3rem auto 0;flex-wrap:wrap}
+@media (max-width:640px){.ler-obra{grid-template-columns:1fr}.ler-capa{max-width:200px}}

@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Autor | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
 <meta name="robots" content="noindex,nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +19,7 @@
 
 <header class="site-header">
   <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
     <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
     <p class="tagline">Coletivo de Escritores Independentes</p>
   </div>
@@ -62,8 +67,10 @@
       ${o.genero ? `<p class="by">${esc(o.genero)}</p>` : ''}
       ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
       <p class="rev-line">${o.reviews && o.reviews.total ? `<span class="stars">${'★'.repeat(Math.round(o.reviews.media))}${'☆'.repeat(5 - Math.round(o.reviews.media))}</span> ${o.reviews.media.toFixed(1)} · ${o.reviews.total} avaliaç${o.reviews.total === 1 ? 'ão' : 'ões'}` : 'Sem avaliações ainda'}</p>
+      ${o.url ? `<div class="buy"><a class="btn btn-primary" href="${esc(o.url)}">Ler no Entrelinhas · ${o.capitulos} cap.</a></div>` : ''}
       ${o.link || (o.lojas || []).length ? `<div class="buy">${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}${(o.lojas || []).map(l => `<a class="btn btn-ghost" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</div>` : ''}
-      ${isOwner && o.id ? `<p class="owner-edit"><a class="btn btn-ghost" href="conta.html#obra-${esc(o.id)}">Editar este livro, sinopse e links de venda</a></p>` : ''}
+      ${isOwner && o.url ? `<p class="owner-edit"><a class="btn btn-ghost" href="estudio.html#/obra/${esc(o.id)}">Editar no Estúdio</a></p>` : ''}
+      ${isOwner && o.id && !o.url ? `<p class="owner-edit"><a class="btn btn-ghost" href="conta.html#obra-${esc(o.id)}">Editar este livro, sinopse e links de venda</a></p>` : ''}
       ${o.id ? `<button type="button" class="btn btn-ghost rev-toggle" data-obra="${esc(o.id)}">Ver e escrever avaliações</button><div class="rev-box" hidden></div>` : ''}
     </article>`;
 
@@ -73,6 +80,8 @@
   const viewerMod = !!(p.mod && me && me.mod);
   // dono do perfil: ve os atalhos de edicao (a edicao em si acontece em conta.html)
   const isOwner = !!(me && me.role === 'autor' && me.slug === slug);
+  // obras publicadas pelo Estudio vem primeiro (leitura no proprio site), depois os livros do perfil
+  const obras = [...(p.publicadas || []).map((o) => ({ ...o, status: 'Publicado' })), ...d.obras];
 
   root.innerHTML = `
   <section class="page active" id="perfil">
@@ -90,7 +99,7 @@
         ${viewerMod ? '<p class="links"><a class="btn btn-primary mod-chat-btn" href="chat.html">&#9733; Entrar no chat da moderação</a><a class="btn btn-ghost" href="https://mail.proton.me/" target="_blank" rel="noopener noreferrer">Abrir a caixa de e-mails</a></p>' : ''}
       </div>
     </div>
-    ${d.obras.length || isOwner ? `<div class="section-head"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div>${d.obras.length ? `<div class="works">${d.obras.map(obra).join('')}</div>` : '<p class="muted-note">Você ainda não cadastrou nenhum livro. <a href="conta.html#nova-obra">Adicionar o primeiro livro</a>.</p>'}` : ''}
+    ${obras.length || isOwner ? `<div class="section-head"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div>${obras.length ? `<div class="works">${obras.map(obra).join('')}</div>` : '<p class="muted-note">Você ainda não cadastrou nenhum livro. <a href="conta.html#nova-obra">Adicionar o primeiro livro</a>.</p>'}` : ''}
     ${d.secoes.map(s => `${s.titulo ? `<div class="section-head"><div><h2>${esc(s.titulo)}</h2></div><div class="line"></div></div>` : ''}<div class="prose">${paras(s.texto)}</div>`).join('')}
     <p style="text-align:center;margin:3rem 0 0"><a class="btn btn-ghost" href="autores.html">Ver todos os autores</a></p>
   </section>`;
