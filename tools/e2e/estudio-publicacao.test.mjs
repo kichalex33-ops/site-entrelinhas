@@ -78,8 +78,13 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   E2E.app.db.prepare('UPDATE profiles SET data = ? WHERE slug = ?').run(JSON.stringify({ nome: 'Autora Publicada', frase: '', local: '', bio: '', citacao: '', cor: '#d9a94a', fundo: 'preto', retrato: '', links: [], obras: [], secoes: [] }), a.slug);
   await leitor.goto(`${E2E.url}/autor.html?a=${a.slug}`);
   await leitor.waitForSelector('a:has-text("Ler no Entrelinhas")');
+  await leitor.goto(`${E2E.url}/index.html`);
+  await leitor.waitForSelector('#recentes .rel-card:has-text("O Rio")'); // carrossel Recem-publicadas
   await leitor.goto(`${E2E.url}/index.html#biblioteca`);
-  await leitor.waitForSelector('#lerAqui:not([hidden]) .work:has-text("O Rio")');
+  await leitor.waitForSelector('#libraryGrid .book-card:has-text("O Rio") .tag-ler');
+  await leitor.click('#libraryGrid .book-card:has-text("O Rio")');
+  await leitor.waitForURL(/obra\.html\?a=/);
+  await leitor.waitForSelector('.livro-titulo:has-text("O Rio")');
   assert.deepEqual(erros, []);
   await ctx.close();
   assert.deepEqual(a.erros, []);

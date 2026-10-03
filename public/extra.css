@@ -375,3 +375,9 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .livro-painel .livro-info{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.9rem}
 @media (max-width:700px){.livro-hero{grid-template-columns:1fr;gap:1.4rem}.livro-capa{justify-self:center}.livro-cab{text-align:left}}
 @media (max-width:560px){.livro-numeros{grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:.6rem;padding:.8rem}.livro-numeros b{font-size:1.05rem}.livro-numeros span{font-size:.58rem;letter-spacing:.06em}}
+
+/* vitrine: "Veja mais" no titulo da secao e selo de leitura no site */
+.section-head .veja-mais{white-space:nowrap;color:var(--accent);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;margin-left:1rem}
+.section-head .veja-mais:hover{text-decoration:underline}
+.tag-ler{margin-left:.3rem;border-color:var(--accent);color:var(--accent)}
+.rel-card h3 .faixa,.book-card h4 .faixa{width:auto;height:1.3rem;min-width:1.3rem;font-size:.65rem}

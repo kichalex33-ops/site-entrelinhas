@@ -56,6 +56,17 @@
     </div>
     <div class="marquee"><div class="marquee-track"><div class="group" id="featured"></div></div></div>
 
+    <div class="section-head" id="recem">
+      <div><span class="eyebrow">Novidades</span><h2>Recém-publicadas</h2></div>
+      <div class="line"></div>
+      <a class="veja-mais" href="#lancamentos" data-goto="lancamentos">Veja mais &rarr;</a>
+    </div>
+    <div class="carousel">
+      <button class="car-btn prev" id="recPrev" aria-label="Anterior">&#8249;</button>
+      <div class="car-track" id="recentes"></div>
+      <button class="car-btn next" id="recNext" aria-label="Próximo">&#8250;</button>
+    </div>
+
     <div class="section-head">
       <div><span class="eyebrow">Notícias</span><h2>Do coletivo</h2></div>
       <div class="line"></div>
@@ -74,11 +85,7 @@
     <div class="hero" style="padding-bottom:.5rem">
       <span class="eyebrow">Acervo completo</span>
       <h2>Nossa <em>Biblioteca</em></h2>
-      <p>Todos os livros do coletivo, em ordem alfabética. Clique em uma capa para ler a sinopse.</p>
-    </div>
-    <div id="lerAqui" hidden>
-      <div class="section-head"><div><span class="eyebrow">Publicadas no Estúdio</span><h2>Leia no Entrelinhas</h2></div><div class="line"></div></div>
-      <div class="works" id="lerAquiGrid"></div>
+      <p>Todos os livros do coletivo, em ordem alfabética. Clique em uma capa para abrir a página do livro.</p>
     </div>
     <div class="chips reveal" id="chips"></div>
     <div class="grid" id="libraryGrid"></div>
@@ -151,25 +158,5 @@
 </div>
 
 <script src="app.js"></script>
-<script>
-// obras publicadas pelo Estudio (leitura no proprio site). Sem publicacao ligada, a API responde 404 e nada aparece.
-fetch('/api/biblioteca').then((r) => r.ok ? r.json() : null).then((d) => {
-  if (!d || !d.obras.length) return;
-  const ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
-  const img = (id) => !id ? '' : id.charAt(0) === '/' ? id : '/img/' + id + '?v=2';
-  const CORES = { L: 'Livre', 10: '10', 12: '12', 14: '14', 16: '16', 18: '18' };
-  const faixa = (f) => CORES[f] ? `<span class="faixa faixa-${f}" title="${f === 'L' ? 'Livre para todos os públicos' : 'Não recomendado para menores de ' + f + ' anos'}">${f}</span>` : '';
-  document.getElementById('lerAquiGrid').innerHTML = d.obras.map((o) => `
-    <article class="work">
-      ${o.capa ? `<img src="${esc(img(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : ''}
-      <h3><a class="work-link" href="obra.html?a=${encodeURIComponent(o.autor.slug)}&o=${esc(o.id)}">${esc(o.titulo)}</a> ${faixa(o.faixa)}</h3>
-      <p class="by">${esc(o.autor.nome)}${o.genero ? ' · ' + esc(o.genero) : ''}</p>
-      ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
-      <a class="btn btn-primary" href="${esc(o.url)}">Ler · ${o.capitulos} cap.</a>
-    </article>`).join('');
-  document.getElementById('lerAqui').hidden = false;
-}).catch(() => {});
-</script>
 </body>
 </html>

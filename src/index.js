@@ -4,6 +4,7 @@
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
 import { getLivro, putLivro, imagensDasPaginas } from './livro.js';
+import { vitrine } from './vitrine.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
 const SESSION_DAYS = 30;
@@ -683,6 +684,7 @@ export default {
           return json(list);
         }
         if (path === '/api/chat') return listChat(env, req, url);
+        if (path === '/api/vitrine') return vitrine(env, { json, now, publicacao });
         if (path === '/api/admin/contas') return adminAccounts(env, req);
         const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
         if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao, denunciasAbertas });
