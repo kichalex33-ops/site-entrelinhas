@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Minha conta | Entrelinhas</title>
+<title>Recuperar senha | Entrelinhas</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -36,11 +36,18 @@
 <main>
   <section class="page active">
     <div class="hero" style="padding-bottom:.5rem">
-      <span class="eyebrow">Autores e leitores</span>
-      <h2>Minha <em>conta</em></h2>
-      <p id="subtitle">Entre para editar a sua página pública.</p>
+      <span class="eyebrow">Conta</span>
+      <h2>Recuperar <em>senha</em></h2>
+      <p>Esqueceu a senha? A gente ajuda você a criar uma nova.</p>
     </div>
-    <div id="app" class="editor"></div>
+    <div class="auth-box">
+      <form id="f">
+        <label class="fld"><span>E-mail da sua conta</span><input name="email" type="email" required autocomplete="email" autocapitalize="none" spellcheck="false"></label>
+        <button class="btn btn-primary" type="submit">Pedir link de nova senha</button>
+        <div id="msg"></div>
+      </form>
+      <p class="hint" style="margin-top:1rem"><a href="conta.html">Voltar para o login</a></p>
+    </div>
   </section>
 </main>
 
@@ -53,7 +60,20 @@
 </footer>
 
 <script src="common.js"></script>
-<script src="conta.js"></script>
-<script src="moderacao.js"></script>
+<script>
+// O servidor responde sempre igual (nao revela se a conta existe). Sem envio de e-mail configurado,
+// o link de nova senha e gerado por um moderador, na area de moderacao da conta.
+const f = document.getElementById('f'), msg = document.getElementById('msg');
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const b = f.querySelector('button'); b.disabled = true;
+  let r = null;
+  try { r = await EL.api('/api/recuperar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: f.email.value.trim() }) }); } catch (err) { /* resposta generica */ }
+  msg.innerHTML = r && r.email
+    ? '<p class="note ok" role="status">Se houver uma conta com esse e-mail, enviamos um link para criar a nova senha. Ele vale 30 minutos. Confira também o spam.</p>'
+    : '<p class="note ok" role="status">Pedido anotado. Por enquanto o link de nova senha é entregue por um moderador do coletivo: fale com um deles (WhatsApp ou mensagem direta) e informe este e-mail. O link vale 30 minutos e só funciona uma vez.</p>';
+  b.disabled = false;
+});
+</script>
 </body>
 </html>

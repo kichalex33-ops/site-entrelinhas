@@ -281,6 +281,92 @@ async function changePassword(env, req, user) {
   return json({ ok: true });
 }
 
+// ---------- recuperacao de senha ----------
+// Modo 1: moderador gera o link e entrega por um canal confiavel. Modo 2: a pessoa pede pelo e-mail
+// (so envia se RESEND_API_KEY existir). O banco guarda so o hash do token; link de uso unico, 30 min.
+const RESET_TTL = 30 * 60;
+
+async function criarLinkReset(env, userId, origem) {
+  const token = toHex(rand(32));
+  // um link valido por vez: pedir de novo invalida os anteriores
+  await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? OR expires_at < ?').bind(userId, now()).run();
+  await env.DB.prepare('INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
+    .bind(await sha256Hex(token), userId, now() + RESET_TTL, now()).run();
+  return `${origem}/redefinir.html?token=${token}`;
+}
+
+async function adminResetLink(env, req, user) {
+  if (!user.is_admin) return fail('Apenas moderadores.', 403);
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const u = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(str(b.email, 254).toLowerCase()).first();
+  if (!u) return fail('Nenhuma conta com esse e-mail.', 404);
+  return json({ link: await criarLinkReset(env, u.id, new URL(req.url).origin), expira_em_min: RESET_TTL / 60 });
+}
+
+// resposta sempre igual, exista a conta ou nao (nao revela quem tem cadastro)
+async function requestReset(env, req) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const ip = req.headers.get('CF-Connecting-IP') || 'x';
+  const email = str(b.email, 254).toLowerCase();
+  const generico = json({ ok: true, email: !!env.RESEND_API_KEY });
+  const keys = ['rp|' + ip, 'rp|' + email];
+  for (const k of keys) if (await tooManyFails(env, k)) return generico;
+  for (const k of keys) await recordFail(env, k);
+  if (!isEmail(email) || !env.RESEND_API_KEY) return generico;
+  const u = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+  if (u) await enviarEmailReset(env, email, await criarLinkReset(env, u.id, new URL(req.url).origin));
+  return generico;
+}
+
+async function doReset(env, req) {
+  const b = await body(req);
+  if (!b) return fail('Requisição inválida.');
+  const nova = typeof b.nova === 'string' ? b.nova : '';
+  if (nova.length < 10 || nova.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
+  const th = await sha256Hex(str(b.token, 64));
+  const row = await env.DB.prepare('SELECT user_id, expires_at, used FROM password_resets WHERE token_hash = ?').bind(th).first();
+  if (!row || row.used || row.expires_at < now()) return fail('Este link é inválido ou expirou. Peça um novo.', 400);
+  // marca como usado ANTES de trocar: dois envios simultaneos nao usam o mesmo link
+  const mark = await env.DB.prepare('UPDATE password_resets SET used = 1 WHERE token_hash = ? AND used = 0').bind(th).run();
+  if (!mark.meta || mark.meta.changes !== 1) return fail('Este link é inválido ou expirou. Peça um novo.', 400);
+  const salt = rand(16);
+  await env.DB.prepare('UPDATE users SET pass_hash = ?, pass_salt = ? WHERE id = ?').bind(await hashPassword(nova, salt), b64(salt), row.user_id).run();
+  await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(row.user_id).run(); // derruba sessoes antigas
+  await env.DB.prepare("DELETE FROM login_fails WHERE key = 'em|' || (SELECT email FROM users WHERE id = ?)").bind(row.user_id).run();
+  return json({ ok: true });
+}
+
+async function enviarEmailReset(env, email, link) {
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: env.RESET_FROM || 'Entrelinhas <nao-responda@entrelinhasbr.com.br>',
+        to: email,
+        subject: 'Redefinir sua senha — Entrelinhas',
+        text: `Recebemos um pedido para redefinir sua senha.\n\nCrie uma nova senha neste link (vale 30 minutos):\n${link}\n\nSe não foi você, ignore este e-mail.`,
+      }),
+    });
+  } catch { /* falha de envio nao vaza para quem pediu */ }
+}
+
+// lista de contas para o painel de moderacao (recuperacao de senha)
+async function adminAccounts(env, req) {
+  const u = await currentUser(env, req);
+  if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+  const rows = await env.DB.prepare(
+    'SELECT u.email, u.slug, u.role, u.nome, u.is_admin, p.data FROM users u LEFT JOIN profiles p ON p.user_id = u.id ORDER BY u.role, u.id'
+  ).all();
+  return json(rows.results.map((r) => {
+    let nome = r.nome || r.slug;
+    try { nome = JSON.parse(r.data || '{}').nome || nome; } catch { /* perfil sem json */ }
+    return { email: r.email, slug: r.slug, nome, role: r.role, mod: !!r.is_admin };
+  }));
+}
+
 async function getProfile(env, slug, publicacao) {
   const p = await env.DB.prepare(
     'SELECT p.slug, p.data, p.badges, p.published, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.slug = ?'
@@ -546,6 +632,7 @@ export default {
           return json(list);
         }
         if (path === '/api/chat') return listChat(env, req, url);
+        if (path === '/api/admin/contas') return adminAccounts(env, req);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
           const p = await getProfile(env, m[1], publicacao);
@@ -558,6 +645,8 @@ export default {
       if (path === '/api/register-leitor' && req.method === 'POST') return registerLeitor(env, req);
       if (path === '/api/login' && req.method === 'POST') return login(env, req);
       if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
+      if (path === '/api/recuperar' && req.method === 'POST') return requestReset(env, req);
+      if (path === '/api/redefinir' && req.method === 'POST') return doReset(env, req);
 
       const user = await currentUser(env, req);
       if (!user) return fail('Faça login para continuar.', 401);
@@ -572,6 +661,7 @@ export default {
         if (rm[2] === 'denunciar' && req.method === 'POST') return reportReview(env, req, user, rid);
       }
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
+      if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
       if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
       const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
       if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));

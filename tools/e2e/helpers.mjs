@@ -40,7 +40,7 @@ export async function iniciar(extraEnv = {}) {
       const chunks = []; for await (const c of req) chunks.push(c);
       const corpo = chunks.length ? Buffer.concat(chunks) : undefined;
       const headers = new Headers(); for (const [k, v] of Object.entries(req.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(',') : v);
-      const r = await app.worker.fetch(new Request('http://127.0.0.1' + req.url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : corpo }), app.env);
+      const r = await app.worker.fetch(new Request('http://' + req.headers.host + req.url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : corpo }), app.env);
       res.writeHead(r.status, Object.fromEntries(r.headers));
       res.end(Buffer.from(await r.arrayBuffer()));
     } catch (e) { res.writeHead(500); res.end(String(e && e.stack || e)); }

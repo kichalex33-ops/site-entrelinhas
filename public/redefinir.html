@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Minha conta | Entrelinhas</title>
+<title>Nova senha | Entrelinhas</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -36,11 +36,19 @@
 <main>
   <section class="page active">
     <div class="hero" style="padding-bottom:.5rem">
-      <span class="eyebrow">Autores e leitores</span>
-      <h2>Minha <em>conta</em></h2>
-      <p id="subtitle">Entre para editar a sua página pública.</p>
+      <span class="eyebrow">Conta</span>
+      <h2>Criar <em>nova senha</em></h2>
+      <p>Escolha uma senha nova para entrar no Entrelinhas.</p>
     </div>
-    <div id="app" class="editor"></div>
+    <div class="auth-box">
+      <form id="f">
+        <label class="fld"><span>Nova senha (mínimo 10 caracteres)</span><input name="nova" type="password" required minlength="10" maxlength="200" autocomplete="new-password"></label>
+        <label class="fld"><span>Repita a nova senha</span><input name="conf" type="password" required minlength="10" maxlength="200" autocomplete="new-password"></label>
+        <button class="btn btn-primary" type="submit">Salvar nova senha</button>
+        <div id="msg"></div>
+      </form>
+      <p class="hint" style="margin-top:1rem"><a href="recuperar.html">Pedir outro link</a> · <a href="conta.html">Voltar para o login</a></p>
+    </div>
   </section>
 </main>
 
@@ -53,7 +61,23 @@
 </footer>
 
 <script src="common.js"></script>
-<script src="conta.js"></script>
-<script src="moderacao.js"></script>
+<script>
+const token = new URLSearchParams(location.search).get('token') || '';
+const f = document.getElementById('f'), msg = document.getElementById('msg');
+const note = (t, ok) => { msg.innerHTML = `<p class="note ${ok ? 'ok' : 'err'}" role="status">${EL.esc(t)}</p>`; };
+// tira o token da barra de endereco (nao fica no historico nem em capturas de tela)
+if (token) history.replaceState(null, '', location.pathname);
+if (!/^[a-f0-9]{64}$/.test(token)) { note('Este link está incompleto. Peça um novo.'); f.querySelector('button').disabled = true; }
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (f.nova.value !== f.conf.value) return note('As duas senhas não são iguais.');
+  const b = f.querySelector('button'); b.disabled = true;
+  try {
+    await EL.api('/api/redefinir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, nova: f.nova.value }) });
+    note('Senha trocada. Levando você para o login...', true);
+    setTimeout(() => { location.href = 'conta.html'; }, 1500);
+  } catch (err) { note(err.message); b.disabled = false; }
+});
+</script>
 </body>
 </html>

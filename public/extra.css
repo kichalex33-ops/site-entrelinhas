@@ -195,3 +195,12 @@ a.tab{text-decoration:none;display:inline-block}
 .ler-texto a{color:var(--accent)}
 .ler-nav{display:flex;justify-content:space-between;align-items:center;gap:.6rem;max-width:65ch;margin:3rem auto 0;flex-wrap:wrap}
 @media (max-width:640px){.ler-obra{grid-template-columns:1fr}.ler-capa{max-width:200px}}
+
+/* painel de moderacao (conta.html) */
+#mod-panel{margin-top:1.5rem}
+#mod-panel summary{cursor:pointer;color:var(--accent);font-weight:500}
+.mod-conta{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+.mod-conta>div:first-child{flex:1;min-width:180px}
+.mod-saida{flex-basis:100%}
+.mod-link{display:flex;gap:.5rem;margin-top:.4rem}
+.mod-link input{flex:1;min-width:0;padding:.55rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.8rem}

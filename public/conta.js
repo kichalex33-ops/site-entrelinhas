@@ -56,7 +56,7 @@
           ? 'O cadastro de autor é fechado: precisa de um código de convite do coletivo. O e-mail serve só para entrar e nunca aparece no site.'
           : mode === 'leitor'
           ? 'Conta de leitor é aberta a todos. Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos. O e-mail serve só para entrar e nunca aparece no site.'
-          : 'Esqueceu a senha? Peça ao coletivo para redefinir.'}</p>
+          : '<a href="recuperar.html">Esqueci minha senha</a>'}</p>
         ${mode === 'login' && LOCAL ? `<p class="hint"><b>Rodando no seu computador.</b> As contas do site real não existem aqui. Entre com uma conta de teste (senha <code>entrelinhas123</code>):<br>${CONTAS_LOCAIS.map(([em, rot]) => `<button type="button" class="btn btn-ghost" data-local="${em}" style="margin:.4rem .4rem 0 0">${rot}</button>`).join('')}</p>` : ''}
       </div>`;
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => authView(b.dataset.mode)));
