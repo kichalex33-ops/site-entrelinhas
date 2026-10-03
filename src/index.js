@@ -3,6 +3,7 @@
 
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
+import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOferta } from './ajuda.js';
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine } from './vitrine.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
@@ -694,6 +695,11 @@ export default {
           return listarDenunciasLivros(env, url, { json });
         }
         if (path === '/api/admin/convites') return listarConvites(env, req);
+        if (path === '/api/ajuda') {
+          const u = await currentUser(env, req);
+          if (!u) return fail('Faça login para continuar.', 401);
+          return u.role === 'autor' ? listarAjuda(env, u, { json }) : fail('A ajuda entre autores é para autores do coletivo.', 403);
+        }
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
           const p = await getProfile(env, m[1], publicacao);
@@ -728,6 +734,20 @@ export default {
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
       const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
       if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+      if (path === '/api/ajuda' || path.startsWith('/api/ajuda/')) {
+        if (user.role !== 'autor') return fail('A ajuda entre autores é para autores do coletivo.', 403);
+        const ha = { json, fail, str, body, now };
+        if (path === '/api/ajuda' && req.method === 'POST') return criarPedido(env, req, user, ha);
+        const aj = path.match(/^\/api\/ajuda\/(\d{1,12})\/(fechar|reabrir|oferta)(?:\/(\d{1,12}))?$/);
+        if (aj) {
+          const id = Number(aj[1]);
+          if (aj[2] !== 'oferta' && !aj[3] && req.method === 'POST') return fecharPedido(env, user, id, aj[2] === 'reabrir', ha);
+          if (aj[2] === 'oferta' && !aj[3] && req.method === 'POST') return ofertar(env, req, user, id, ha);
+          if (aj[2] === 'oferta' && !aj[3] && req.method === 'DELETE') return desistir(env, user, id, ha);
+          if (aj[2] === 'oferta' && aj[3] && req.method === 'POST') return decidirOferta(env, req, user, id, Number(aj[3]), ha);
+        }
+        return fail('Não encontrado.', 404);
+      }
       const fv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/favorito$/);
       if (fv && req.method === 'POST') return favoritarLivro(env, user, fv[1], fv[2], { json, fail, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
       const ps = path.match(/^\/api\/livro\/([a-f0-9]{12})\/posts(?:\/(\d{1,12}))?$/);

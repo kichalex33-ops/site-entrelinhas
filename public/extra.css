@@ -423,3 +423,42 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .extra-bt{background:none;border:1px solid var(--line-strong);border-radius:999px;color:var(--text);font:inherit;font-size:.82rem;padding:.3rem .8rem;cursor:pointer}
 .extra-bt:hover{border-color:var(--accent)}
 .extra-comentarios{margin-top:.8rem}
+
+/* Servicos: ajuda entre autores (ajuda.html) */
+.service-link{margin-top:.9rem;display:inline-flex;max-width:100%;white-space:normal;text-align:center}
+.ajuda{max-width:900px;margin:0 auto;padding:0 1.5rem 3rem}
+.ajuda-passos{list-style:none;padding:0;margin:2rem 0;display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));counter-reset:passo}
+.ajuda-passos li{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:.9rem 1rem;display:grid;gap:.3rem;counter-increment:passo}
+.ajuda-passos b{font-family:'Playfair Display',serif;font-weight:500;color:var(--accent)}
+.ajuda-passos b::before{content:counter(passo) ". "}
+.ajuda-passos span{font-size:.83rem;color:var(--muted)}
+.aj-topo{margin-bottom:2rem}
+.aj-novo{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem}
+.aj-lista{display:grid;gap:1rem;margin:1rem 0 2.4rem}
+.aj-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem}
+.aj-card.fechado{opacity:.65}
+.aj-card h4{font-family:'Playfair Display',serif;font-weight:500;font-size:1.15rem}
+.aj-card .by{font-size:.75rem;color:var(--muted);margin:.2rem 0 .7rem}
+.aj-card a{color:var(--accent)}
+.aj-card p{font-size:.9rem;color:#c8c8d0;margin-bottom:.5rem}
+.aj-campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.5rem;margin:.6rem 0;font-size:.85rem}
+.aj-campos dt{color:var(--muted);font-size:.72rem}
+.aj-campos dd{margin:0}
+.aj-oferta{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
+.aj-oferta input{flex:1 1 240px;min-width:0;padding:.55rem .7rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:.85rem}
+.aj-st{font-size:.85rem;margin-top:.6rem}
+.aj-tag{display:inline-block;border:1px solid var(--line-strong);border-radius:999px;padding:.05rem .55rem;font-size:.7rem;font-family:Inter,sans-serif;color:var(--muted);vertical-align:middle}
+.aj-tag.aj-aceito{border-color:var(--accent);color:var(--accent)}
+.aj-tag.aj-concluido{border-color:#3f8f5f;color:#7fcf9a}
+.aj-ofertas{list-style:none;padding:0;display:grid;gap:.6rem}
+.aj-of{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:.6rem}
+.aj-of p{margin:.3rem 0 0}
+.aj-bts{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.aj-bts .rm{margin:0}
+.aj-acesso{border-left:3px solid var(--accent);background:rgba(217,169,74,.07);border-radius:0 8px 8px 0;padding:.6rem .8rem;margin:.6rem 0;font-size:.88rem;word-break:break-word}
+
+/* capas no tamanho padrao (--capa-w, 200px) tambem nos destaques e na Biblioteca; no celular, duas por linha */
+.slide{width:var(--capa-w)}
+.grid{grid-template-columns:repeat(auto-fill,minmax(140px,var(--capa-w)))}
+.slide .cover{height:auto;width:100%}
+@media (max-width:520px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.8rem 1rem}}

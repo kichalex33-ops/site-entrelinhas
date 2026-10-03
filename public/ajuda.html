@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitura Beta | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab active" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main>
+  <section class="page active ajuda">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Ajuda entre autores</span>
+      <h2>Leitura <em>Beta</em></h2>
+      <p>Um autor do coletivo lê o seu original antes do lançamento e devolve impressões honestas. Em troca, você lê o de alguém.</p>
+    </div>
+    <ol class="ajuda-passos">
+      <li><b>Peça</b><span>Conte do que se trata o texto, o que quer saber e como chegar ao original.</span></li>
+      <li><b>Escolha</b><span>Autores se oferecem. Você aceita quem quiser; só quem foi aceito vê o link do original.</span></li>
+      <li><b>Leia e comente</b><span>A conversa e os comentários acontecem onde o original estiver (documento, e-mail...).</span></li>
+      <li><b>Conclua</b><span>Quando receber o retorno, marque como concluída: quem leu ganha o selo “Leitor beta” no perfil.</span></li>
+    </ol>
+    <div id="root"><p class="muted-note">Carregando...</p></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script>
+(function () {
+  'use strict';
+  const { esc, api } = window.EL;
+  const root = document.getElementById('root');
+  const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
+  const paras = (t) => String(t || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+  // acesso ao original: links viram clicaveis, o resto fica como texto
+  const linkar = (t) => esc(t).replace(/https:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`);
+  const perfil = (slug, nome) => `<a href="autor.html?a=${encodeURIComponent(slug)}">${esc(nome)}</a>`;
+  const ST_OFERTA = { oferta: 'aguardando resposta', aceito: 'aceito', concluido: 'concluída', recusado: 'não aceito' };
+  let D = null, formAberto = false;
+
+  carregar();
+  async function carregar() {
+    try { D = await api('/api/ajuda'); }
+    catch (e) {
+      if (e.status === 401) { root.innerHTML = '<div class="auth-box"><p>Os pedidos de leitura beta são feitos e respondidos pelos autores do coletivo. Entre na sua conta de autor para ver os pedidos abertos.</p><p style="margin-top:1rem"><a class="btn btn-primary" href="conta.html">Entrar</a></p></div>'; return; }
+      root.innerHTML = `<p class="muted-note">${esc(e.status === 403 ? 'A leitura beta é organizada entre os autores do coletivo. Contas de leitor ainda não participam.' : 'Não foi possível carregar os pedidos.')}</p>`;
+      return;
+    }
+    desenhar();
+  }
+
+  function campos(r) {
+    return [['Gênero', r.genero], ['Tamanho', r.tamanho], ['Quer saber', r.retorno], ['Prazo', r.prazo]].filter((x) => x[1])
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
+  }
+
+  function aberto(r) {
+    const cheio = r.aceitos >= r.vagas;
+    return `<article class="aj-card">
+      <h4>${esc(r.titulo)}</h4>
+      <p class="by">de ${perfil(r.autor_slug, r.autor_nome)} · ${dia(r.created_at)} · ${r.aceitos} de ${r.vagas} vaga${r.vagas === 1 ? '' : 's'} preenchida${r.vagas === 1 ? '' : 's'}</p>
+      ${paras(r.descricao)}
+      <dl class="aj-campos">${campos(r)}</dl>
+      ${r.minha ? `<p class="aj-st">Você se ofereceu: <b>${ST_OFERTA[r.minha]}</b></p>`
+        : cheio ? '<p class="aj-st">Vagas preenchidas.</p>'
+        : `<form class="aj-oferta" data-oferta="${r.id}"><input name="msg" maxlength="500" placeholder="Recado opcional: por que você quer ler, quando consegue entregar..." aria-label="Recado para o autor"><button class="btn btn-primary" type="submit">Quero ler</button></form>`}
+    </article>`;
+  }
+
+  function meu(r) {
+    const ofertas = r.ofertas.map((o) => `<li class="aj-of">
+        <div>${perfil(o.slug, o.nome)} <span class="aj-tag aj-${o.status}">${ST_OFERTA[o.status]}</span>${o.msg ? `<p>${esc(o.msg)}</p>` : ''}</div>
+        <div class="aj-bts">
+          ${o.status === 'oferta' || o.status === 'recusado' ? `<button type="button" class="btn btn-ghost" data-decidir="${r.id}:${o.user_id}:aceitar">Aceitar</button>` : ''}
+          ${o.status === 'oferta' ? `<button type="button" class="rm" data-decidir="${r.id}:${o.user_id}:recusar">Recusar</button>` : ''}
+          ${o.status === 'aceito' ? `<button type="button" class="btn btn-primary" data-decidir="${r.id}:${o.user_id}:concluir">Recebi o retorno</button><button type="button" class="rm" data-decidir="${r.id}:${o.user_id}:recusar">Cancelar</button>` : ''}
+        </div></li>`).join('');
+    return `<article class="aj-card${r.status === 'fechado' ? ' fechado' : ''}">
+      <h4>${esc(r.titulo)} ${r.status === 'fechado' ? '<span class="aj-tag">fechado</span>' : ''}</h4>
+      <p class="by">${dia(r.created_at)} · ${r.vagas} vaga${r.vagas === 1 ? '' : 's'}</p>
+      <ul class="aj-ofertas">${ofertas || '<li class="hint">Ninguém se ofereceu ainda.</li>'}</ul>
+      <p><button type="button" class="rm" data-pedido="${r.id}:${r.status === 'fechado' ? 'reabrir' : 'fechar'}">${r.status === 'fechado' ? 'Reabrir pedido' : 'Fechar pedido'}</button></p>
+    </article>`;
+  }
+
+  function ajuda(a) {
+    return `<article class="aj-card">
+      <h4>${esc(a.titulo)} <span class="aj-tag aj-${a.status}">${ST_OFERTA[a.status]}</span></h4>
+      <p class="by">de ${perfil(a.autor_slug, a.autor_nome)}</p>
+      ${a.acesso ? `<div class="aj-acesso"><b>Como chegar ao original:</b><p>${linkar(a.acesso).replace(/\n/g, '<br>')}</p></div>` : '<p class="hint">O link do original aparece aqui quando o autor aceitar.</p>'}
+      ${a.status !== 'concluido' ? `<p><button type="button" class="rm" data-desistir="${a.id}">Desistir</button></p>` : ''}
+    </article>`;
+  }
+
+  function novo() {
+    return `<form class="el-form aj-novo" id="novo">
+      <label class="fld"><span>Título (normalmente o nome do livro)</span><input name="titulo" maxlength="120" required></label>
+      <label class="fld"><span>Gênero</span><input name="genero" maxlength="80" placeholder="Ex.: fantasia, suspense"></label>
+      <label class="fld"><span>Do que se trata</span><textarea name="descricao" rows="4" maxlength="2000" required placeholder="Sinopse curta e em que ponto o texto está (completo, primeiros capítulos...)"></textarea></label>
+      <label class="fld"><span>Tamanho</span><input name="tamanho" maxlength="120" placeholder="Ex.: 12 capítulos, cerca de 40 mil palavras"></label>
+      <label class="fld"><span>O que você quer saber</span><textarea name="retorno" rows="2" maxlength="1000" placeholder="Ex.: o começo prende? os personagens convencem? alguma parte arrasta?"></textarea></label>
+      <label class="fld"><span>Prazo (opcional)</span><input name="prazo" maxlength="80" placeholder="Ex.: até o fim de novembro"></label>
+      <label class="fld"><span>Quantos leitores beta</span><select name="vagas">${[1, 2, 3, 4, 5].map((n) => `<option>${n}</option>`).join('')}</select></label>
+      <label class="fld"><span>Como chegar ao original (só quem você aceitar vê)</span><textarea name="acesso" rows="2" maxlength="1000" required placeholder="Link do documento com permissão de comentário, ou como pedir o arquivo"></textarea></label>
+      <div class="el-estado" role="status"></div>
+      <p><button class="btn btn-primary" type="submit">Publicar pedido</button> <button class="btn btn-ghost" type="button" data-cancelar>Cancelar</button></p>
+    </form>`;
+  }
+
+  function desenhar() {
+    const qtd = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    root.innerHTML = `
+      <div class="aj-topo">${formAberto ? novo() : '<button type="button" class="btn btn-primary" data-novo>Pedir leitura beta</button>'}</div>
+      <div class="section-head"><div><span class="eyebrow">${qtd(D.abertos.length, 'pedido', 'pedidos')}</span><h2>Pedidos abertos</h2></div><div class="line"></div></div>
+      <div class="aj-lista">${D.abertos.map(aberto).join('') || '<p class="muted-note">Nenhum pedido aberto de outros autores agora.</p>'}</div>
+      ${D.meus.length ? `<div class="section-head"><div><span class="eyebrow">Seus originais</span><h2>Meus pedidos</h2></div><div class="line"></div></div><div class="aj-lista">${D.meus.map(meu).join('')}</div>` : ''}
+      ${D.ajudas.length ? `<div class="section-head"><div><span class="eyebrow">Você ajudando</span><h2>Minhas leituras</h2></div><div class="line"></div></div><div class="aj-lista">${D.ajudas.map(ajuda).join('')}</div>` : ''}`;
+  }
+
+  async function enviar(caminho, opts, estado) {
+    try { D = await api(caminho, Object.assign({ method: 'POST' }, opts)); return true; }
+    catch (e) {
+      const aviso = `<p class="note err">${esc(e.message)}</p>`;
+      if (estado) estado.innerHTML = aviso;
+      else { root.querySelectorAll('.aj-erro').forEach((x) => x.remove()); root.insertAdjacentHTML('afterbegin', `<div class="aj-erro">${aviso}</div>`); root.scrollIntoView(); }
+      return false;
+    }
+  }
+  const comJson = (dados) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
+
+  root.addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.novo !== undefined) { formAberto = true; desenhar(); root.querySelector('#novo input').focus(); }
+    else if (t.dataset.cancelar !== undefined) { formAberto = false; desenhar(); }
+    else if (t.dataset.decidir) {
+      const [id, uid, acao] = t.dataset.decidir.split(':');
+      t.disabled = true;
+      if (await enviar(`/api/ajuda/${id}/oferta/${uid}`, comJson({ acao }))) desenhar(); else t.disabled = false;
+    }
+    else if (t.dataset.pedido) { const [id, acao] = t.dataset.pedido.split(':'); if (await enviar(`/api/ajuda/${id}/${acao}`, {})) desenhar(); }
+    else if (t.dataset.desistir) { if (await enviar(`/api/ajuda/${t.dataset.desistir}/oferta`, { method: 'DELETE' })) desenhar(); }
+  });
+
+  root.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, bt = f.querySelector('button[type=submit]');
+    bt.disabled = true;
+    if (f.id === 'novo') {
+      const dados = Object.fromEntries(new FormData(f));
+      if (await enviar('/api/ajuda', comJson({ ...dados, tipo: 'beta' }), f.querySelector('.el-estado'))) { formAberto = false; desenhar(); }
+      else bt.disabled = false;
+    } else if (f.dataset.oferta) {
+      if (await enviar(`/api/ajuda/${f.dataset.oferta}/oferta`, comJson({ msg: f.msg.value }))) desenhar(); else bt.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

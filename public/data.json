@@ -255,7 +255,9 @@
       "icone": "✦",
       "titulo": "Leitura Beta",
       "status": "Aberto",
-      "texto": "A comunidade lê o seu original antes do lançamento e devolve impressões honestas."
+      "texto": "A comunidade lê o seu original antes do lançamento e devolve impressões honestas.",
+      "link": "ajuda.html",
+      "acao": "Ver pedidos"
     },
     {
       "icone": "✎",
