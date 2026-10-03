@@ -163,7 +163,7 @@ fetch('/api/biblioteca').then((r) => r.ok ? r.json() : null).then((d) => {
   document.getElementById('lerAquiGrid').innerHTML = d.obras.map((o) => `
     <article class="work">
       ${o.capa ? `<img src="${esc(img(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : ''}
-      <h3>${esc(o.titulo)} ${faixa(o.faixa)}</h3>
+      <h3><a class="work-link" href="obra.html?a=${encodeURIComponent(o.autor.slug)}&o=${esc(o.id)}">${esc(o.titulo)}</a> ${faixa(o.faixa)}</h3>
       <p class="by">${esc(o.autor.nome)}${o.genero ? ' · ' + esc(o.genero) : ''}</p>
       ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
       <a class="btn btn-primary" href="${esc(o.url)}">Ler · ${o.capitulos} cap.</a>

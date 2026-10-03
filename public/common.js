@@ -37,5 +37,22 @@
   // "2025" -> "2025"; "2025-03" -> "mar. 2025"
   const mesAno = (s) => { const m = /^(\d{4})(?:-(\d{2}))?$/.exec(s || ''); if (!m) return ''; return m[2] ? new Date(+m[1], +m[2] - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : m[1]; };
 
-  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api, FAIXAS, faixa, mesAno };
+  // reduz a imagem no navegador (JPEG ate ~550 KB) e envia; devolve o id da imagem
+  async function enviarImagem(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Envie uma imagem JPEG, PNG ou WebP.');
+    const bmp = await createImageBitmap(file);
+    let max = 1400, blob = null;
+    for (let i = 0; i < 7 && !blob; i++) {
+      const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const b = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.85));
+      if (b && b.size <= 550 * 1024) blob = b; else max = Math.round(max * 0.8);
+    }
+    if (!blob) throw new Error('Não foi possível reduzir a imagem. Tente uma menor.');
+    const r = await api('/api/image', { method: 'POST', headers: { 'Content-Type': blob.type }, body: blob });
+    return r.id;
+  }
+
+  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api, FAIXAS, faixa, mesAno, enviarImagem };
 })();

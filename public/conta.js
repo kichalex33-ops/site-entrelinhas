@@ -153,7 +153,7 @@
           <div class="obras-lista">${P.obras.map((o, i) => `<div class="obra-item">
             <div class="obra-mini">${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="">` : `<span>${esc((o.titulo || '?').trim().charAt(0).toUpperCase())}</span>`}</div>
             <div class="obra-info"><b>${esc(o.titulo || 'Sem título')} ${EL.faixa(o.faixa)}</b><span class="hint">${esc([o.status, o.genero, EL.mesAno(o.publicado_em)].filter(Boolean).join(' · '))}</span></div>
-            <div class="obra-acoes"><button type="button" class="btn btn-ghost" data-editobra="${i}">Editar</button><button type="button" class="rm" data-rmobra="${i}">Remover</button></div>
+            <div class="obra-acoes">${o.id ? `<a class="btn btn-ghost" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">Página do livro</a>` : ''}<button type="button" class="btn btn-ghost" data-editobra="${i}">Editar</button><button type="button" class="rm" data-rmobra="${i}">Remover</button></div>
           </div>`).join('') || '<p class="hint">Nenhum livro divulgado ainda.</p>'}</div>
           <button type="button" class="btn btn-primary" data-novaobra>Adicionar obra</button>
         </fieldset>

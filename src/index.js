@@ -3,11 +3,12 @@
 
 import { studioApi, FAIXAS } from './studio.js';
 import { leituraPublica, publicadasDoAutor, obraPublicada } from './leitura.js';
+import { getLivro, putLivro, imagensDasPaginas } from './livro.js';
 
 const SESSION_DAYS = 30;
 const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
 const MAX_IMG = 600 * 1024;
-const MAX_IMGS_PER_USER = 30;
+const MAX_IMGS_PER_USER = 80; // perfil, capas, personagens e galerias das paginas de livro
 const FAIL_LIMIT = 8;
 const FAIL_WINDOW = 15 * 60;
 const FUNDOS = ['preto', 'azul', 'vinho', 'verde', 'grafite'];
@@ -433,6 +434,17 @@ async function getProfile(env, slug, publicacao) {
   return { slug: p.slug, data, badges: JSON.parse(p.badges), mod: !!p.mod, publicadas };
 }
 
+// limpa imagens do autor sem uso (com mais de 1h, para nao apagar upload recem-feito)
+async function limparImagens(env, userId, perfil) {
+  if (!perfil) { const p = await env.DB.prepare('SELECT data FROM profiles WHERE user_id = ?').bind(userId).first(); try { perfil = JSON.parse(p.data); } catch { return; } }
+  const used = new Set([perfil.retrato, ...(perfil.obras || []).map((o) => o.capa)].filter(Boolean));
+  const capas = await env.DB.prepare('SELECT meta, pub_meta FROM studio_works WHERE user_id = ?').bind(userId).all();
+  for (const w of capas.results) for (const j of [w.meta, w.pub_meta]) { try { const c = JSON.parse(j || '{}').capa; if (c) used.add(c); } catch { /* json invalido */ } }
+  for (const id of await imagensDasPaginas(env, userId)) used.add(id);
+  const imgs = await env.DB.prepare('SELECT id FROM images WHERE user_id = ? AND created_at < ?').bind(userId, now() - 3600).all();
+  for (const r of imgs.results) if (!used.has(r.id)) await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(r.id).run();
+}
+
 async function saveProfile(env, req, user) {
   const b = await body(req);
   if (!b) return fail('Requisição inválida.');
@@ -445,12 +457,7 @@ async function saveProfile(env, req, user) {
   try { for (const o of JSON.parse(antes.data).obras || []) if (o.id) noSite.set(o.id, o.no_site_em || 0); } catch { /* perfil antigo */ }
   for (const o of data.obras) { const t = noSite.has(o.id) ? noSite.get(o.id) : now(); if (t) o.no_site_em = t; }
   await env.DB.prepare('UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?').bind(JSON.stringify(data), now(), user.slug).run();
-  // limpa imagens do autor sem uso (com mais de 1h, para nao apagar upload recem-feito)
-  const used = new Set([data.retrato, ...data.obras.map((o) => o.capa)].filter(Boolean));
-  const capas = await env.DB.prepare('SELECT meta, pub_meta FROM studio_works WHERE user_id = ?').bind(user.id).all();
-  for (const w of capas.results) for (const j of [w.meta, w.pub_meta]) { try { const c = JSON.parse(j || '{}').capa; if (c) used.add(c); } catch { /* json invalido */ } }
-  const imgs = await env.DB.prepare('SELECT id FROM images WHERE user_id = ? AND created_at < ?').bind(user.id, now() - 3600).all();
-  for (const r of imgs.results) if (!used.has(r.id)) await env.DB.prepare('DELETE FROM images WHERE id = ?').bind(r.id).run();
+  await limparImagens(env, user.id, data);
   return json({ ok: true, data });
 }
 
@@ -676,6 +683,8 @@ export default {
         }
         if (path === '/api/chat') return listChat(env, req, url);
         if (path === '/api/admin/contas') return adminAccounts(env, req);
+        const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
+        if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao });
         if (path === '/api/admin/convites') return listarConvites(env, req);
         const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
         if (m) {
@@ -707,6 +716,12 @@ export default {
       if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
       if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
       if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
+      const lp = path.match(/^\/api\/livro\/([a-f0-9]{12})$/);
+      if (lp && req.method === 'PUT') {
+        const r = await putLivro(env, req, user, lp[1], { json, fail, str, body, now, isUrl, ownsImage });
+        if (r.ok) await limparImagens(env, user.id);
+        return r;
+      }
       if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
       const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
       if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));

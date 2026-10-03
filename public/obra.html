@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Livro | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab active" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+  </nav>
+</header>
+
+<main id="root"><section class="page active"><p class="muted-note">Carregando...</p></section></main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Área do autor</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script src="common.js"></script>
+<script src="reviews.js"></script>
+<script>
+// Pagina do livro: obra.html?a=autor&o=id-da-obra[#aba]
+// Dados basicos vem do perfil (livro divulgado) ou da publicacao do Estudio; o resto o autor preenche aqui mesmo.
+(function () {
+  'use strict';
+  const { esc, imgUrl, api, faixa, mesAno, FAIXAS, initial } = window.EL;
+  const root = document.getElementById('root');
+  const q = new URLSearchParams(location.search);
+  const autor = q.get('a') || '', obraId = q.get('o') || '';
+  const ABAS = [['detalhes', 'Detalhes'], ['capitulos', 'Capítulos'], ['personagens', 'Personagens'], ['galeria', 'Galeria'], ['materiais', 'Materiais'], ['avaliacoes', 'Avaliações']];
+  const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
+  const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
+  const paras = (t) => String(t || '').split(/\n{2,}/).map((s) => s.trim()).filter(Boolean).map((p) => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+  const msg = (t) => { root.innerHTML = `<section class="page active"><p class="muted-note">${esc(t)}</p><p style="text-align:center;margin-top:1.5rem"><a class="btn btn-ghost" href="index.html#biblioteca">Voltar à biblioteca</a></p></section>`; };
+  let D = null;
+
+  if (!/^[a-z0-9-]{1,40}$/.test(autor) || !/^[a-f0-9]{12}$/.test(obraId)) return msg('Livro não informado.');
+  carregar();
+
+  async function carregar() {
+    try { D = await api(`/api/livro/${autor}/${obraId}`); } catch (e) { return msg(e.status === 404 ? 'Este livro não está disponível.' : 'Não foi possível carregar o livro.'); }
+    desenhar();
+  }
+
+  function info() {
+    const o = D.obra, f = FAIXAS.find((x) => x[0] === o.faixa);
+    const linhas = [
+      ['Tipo', D.tipo === 'estudio' ? 'Obra publicada no Entrelinhas' : 'Livro'],
+      ['Gênero', o.genero], ['Situação', o.status],
+      ['Classificação', f ? f[1] : ''],
+      ['Lançamento', mesAno(o.publicado_em)],
+      ['No site desde', o.no_site_em ? dia(o.no_site_em) : ''],
+      ['Capítulos', D.capitulos ? milhar(D.capitulos.length) : ''],
+      ['Palavras', D.capitulos ? milhar(D.capitulos.reduce((s, c) => s + c.palavras, 0)) : ''],
+      ['Créditos', o.creditos],
+    ].filter((l) => l[1]);
+    return `<dl class="livro-info"><div><dt>Autor</dt><dd><a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a></dd></div>${linhas.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+  }
+
+  function painel(aba) {
+    const p = D.pagina, o = D.obra;
+    if (aba === 'detalhes') return `
+      <h3>Sinopse</h3>${paras(o.sinopse) || '<p class="hint">O autor ainda não escreveu a sinopse.</p>'}
+      ${p.contexto ? `<h3>Bastidores</h3>${paras(p.contexto)}` : ''}
+      ${p.estilo ? `<h3>Estilo e tom</h3>${paras(p.estilo)}` : ''}`;
+    if (aba === 'capitulos') return `<ol class="ler-sumario">${(D.capitulos || []).map((c) => `<li><a href="${esc(o.url)}&c=${c.n}"><span>${esc(c.titulo)}</span><small>${milhar(c.palavras)} palavras</small></a></li>`).join('')}</ol>`;
+    if (aba === 'personagens') return `<div class="livro-pers">${p.personagens.map((c) => `<article class="pers">
+        <div class="pers-foto">${c.imagem ? `<img src="${esc(imgUrl(c.imagem))}" alt="${esc(c.nome)}" loading="lazy">` : `<span>${initial(c.nome)}</span>`}</div>
+        <div><h4>${esc(c.nome)}</h4>${c.papel ? `<p class="by">${esc(c.papel)}</p>` : ''}${c.descricao ? paras(c.descricao) : ''}</div></article>`).join('')}</div>`;
+    if (aba === 'galeria') return `<div class="livro-galeria">${p.imagens.map((i, n) => `<figure><button type="button" data-foto="${n}" aria-label="Ampliar ${esc(i.legenda || 'imagem')}"><img src="${esc(imgUrl(i.id))}" alt="${esc(i.legenda)}" loading="lazy"></button>${i.legenda ? `<figcaption>${esc(i.legenda)}</figcaption>` : ''}</figure>`).join('')}</div>`;
+    if (aba === 'materiais') return `<ul class="livro-mat">${p.materiais.map((m) => `<li><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer nofollow">${esc(m.rotulo)} &#8599;</a>${m.descricao ? `<span class="hint">${esc(m.descricao)}</span>` : ''}</li>`).join('')}</ul>`;
+    if (aba === 'avaliacoes') return '<div class="rev-box livro-rev"></div>';
+    return '';
+  }
+
+  function abasVisiveis() {
+    const p = D.pagina;
+    const tem = { detalhes: true, capitulos: !!(D.capitulos && D.capitulos.length), personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length, avaliacoes: true };
+    const n = { capitulos: D.capitulos && D.capitulos.length, personagens: p.personagens.length, galeria: p.imagens.length, materiais: p.materiais.length };
+    return ABAS.filter(([k]) => tem[k]).map(([k, r]) => [k, n[k] ? `${r} (${n[k]})` : r]);
+  }
+
+  function desenhar() {
+    const o = D.obra, p = D.pagina;
+    document.title = `${o.titulo} | Entrelinhas`;
+    const abas = abasVisiveis();
+    const pedida = location.hash.slice(1);
+    const ativa = abas.some(([k]) => k === pedida) ? pedida : 'detalhes';
+    const lojas = [o.link && { rotulo: /amazon\.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer', url: o.link }, ...(o.lojas || [])].filter(Boolean);
+    const aqui = location.origin + location.pathname + location.search;
+    root.innerHTML = `
+    <section class="page active livro">
+      <p class="ler-trilha"><a href="autor.html?a=${encodeURIComponent(D.autor.slug)}">${esc(D.autor.nome)}</a> · livros</p>
+      <h2 class="livro-titulo">${esc(o.titulo)} ${faixa(o.faixa)}</h2>
+      ${p.alt_titulos ? `<p class="livro-alt">${esc(p.alt_titulos)}</p>` : ''}
+      <div class="livro-grade">
+        <aside class="livro-lado">
+          ${o.capa ? `<img class="ler-capa" src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}">` : `<div class="typo">${initial(o.titulo)}</div>`}
+          <div class="livro-acoes">
+            ${o.url ? `<a class="btn btn-primary" href="${esc(o.url)}${D.capitulos && D.capitulos.length ? '&c=' + D.capitulos[0].n : ''}">Começar a ler</a>` : ''}
+            ${lojas.map((l) => `<a class="btn btn-ghost" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.rotulo)}</a>`).join('')}
+          </div>
+          <div class="livro-share" aria-label="Compartilhar">
+            <button type="button" class="btn btn-ghost" data-copiar>Copiar link</button>
+            <a class="btn btn-ghost" href="https://wa.me/?text=${encodeURIComponent(o.titulo + ' — ' + aqui)}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a class="btn btn-ghost" href="https://x.com/intent/post?text=${encodeURIComponent(o.titulo)}&url=${encodeURIComponent(aqui)}" target="_blank" rel="noopener noreferrer">X</a>
+          </div>
+          <h3>Informações</h3>
+          ${info()}
+          ${D.dono ? '<p><button type="button" class="btn btn-primary" data-editar>Editar página do livro</button></p>' : ''}
+        </aside>
+        <div class="livro-main">
+          <nav class="livro-abas" role="tablist">${abas.map(([k, r]) => `<button type="button" role="tab" data-aba="${k}" aria-selected="${k === ativa}">${esc(r)}</button>`).join('')}</nav>
+          <div class="livro-painel" role="tabpanel">${painel(ativa)}</div>
+          ${D.dono && !p.personagens.length && !p.imagens.length && !p.materiais.length && !p.contexto ? '<p class="hint livro-dica">Esta página só mostra a sinopse por enquanto. Use “Editar página do livro” para contar os bastidores, apresentar personagens, mostrar imagens extras e indicar materiais complementares.</p>' : ''}
+        </div>
+      </div>
+    </section>`;
+    if (ativa === 'avaliacoes') EL.reviews.mount(root.querySelector('.livro-rev'), { autor, obra: o.id });
+  }
+
+  // link direto para uma aba (obra.html?...#personagens) com a pagina ja aberta
+  window.addEventListener('hashchange', () => { if (D) desenhar(); });
+
+  root.addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.aba) { history.replaceState(null, '', '#' + t.dataset.aba); desenhar(); }
+    else if (t.dataset.foto) ampliar(Number(t.dataset.foto));
+    else if (t.dataset.copiar !== undefined) { try { await navigator.clipboard.writeText(location.origin + location.pathname + location.search); t.textContent = 'Link copiado'; } catch { /* sem permissao */ } }
+    else if (t.dataset.editar !== undefined) editar();
+  });
+
+  function janela(titulo, corpo, rodape, largo) {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'el-dialogo' + (largo ? ' largo' : '');
+    dlg.innerHTML = `<h2>${esc(titulo)}</h2><div class="el-dialogo-corpo"></div><div class="el-dialogo-rodape"></div>`;
+    dlg.querySelector('.el-dialogo-corpo').append(...[].concat(corpo));
+    dlg.querySelector('.el-dialogo-rodape').append(...[].concat(rodape));
+    dlg.addEventListener('close', () => dlg.remove());
+    document.body.append(dlg); dlg.showModal();
+    return dlg;
+  }
+  const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
+  const botao = (rotulo, classe, fn) => { const b = el(`<button type="button" class="btn ${classe}">${esc(rotulo)}</button>`); b.addEventListener('click', fn); return b; };
+
+  function ampliar(n) {
+    const i = D.pagina.imagens[n];
+    const d = janela(i.legenda || D.obra.titulo, el(`<img class="livro-zoom" src="${esc(imgUrl(i.id))}" alt="${esc(i.legenda)}">`), botao('Fechar', 'btn-ghost', () => d.close()), true);
+  }
+
+  // ---------- edicao (so o dono) ----------
+  function editar() {
+    const p = JSON.parse(JSON.stringify(D.pagina));
+    const f = el(`<form class="el-form livro-ed">
+      <label class="fld"><span>Títulos alternativos (outros idiomas, título original...)</span><input name="alt" maxlength="200" value="${esc(p.alt_titulos)}"></label>
+      <label class="fld"><span>Bastidores</span><textarea name="contexto" rows="5" maxlength="4000" placeholder="Como a história nasceu, inspirações, curiosidades, prêmios...">${esc(p.contexto)}</textarea></label>
+      <label class="fld"><span>Estilo e tom</span><textarea name="estilo" rows="3" maxlength="1500" placeholder="Ex.: narrador em primeira pessoa, capítulos curtos, tom sombrio com humor...">${esc(p.estilo)}</textarea></label>
+      <fieldset class="blk"><legend>Personagens (até 16)</legend><div data-lista="personagens"></div><button type="button" class="btn btn-ghost" data-add="personagens">Adicionar personagem</button></fieldset>
+      <fieldset class="blk"><legend>Galeria: imagens extras (até 12)</legend><p class="hint">Mapas, ilustrações, artes de personagens, bastidores. JPG, PNG ou WebP.</p><div data-lista="imagens" class="ed-galeria"></div><label class="btn btn-ghost ed-up">Enviar imagem<input type="file" accept="image/jpeg,image/png,image/webp" data-upgaleria hidden></label></fieldset>
+      <fieldset class="blk"><legend>Materiais complementares (até 10)</legend><p class="hint">Links para glossário, mapa interativo, trilha sonora, entrevistas, extras...</p><div data-lista="materiais"></div><button type="button" class="btn btn-ghost" data-add="materiais">Adicionar material</button></fieldset>
+      <div class="el-estado" role="status"></div>
+    </form>`);
+    const estado = f.querySelector('.el-estado');
+    const avisar = (t, ok) => { estado.innerHTML = `<p class="note ${ok ? 'ok' : 'err'}">${esc(t)}</p>`; };
+    const LIM = { personagens: 16, imagens: 12, materiais: 10 };
+    const desenharListas = () => {
+      f.querySelector('[data-lista=personagens]').innerHTML = p.personagens.map((c, i) => `<div class="item ed-pers">
+          <div class="pers-foto">${c.imagem ? `<img src="${esc(imgUrl(c.imagem))}" alt="">` : '<span>foto</span>'}</div>
+          <div class="ed-campos">
+            <label class="fld"><span>Nome</span><input data-k="personagens.${i}.nome" maxlength="80" value="${esc(c.nome)}"></label>
+            <label class="fld"><span>Papel</span><input data-k="personagens.${i}.papel" maxlength="60" value="${esc(c.papel)}" placeholder="Protagonista, antagonista, mentora..."></label>
+            <label class="fld"><span>Descrição</span><textarea data-k="personagens.${i}.descricao" rows="3" maxlength="800">${esc(c.descricao)}</textarea></label>
+            <label class="btn btn-ghost ed-up">${c.imagem ? 'Trocar foto' : 'Enviar foto'}<input type="file" accept="image/jpeg,image/png,image/webp" data-upfoto="${i}" hidden></label>
+            <button type="button" class="rm" data-rm="personagens.${i}">Remover personagem</button>
+          </div></div>`).join('');
+      f.querySelector('[data-lista=imagens]').innerHTML = p.imagens.map((im, i) => `<div class="ed-img">
+          <img src="${esc(imgUrl(im.id))}" alt="">
+          <input data-k="imagens.${i}.legenda" maxlength="120" value="${esc(im.legenda)}" placeholder="Legenda" aria-label="Legenda da imagem">
+          <button type="button" class="rm" data-rm="imagens.${i}">Remover</button></div>`).join('');
+      f.querySelector('[data-lista=materiais]').innerHTML = p.materiais.map((m, i) => `<div class="item">
+          <label class="fld"><span>Nome</span><input data-k="materiais.${i}.rotulo" maxlength="80" value="${esc(m.rotulo)}" placeholder="Ex.: Glossário"></label>
+          <label class="fld"><span>Link (https://...)</span><input data-k="materiais.${i}.url" type="url" maxlength="300" value="${esc(m.url)}"></label>
+          <label class="fld"><span>Descrição curta</span><input data-k="materiais.${i}.descricao" maxlength="200" value="${esc(m.descricao)}"></label>
+          <button type="button" class="rm" data-rm="materiais.${i}">Remover material</button></div>`).join('');
+      for (const k of ['personagens', 'materiais']) f.querySelector(`[data-add=${k}]`).hidden = p[k].length >= LIM[k];
+      f.querySelector('.ed-up:has([data-upgaleria])').hidden = p.imagens.length >= LIM.imagens;
+    };
+    desenharListas();
+    f.addEventListener('submit', (e) => e.preventDefault());
+    f.addEventListener('input', (e) => {
+      const k = e.target.dataset.k; if (!k) return;
+      const [lista, i, campo] = k.split('.'); p[lista][Number(i)][campo] = e.target.value;
+    });
+    f.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t.dataset.add === 'personagens') { p.personagens.push({ nome: '', papel: '', descricao: '', imagem: '' }); desenharListas(); }
+      else if (t.dataset.add === 'materiais') { p.materiais.push({ rotulo: '', url: '', descricao: '' }); desenharListas(); }
+      else if (t.dataset.rm) { const [lista, i] = t.dataset.rm.split('.'); p[lista].splice(Number(i), 1); desenharListas(); }
+    });
+    f.addEventListener('change', async (e) => {
+      const t = e.target; if (t.type !== 'file' || !t.files[0]) return;
+      avisar('Enviando a imagem...', true);
+      try {
+        const id = await EL.enviarImagem(t.files[0]);
+        if (t.dataset.upgaleria !== undefined) p.imagens.push({ id, legenda: '' });
+        else p.personagens[Number(t.dataset.upfoto)].imagem = id;
+        desenharListas(); avisar('Imagem enviada. Clique em Salvar para publicar.', true);
+      } catch (err) { avisar(err.message); }
+    });
+    const salvar = botao('Salvar', 'btn-primary', async () => {
+      p.alt_titulos = f.alt.value; p.contexto = f.contexto.value; p.estilo = f.estilo.value;
+      salvar.disabled = true; avisar('Salvando...', true);
+      try {
+        const r = await api(`/api/livro/${obraId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: p }) });
+        D.pagina = r.pagina; dlg.close(); desenhar();
+      } catch (err) { avisar(err.message); salvar.disabled = false; }
+    });
+    const dlg = janela('Página do livro', f, [botao('Cancelar', 'btn-ghost', () => dlg.close()), salvar], true);
+  }
+})();
+</script>
+</body>
+</html>

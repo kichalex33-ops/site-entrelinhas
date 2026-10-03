@@ -68,7 +68,7 @@
     <article class="work">
       ${o.capa ? `<img src="${esc(imgUrl(o.capa))}" alt="Capa de ${esc(o.titulo)}" loading="lazy">` : `<div class="typo">${initial(o.titulo)}</div>`}
       <span class="status${o.status === 'Publicado' ? ' on' : ''}">${esc(o.status)}</span>
-      <h3>${esc(o.titulo)} ${EL.faixa(o.faixa)}</h3>
+      <h3>${o.id ? `<a class="work-link" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">${esc(o.titulo)}</a>` : esc(o.titulo)} ${EL.faixa(o.faixa)}</h3>
       ${o.genero ? `<p class="by">${esc(o.genero)}</p>` : ''}
       ${datas(o) ? `<p class="by datas">${datas(o)}</p>` : ''}
       ${o.sinopse ? `<p>${esc(o.sinopse)}</p>` : ''}
@@ -77,6 +77,7 @@
       ${o.link || (o.lojas || []).length ? `<div class="buy">${o.link ? `<a class="btn btn-ghost" href="${esc(o.link)}"${linkAttrs(o.link)}>${/amazon.|uiclap/i.test(o.link) ? 'Comprar' : 'Conhecer'}</a>` : ''}${(o.lojas || []).map(l => `<a class="btn btn-ghost" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</div>` : ''}
       ${isOwner && o.url ? `<p class="owner-edit"><a class="btn btn-ghost" href="estudio.html#/obra/${esc(o.id)}">Editar no Estúdio</a></p>` : ''}
       ${isOwner && o.id && !o.url ? `<p class="owner-edit"><a class="btn btn-ghost" href="conta.html#obra-${esc(o.id)}">Editar este livro, sinopse e links de venda</a></p>` : ''}
+      ${o.id ? `<p class="owner-edit"><a class="btn btn-ghost" href="obra.html?a=${encodeURIComponent(slug)}&o=${esc(o.id)}">Página do livro</a></p>` : ''}
       ${o.id ? `<button type="button" class="btn btn-ghost rev-toggle" data-obra="${esc(o.id)}">Ver e escrever avaliações</button><div class="rev-box" hidden></div>` : ''}
     </article>`;
 

@@ -279,3 +279,56 @@ dialog.el-dialogo{margin:auto;background:var(--panel-2);color:var(--text);border
 .faixa-op label:has(input:checked){border-color:var(--accent)}
 .data-pub{display:flex;gap:.5rem}
 .data-pub input{max-width:7rem}
+
+/* obra.html: pagina do livro */
+.livro{max-width:1100px;margin:0 auto;padding:2rem 1.5rem 3rem}
+.livro .ler-trilha{text-align:left;margin-bottom:.4rem}
+.livro-titulo{font-family:'Playfair Display',serif;font-weight:500;font-size:clamp(1.7rem,4vw,2.4rem)}
+.livro-alt{color:var(--muted);font-style:italic;margin-top:.2rem}
+.livro-grade{display:grid;grid-template-columns:minmax(0,var(--capa-w,200px)) 1fr;gap:2.2rem;margin-top:1.6rem;align-items:start}
+.livro-lado{display:grid;gap:.8rem}
+.livro-lado .typo,.livro-lado .ler-capa{width:100%;max-width:var(--capa-w,200px);aspect-ratio:2/3;border-radius:8px}
+.livro-lado .typo{display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:4rem;color:var(--accent);background:linear-gradient(160deg,#1c2f4a,#070b14)}
+.livro-lado h3{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:.3rem;margin-top:.6rem}
+.livro-acoes,.livro-share{display:flex;flex-wrap:wrap;gap:.4rem}
+.livro-acoes .btn,.livro-share .btn{white-space:normal;text-align:center}
+.livro-share .btn{padding:.35rem .7rem;font-size:.62rem}
+.livro-info{display:grid;gap:.45rem;font-size:.85rem}
+.livro-info dt{color:var(--muted);font-size:.72rem}
+.livro-info dd{margin:0}
+.livro-info a{color:var(--accent)}
+.livro-abas{display:flex;flex-wrap:wrap;gap:.2rem;border-bottom:1px solid var(--line);margin-bottom:1.2rem}
+.livro-abas button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:inherit;font-size:.82rem;padding:.55rem .75rem;cursor:pointer}
+.livro-abas button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent)}
+.livro-painel h3{font-family:'Playfair Display',serif;font-weight:500;font-size:1.15rem;margin:1.4rem 0 .5rem}
+.livro-painel h3:first-child{margin-top:0}
+.livro-painel p{color:#c8c8d0;margin-bottom:.8rem;line-height:1.7}
+.livro-pers{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.pers{display:flex;gap:.9rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:.9rem}
+.pers h4{font-family:'Playfair Display',serif;font-weight:500}
+.pers p{font-size:.85rem}
+.pers-foto{width:72px;height:96px;flex:0 0 auto;border-radius:6px;overflow:hidden;background:linear-gradient(160deg,#1c2f4a,#070b14);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:'Playfair Display',serif;font-size:1.6rem}
+.pers-foto img{width:100%;height:100%;object-fit:cover}
+.pers-foto span{font-size:.75rem;font-family:inherit;color:var(--muted)}
+.livro-galeria{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.livro-galeria figure{margin:0}
+.livro-galeria button{padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:zoom-in;background:none;width:100%;display:block}
+.livro-galeria img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.livro-galeria figcaption{font-size:.78rem;color:var(--muted);margin-top:.3rem}
+.livro-zoom{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:6px}
+dialog.el-dialogo.largo{width:min(860px,96vw)}
+.livro-mat{list-style:none;padding:0;display:grid;gap:.6rem}
+.livro-mat li{display:grid;gap:.15rem;padding:.7rem .9rem;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.livro-mat a{color:var(--accent);text-decoration:none}
+.livro-dica{margin-top:1.5rem}
+.livro-ed .ed-pers{display:flex;gap:.9rem;align-items:flex-start;flex-wrap:wrap}
+.livro-ed .ed-campos{flex:1 1 220px;min-width:0}
+.livro-ed .ed-up{cursor:pointer;display:inline-flex;margin:.3rem .3rem .3rem 0}
+.ed-galeria{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-bottom:.6rem}
+.ed-img{display:grid;gap:.3rem}
+.ed-img img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px}
+.ed-img input{width:100%;padding:.4rem .5rem;background:var(--panel-2);color:var(--text);border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:.8rem}
+@media (max-width:700px){.livro-grade{grid-template-columns:1fr}.livro-lado .typo,.livro-lado .ler-capa{margin:0 auto}}
+.work-link{color:inherit;text-decoration:none}
+.work-link:hover{color:var(--accent)}
+.el-dialogo .el-dialogo-rodape{position:sticky;bottom:-1.4rem;background:var(--panel-2);padding:.8rem 0 .2rem;margin-bottom:-.2rem;border-top:1px solid var(--line)}
