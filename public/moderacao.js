@@ -163,7 +163,82 @@
     recarregar();
   }
 
-  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); }).observe(app, { childList: true });
+  // ---------- conteudo da pagina inicial (noticias, projetos, selos, servicos, contato) ----------
+  // Os formularios saem do esquema que o servidor manda (src/site.js): campo novo no servidor aparece aqui sozinho.
+  let montandoSite = false;
+  const novo = (tag, props = {}, ...filhos) => { const e = Object.assign(document.createElement(tag), props); e.append(...filhos); return e; };
+
+  async function montarSite() {
+    const den = document.getElementById('mod-denuncias');
+    if (montandoSite || document.getElementById('mod-site') || !den) return;
+    montandoSite = true;
+    const sec = novo('details', { id: 'mod-site', className: 'blk' },
+      novo('summary', {}, 'Moderação · conteúdo da página inicial'),
+      novo('p', { className: 'hint' }, 'Notícias, projetos em andamento, selos, serviços e contato da página inicial. Cada seção é salva separadamente e muda no site na hora.'));
+    den.after(sec);
+    montandoSite = false;
+    const corpo = novo('div', {}, novo('p', { className: 'hint' }, 'Carregando...'));
+    sec.append(corpo);
+    let S;
+    try { S = await api('/api/admin/site'); } catch (e) { corpo.replaceChildren(novo('p', { className: 'note err' }, e.message)); return; }
+    corpo.replaceChildren(...Object.entries(S.secoes).map(([chave, esq]) => secaoEditor(chave, esq, S.dados[chave])));
+  }
+
+  function campoEditor(c, valor, aoMudar) {
+    let el;
+    if (c.tipo === 'area') el = novo('textarea', { rows: 3, maxLength: c.max, value: valor || '' });
+    else if (c.tipo === 'escolha') { el = novo('select', {}, ...c.opcoes.map((o) => novo('option', { value: o, textContent: o }))); el.value = c.opcoes.includes(valor) ? valor : c.opcoes[0]; }
+    else if (c.tipo === 'numero') el = novo('input', { type: 'number', min: c.min, max: c.max, value: valor == null ? '' : valor });
+    else if (c.tipo === 'cor') el = novo('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(valor || '') ? valor : '#1c2f4a' });
+    else el = novo('input', { type: 'text', maxLength: c.max, value: valor || '' });
+    if (c.obrig) el.required = true;
+    const ler = () => aoMudar(c.tipo === 'numero' ? Number(el.value) : el.value);
+    el.addEventListener('input', ler); el.addEventListener('change', ler);
+    if (c.tipo === 'escolha' || c.tipo === 'cor') ler(); // valor padrao entra no item
+    return novo('label', { className: 'fld' }, novo('span', {}, c.rotulo + (c.obrig ? ' *' : '')), el);
+  }
+
+  function secaoEditor(chave, esq, dadosIniciais) {
+    let itens = esq.unico ? [Object.assign({}, dadosIniciais)] : (dadosIniciais || []).map((x) => Object.assign({}, x));
+    const caixa = novo('fieldset', { className: 'blk mod-site-sec' }, novo('legend', {}, esq.rotulo));
+    const lista = novo('div', { className: 'mod-site-lista' });
+    const estado = novo('div', { className: 'el-estado', role: 'status' });
+    const avisar = (t, ok) => estado.replaceChildren(novo('p', { className: 'note ' + (ok ? 'ok' : 'err') }, t));
+    const desenhar = () => {
+      lista.replaceChildren(...itens.map((it, i) => {
+        const box = novo('div', { className: 'item mod-site-item' });
+        if (!esq.unico) {
+          const mover = (d) => { const j = i + d; if (j < 0 || j >= itens.length) return; [itens[i], itens[j]] = [itens[j], itens[i]]; desenhar(); };
+          box.append(novo('div', { className: 'mod-site-acoes' },
+            novo('b', {}, `${esq.item} ${i + 1}`),
+            Object.assign(novo('button', { type: 'button', className: 'rm', title: 'Subir', textContent: '↑' }), { onclick: () => mover(-1) }),
+            Object.assign(novo('button', { type: 'button', className: 'rm', title: 'Descer', textContent: '↓' }), { onclick: () => mover(1) }),
+            Object.assign(novo('button', { type: 'button', className: 'rm', textContent: 'Remover' }), { onclick: () => { itens.splice(i, 1); desenhar(); } })));
+        }
+        for (const c of esq.campos) box.append(campoEditor(c, it[c.k], (v) => { it[c.k] = v; }));
+        return box;
+      }));
+      if (adicionar) adicionar.hidden = itens.length >= esq.max;
+    };
+    const adicionar = esq.unico ? null : Object.assign(novo('button', { type: 'button', className: 'btn btn-ghost', textContent: 'Adicionar ' + esq.item }), {
+      onclick: () => { itens.push({}); desenhar(); lista.lastElementChild.querySelector('input,textarea').focus(); },
+    });
+    const salvar = Object.assign(novo('button', { type: 'button', className: 'btn btn-primary', textContent: 'Salvar ' + esq.rotulo.toLowerCase() }), {
+      onclick: async () => {
+        salvar.disabled = true;
+        try {
+          const r = await api('/api/admin/site/' + chave, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dados: esq.unico ? itens[0] : itens }) });
+          itens = esq.unico ? [r.dados] : r.dados; desenhar(); avisar('Salvo. Já está na página inicial.', true);
+        } catch (err) { avisar(err.message); }
+        salvar.disabled = false;
+      },
+    });
+    caixa.append(lista, novo('div', { className: 'mod-site-rodape' }, ...(adicionar ? [adicionar] : []), salvar), estado);
+    desenhar();
+    return caixa;
+  }
+
+  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarSite(); }).observe(app, { childList: true });
   // o painel de senha monta de forma assincrona; quando ele entra em #app, o observador monta o de convites
   montar();
 })();

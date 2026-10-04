@@ -339,6 +339,13 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .den-motivos label{display:flex;gap:.5rem;align-items:center;font-size:.9rem;cursor:pointer}
 .den-motivos input{accent-color:var(--accent)}
 #mod-denuncias summary{cursor:pointer;color:var(--accent);font-weight:500}
+#mod-site summary{cursor:pointer;color:var(--accent);font-weight:500}
+.mod-site-sec{margin-top:1rem}
+.mod-site-item{display:block;padding:.8rem 0;border-bottom:1px solid var(--line)}
+.mod-site-acoes{display:flex;align-items:center;gap:.4rem;margin-bottom:.4rem;text-transform:capitalize}
+.mod-site-acoes b{flex:1}
+.mod-site-rodape{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}
+.fld input[type=color]{width:4rem;height:2.4rem;padding:.2rem}
 .mod-badge{display:inline-block;min-width:1.4rem;padding:0 .35rem;border-radius:999px;background:#db2827;color:#fff;font-size:.72rem;text-align:center;margin-left:.3rem}
 .mod-todas{display:flex;gap:.4rem;align-items:center;font-size:.85rem;margin:.4rem 0 .8rem}
 .mod-den-grupo{border:1px solid var(--line);border-radius:10px;padding:.7rem .9rem;margin-bottom:.8rem}

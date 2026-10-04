@@ -5,14 +5,10 @@
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
   const lines = (t) => esc(t).replace(/ /g, '<br>');
   const dateKey = (s) => s.split('/').reverse().join('');
-  let DATA, authors, LIVROS = [];
+  let DATA, LIVROS = [];
 
-  const ext = (u) => /^https?:/.test(u) ? ' target="_blank" rel="noopener"' : '';
-  const author = (id) => authors[id] || { nome: id, link: '' };
-  const byline = (id) => {
-    const a = author(id);
-    return a.link ? `<a href="${esc(a.link)}"${ext(a.link)}>${esc(a.nome)}</a>` : `<b>${esc(a.nome)}</b>`;
-  };
+  // quem assina noticia/projeto: nome, com link para o perfil quando houver
+  const byline = (nome, slug) => slug ? `<a href="autor.html?a=${encodeURIComponent(slug)}">${esc(nome || slug)}</a>` : `<b>${esc(nome || 'Coletivo Entrelinhas')}</b>`;
   const FAIXA_TXT = { L: 'Livre para todos os públicos' };
   const faixa = (f) => /^(L|10|12|14|16|18)$/.test(f || '') ? `<span class="faixa faixa-${f}" title="${esc(FAIXA_TXT[f] || 'Não recomendado para menores de ' + f + ' anos')}">${f}</span>` : '';
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
@@ -25,17 +21,12 @@
     c1: '#1c2f4a', c2: '#070b14', href: `obra.html?a=${encodeURIComponent(l.autor.slug)}&o=${encodeURIComponent(l.id)}`,
     faixa: l.faixa, data: l.no_site_em || 0, lancamento: l.lancamento, ler: l.ler || '', aval: l.avaliacoes, pop: l.popular,
   });
-  // reserva: o arquivo antigo (so usado se a API falhar)
-  const doArquivo = (b) => ({
-    titulo: b.titulo, autorNome: author(b.autor).nome, genero: b.genero, gen1: b.genero, capa: b.capa, c1: b.c1, c2: b.c2,
-    href: '', json: b, faixa: '', data: 0, lancamento: '', ler: '',
-  });
 
   const cover = (b) => b.capa ? `<div class="cover cover-img"><img src="${esc(b.capa)}" alt="Capa de ${esc(b.titulo)}" loading="lazy"></div>` : `<div class="cover" style="--c1:${esc(b.c1)};--c2:${esc(b.c2)}"><span class="cover-title">${lines(b.titulo)}</span><span class="cover-author">${esc(b.autorNome)}</span></div>`;
-  const bookAttrs = (b) => b.href ? `data-href="${esc(b.href)}"` : `data-id="${esc(b.titulo)}"`;
-  const quando = (b) => b.data ? `No Entrelinhas desde ${dia(b.data)}` : b.json && b.json.lancamento ? b.json.lancamento : '';
+  const bookAttrs = (b) => `data-href="${esc(b.href)}"`;
+  const quando = (b) => b.data ? `No Entrelinhas desde ${dia(b.data)}` : '';
   const novo = (b) => b.data && Date.now() / 1000 - b.data < 30 * 86400;
-  const relCard = (b) => `<article class="rel-card">${b.href ? `<a class="cover-link" href="${esc(b.href)}" aria-label="${esc(b.titulo)}">${cover(b)}</a>` : cover(b)}${novo(b) ? '<span class="badge-new">Novo</span>' : ''}<h3>${esc(b.titulo)} ${faixa(b.faixa)}</h3><p class="by">${esc(b.autorNome)}${b.genero ? ' · ' + esc(b.genero) : ''}</p><p class="when">${esc(quando(b))}</p>${b.href ? `<a class="btn btn-ghost" href="${esc(b.href)}">Ver o livro</a>` : `<button class="btn btn-ghost" data-open ${bookAttrs(b)}>Ler sinopse</button>`}</article>`;
+  const relCard = (b) => `<article class="rel-card"><a class="cover-link" href="${esc(b.href)}" aria-label="${esc(b.titulo)}">${cover(b)}</a>${novo(b) ? '<span class="badge-new">Novo</span>' : ''}<h3>${esc(b.titulo)} ${faixa(b.faixa)}</h3><p class="by">${esc(b.autorNome)}${b.genero ? ' · ' + esc(b.genero) : ''}</p><p class="when">${esc(quando(b))}</p><a class="btn btn-ghost" href="${esc(b.href)}">Ver o livro</a></article>`;
 
   // popularidade (calculada no servidor: visitas unicas + favoritos + avaliacoes do periodo)
   const pop = (b, p) => (b.pop && b.pop[p]) || 0;
@@ -82,7 +73,7 @@
     const recentes = LIVROS.slice().sort((a, b) => b.data - a.data);
 
     // destaques: com capa primeiro, os mais recentes
-    const destaques = (LIVROS.some((b) => b.json) ? livros.filter((b) => b.json.destaque) : recentes.filter((b) => b.capa).concat(recentes.filter((b) => !b.capa))).slice(0, 14);
+    const destaques = recentes.filter((b) => b.capa).concat(recentes.filter((b) => !b.capa)).slice(0, 14);
     $('#featured').innerHTML = destaques.map(b =>
       `<figure class="slide" ${bookAttrs(b)}>${cover(b)}<figcaption>${esc(b.genero)}${b.lancamento ? ' · ' + esc(mesAno(b.lancamento)) : ''}</figcaption></figure>`).join('');
 
@@ -90,7 +81,7 @@
     $('#releases').innerHTML = recentes.slice(0, 24).map(relCard).join('');
 
     $('#news').innerHTML = DATA.noticias.slice().sort((a, b) => dateKey(b.data).localeCompare(dateKey(a.data))).map(n =>
-      `<article class="post reveal"><span class="date">${esc(n.data)}</span><h4>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p><p class="byline">por ${byline(n.autor)}</p></article>`).join('');
+      `<article class="post reveal"><span class="date">${esc(n.data)}</span><h4>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p><p class="byline">por ${byline(n.autor, n.autor_slug)}</p></article>`).join('');
 
     $('#selos').innerHTML = DATA.selos.map(s =>
       `<div class="selo reveal"><h4>${esc(s.nome)}</h4><p>${esc(s.texto)}</p></div>`).join('');
@@ -103,13 +94,14 @@
     desenharPopulares();
 
     $('#projects').innerHTML = DATA.projetos.map(p =>
-      `<article class="project reveal"><div class="project-visual" style="--c1:${esc(p.c1)};--c2:${esc(p.c2)}"><span class="project-status">${esc(p.etapa)} · ${esc(p.pct)}%</span></div><div class="project-body"><h3>${esc(p.titulo)}</h3><p class="by">${esc(author(p.autor).nome)} · ${esc(p.genero)}</p><p>${esc(p.sinopse)}</p>${p.trecho ? `<blockquote class="excerpt">${esc(p.trecho)}</blockquote>` : ''}<div class="progress"><span style="width:${Number(p.pct) || 0}%"></span></div><div class="progress-label"><span>${esc(p.pct)}% concluído</span><span>Previsão: ${esc(p.previsao)}</span></div></div></article>`).join('');
+      `<article class="project reveal"><div class="project-visual" style="--c1:${esc(p.c1 || '#1c2f4a')};--c2:${esc(p.c2 || '#070b14')}"><span class="project-status">${esc(p.etapa)} · ${esc(p.pct)}%</span></div><div class="project-body"><h3>${esc(p.titulo)}</h3><p class="by">${byline(p.autor, p.autor_slug)}${p.genero ? ' · ' + esc(p.genero) : ''}</p><p>${esc(p.sinopse)}</p>${p.trecho ? `<blockquote class="excerpt">${esc(p.trecho)}</blockquote>` : ''}<div class="progress"><span style="width:${Number(p.pct) || 0}%"></span></div><div class="progress-label"><span>${esc(p.pct)}% concluído</span><span>${p.previsao ? 'Previsão: ' + esc(p.previsao) : ''}</span></div></div></article>`).join('');
 
     $('#services').innerHTML = DATA.servicos.map(s =>
       `<div class="service reveal"><div class="icon">${esc(s.icone)}</div><span class="status${s.status === 'Aberto' ? ' on' : ''}">${esc(s.status)}</span><h3>${esc(s.titulo)}</h3><p>${esc(s.texto)}</p>${s.link ? `<a class="btn btn-ghost service-link" href="${esc(s.link)}">${esc(s.acao || 'Saiba mais')} &rarr;</a>` : ''}</div>`).join('');
 
-    $('#contact').innerHTML = DATA.contato
-      ? `Contato: <a href="${esc(DATA.contato)}" target="_blank" rel="noopener">${esc(DATA.contato)}</a>`
+    const contato = DATA.contato.url;
+    $('#contact').innerHTML = contato
+      ? `Contato: <a href="${esc(contato)}" target="_blank" rel="noopener">${esc(contato.replace(/^mailto:/, ''))}</a>`
       : 'Canal de contato em definição pelo coletivo.';
   }
 
@@ -150,47 +142,13 @@
       $(prox).addEventListener('click', () => car.scrollBy({ left: step() }));
     }
 
-    // reserva (arquivo antigo): janela com a sinopse
-    const modal = $('#modal');
-    const open = (title) => {
-      const b = DATA.livros.find(x => x.titulo === title);
-      if (!b) return;
-      const a = author(b.autor);
-      const mc = $('#modalCover');
-      mc.style.setProperty('--c1', b.c1 || '#222');
-      mc.style.setProperty('--c2', b.c2 || '#0a0a0a');
-      mc.classList.toggle('cover-img', !!b.capa);
-      mc.innerHTML = b.capa
-        ? `<img src="${esc(b.capa)}" alt="Capa de ${esc(b.titulo)}">`
-        : `<span class="cover-title">${lines(b.titulo)}</span><span class="cover-author">${esc(a.nome)}</span>`;
-      $('#modalBuy').innerHTML = (b.compra || []).map((c, i) =>
-        `<a class="btn ${i ? 'btn-ghost' : 'btn-primary'}" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer sponsored">${esc(c.rotulo)}</a>`).join('');
-      $('#modalGenre').textContent = b.genero;
-      $('#modalTitle').textContent = b.titulo;
-      $('#modalAuthor').textContent = a.nome;
-      $('#modalSynopsis').textContent = b.sinopse || 'Sinopse em breve.';
-      const l = $('#modalLink');
-      l.hidden = !a.link;
-      if (a.link) { l.href = a.link; if (/^https?:/.test(a.link)) { l.target = '_blank'; l.rel = 'noopener'; } else { l.removeAttribute('target'); } }
-      modal.classList.add('open');
-      modal.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
-    };
-    const close = () => {
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden', 'true');
-      document.body.style.overflow = '';
-    };
     document.addEventListener('click', e => {
       if (e.target.closest('a[href]')) return;
       const el = e.target.closest('.slide, .book-card, [data-open]');
       if (!el) return;
       e.preventDefault();
-      if (el.dataset.href) location.href = el.dataset.href; // livro do banco: pagina do livro
-      else open(el.dataset.id);
+      if (el.dataset.href) location.href = el.dataset.href;
     });
-    modal.addEventListener('click', e => { if (e.target.hasAttribute('data-close')) close(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('open')) close(); });
 
     const chips = document.querySelectorAll('#chips .chip');
     chips.forEach(c => c.addEventListener('click', () => {
@@ -215,13 +173,11 @@
     });
   }
 
-  // livros reais do banco; projetos, noticias, selos e servicos ainda vem do data.json
-  Promise.all([
-    fetch('data.json').then(r => r.json()),
-    fetch('/api/vitrine').then(r => r.ok ? r.json() : null).catch(() => null),
-  ]).then(([d, v]) => {
-    DATA = d; authors = d.autores;
-    LIVROS = (v ? v.livros.map(doBanco) : d.livros.map(doArquivo)).map((b, i) => Object.assign(b, { i }));
+  // tudo vem do banco: livros (/api/vitrine) e o conteudo editavel pelos moderadores (/api/site)
+  const pegar = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u); return r.json(); });
+  Promise.all([pegar('/api/site'), pegar('/api/vitrine')]).then(([d, v]) => {
+    DATA = d;
+    LIVROS = v.livros.map(doBanco).map((b, i) => Object.assign(b, { i }));
     render(); bind();
   }).catch(() => {
     $('main').insertAdjacentHTML('afterbegin', '<p style="padding:3rem;text-align:center;color:#8c8c95">Não foi possível carregar o conteúdo.</p>');
