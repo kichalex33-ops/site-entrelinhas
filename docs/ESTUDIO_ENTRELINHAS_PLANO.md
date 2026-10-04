@@ -1,5 +1,7 @@
 # Estúdio Entrelinhas: plano (Fase 0, reconhecimento)
 
+> **Documento histórico.** Descreve o projeto como era em 02/10/2026, **antes** de o Estúdio ser construído. Frases como "não existe editor", "não há testes" ou "a biblioteca não é alimentada pelo banco" eram verdade naquele dia e **não são mais**: hoje existem o editor com autosave, a publicação com declaração (ainda provisória), a vitrine vinda do D1 e as suítes `npm test` e `npm run e2e`. O estado atual está no [README](../README.md).
+
 Data: 02/10/2026. Nada foi alterado no projeto antes deste documento.
 
 ## 1. Arquitetura encontrada
