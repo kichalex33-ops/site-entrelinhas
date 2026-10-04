@@ -30,16 +30,24 @@
   }
 
   // ---------- login / cadastro ----------
+  // Entrada unica para leitores e autores. "Criar conta" e a de leitor (aberta a todos);
+  // o cadastro de autor e por convite e fica num link separado (ou chega pronto pelo link do convite).
+  const SUBTITULOS = {
+    login: 'Entre com o seu e-mail e senha. Vale para leitores e autores.',
+    leitor: 'Crie a sua conta de leitor: é grátis e aberta a todos.',
+    register: 'Cadastro de autor do coletivo: precisa do código de convite.',
+  };
   function authView(mode){
     tsId = null;
-    subtitle.textContent = mode === 'leitor' ? 'Crie uma conta de leitor para avaliar obras.' : 'Entre para editar a sua página pública ou avaliar obras.';
+    subtitle.textContent = SUBTITULOS[mode];
     app.innerHTML = `
       <div class="auth-box">
-        <div class="auth-tabs">
+        ${mode === 'register'
+          ? '<p class="auth-volta"><button type="button" class="auth-link" data-mode="leitor">&larr; Não sou autor: criar conta de leitor</button></p>'
+          : `<div class="auth-tabs">
           <button class="${mode === 'login' ? 'on' : ''}" data-mode="login">Entrar</button>
-          <button class="${mode === 'leitor' ? 'on' : ''}" data-mode="leitor">Sou leitor</button>
-          <button class="${mode === 'register' ? 'on' : ''}" data-mode="register">Sou autor</button>
-        </div>
+          <button class="${mode === 'leitor' ? 'on' : ''}" data-mode="leitor">Criar conta</button>
+        </div>`}
         <form id="authForm" autocomplete="on">
           ${mode === 'register' ? field('Código de convite', '<input name="convite" required autocomplete="off">') + field('Seu nome (aparece na página)', '<input name="nome" maxlength="80" autocomplete="name">') : ''}
           ${mode === 'leitor' ? field('Seu nome (aparece nas suas avaliações)', '<input name="nome" maxlength="40" minlength="2" required autocomplete="nickname">') : ''}
@@ -52,8 +60,9 @@
         <p class="hint">${mode === 'register'
           ? 'O cadastro de autor é fechado: precisa de um código de convite do coletivo. O e-mail serve só para entrar e nunca aparece no site.'
           : mode === 'leitor'
-          ? 'Conta de leitor é aberta a todos. Você pode avaliar obras, marcar avaliações como úteis e denunciar abusos. O e-mail serve só para entrar e nunca aparece no site.'
+          ? 'Com a conta de leitor você monta suas estantes (Quero ler, Lendo, Lidos), favorita e avalia livros, segue autores e tem um perfil seu, que pode ser privado. O e-mail serve só para entrar e nunca aparece no site.'
           : '<a href="recuperar.html">Esqueci minha senha</a>'}</p>
+        ${mode !== 'register' ? '<p class="auth-autor">Autor do coletivo com convite? <button type="button" class="auth-link" data-mode="register">Criar conta de autor</button></p>' : ''}
       </div>`;
     app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => authView(b.dataset.mode)));
     if (mode === 'leitor') mountTurnstile();
@@ -460,7 +469,11 @@
       // link de convite (conta.html#convite=CODIGO): abre o cadastro de autor com o codigo preenchido.
       // O codigo fica no fragmento (#), que o navegador nao envia ao servidor.
       const conv = /^#convite=([A-Z0-9-]{5,40})$/i.exec(location.hash);
-      if (!conv) return authView('login');
+      if (!conv) {
+        const inicio = location.hash === '#criar' ? 'leitor' : location.hash === '#autor' ? 'register' : 'login';
+        if (location.hash) history.replaceState(null, '', location.pathname);
+        return authView(inicio);
+      }
       history.replaceState(null, '', location.pathname);
       authView('register');
       document.querySelector('#authForm input[name=convite]').value = conv[1].toUpperCase();

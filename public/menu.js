@@ -1,5 +1,5 @@
 // Topo de todas as paginas:
-//  - canto superior direito: "Entrar" para quem nao entrou; a foto (ou inicial) de quem entrou,
+//  - canto superior direito: "Criar conta" (leitor) e "Entrar" para quem nao entrou; a foto (ou inicial) de quem entrou,
 //    com um menu (Meu perfil, Minha conta, Estudio, Sair)
 //  - menu principal: leitor logado ganha "Meu perfil" ao lado de Autores
 (function () {
@@ -22,7 +22,7 @@
     var topo = cantinho(cab);
 
     if (!me) {
-      if (!/\/conta(\.html)?$/.test(location.pathname)) topo.insertAdjacentHTML('beforeend', '<a class="topo-entrar" href="conta.html">Entrar</a>');
+      if (!/\/conta(\.html)?$/.test(location.pathname)) topo.insertAdjacentHTML('beforeend', '<a class="topo-criar" href="conta.html#criar">Criar conta</a><a class="topo-entrar" href="conta.html">Entrar</a>');
       return;
     }
 

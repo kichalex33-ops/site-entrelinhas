@@ -42,7 +42,10 @@
       <span class="eyebrow">Quem escreve</span>
       <h2>Nossos <em>Autores</em></h2>
       <p>Clique em um autor para ver o perfil, as obras e os links.</p>
-      <p class="cta-row"><a class="btn btn-primary" href="conta.html">Entrar na Área do autor</a></p>
+      <div class="cta-leitor" id="ctaLeitor">
+        <p>Gostou de alguém? Com uma conta de leitor você segue autores, favorita livros e monta suas estantes.</p>
+        <p class="cta-row"><a class="btn btn-primary" href="conta.html#criar">Criar conta de leitor</a> <a class="btn btn-ghost" href="conta.html">Já tenho conta</a></p>
+      </div>
     </div>
     <div class="authors-grid" id="authors"><p class="muted-note">Carregando...</p></div>
   </section>
@@ -51,7 +54,7 @@
 <footer class="site-footer">
   <div class="f-links">
     <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
-    <a href="conta.html">Área do autor</a>
+    <a href="conta.html">Minha conta</a>
   </div>
   <div class="f-brand">ENTRE<b>LINHAS</b></div>
   <p>© 2026 Coletivo Entrelinhas</p>
@@ -62,6 +65,8 @@
 (async function(){
   const { esc, imgUrl, api, initial } = EL;
   const box = document.getElementById('authors');
+  // quem ja entrou (leitor ou autor) nao precisa do convite para criar conta
+  fetch('/api/me').then((r) => { if (r.ok) document.getElementById('ctaLeitor').hidden = true; }).catch(() => {});
   try {
     const list = await api('/api/authors');
     if (!list.length) { box.innerHTML = '<p class="muted-note">Nenhum autor publicado ainda.</p>'; return; }
