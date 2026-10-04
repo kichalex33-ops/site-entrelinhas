@@ -53,5 +53,8 @@
     return r.id;
   }
 
-  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api, FAIXAS, faixa, mesAno, enviarImagem };
+  // abre o recorte (Cropper.js, public/vendor/recorte.js) e devolve o JPEG enquadrado, ou null se a pessoa cancelar
+  const recortar = (file, opcoes) => import('/vendor/recorte.js').then((m) => m.recortar(file, opcoes));
+
+  window.EL = { esc, imgUrl, paras, linkAttrs, theme, initial, api, FAIXAS, faixa, mesAno, enviarImagem, recortar };
 })();

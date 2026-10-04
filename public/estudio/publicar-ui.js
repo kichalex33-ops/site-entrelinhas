@@ -64,9 +64,12 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
   const desenharCapa = () => { capaImg.hidden = !capa; capaTirar.hidden = !capa; if (capa) capaImg.src = window.EL.imgUrl(capa); };
   capaArquivo.addEventListener('change', async () => {
     const arq = capaArquivo.files[0]; if (!arq) return;
-    estado.textContent = 'Enviando a capa...';
-    try { capa = (await api.enviarImagem(await reduzir(arq))).id; estado.textContent = 'Capa enviada.'; desenharCapa(); }
-    catch (e) { estado.textContent = e.message; }
+    try {
+      const rec = await window.EL.recortar(arq, { titulo: 'Ajustar a capa' });
+      capaArquivo.value = ''; if (!rec) return;
+      estado.textContent = 'Enviando a capa...';
+      capa = (await api.enviarImagem(await reduzir(rec))).id; estado.textContent = 'Capa enviada.'; desenharCapa();
+    } catch (e) { estado.textContent = e.message; }
     capaArquivo.value = '';
   });
   desenharCapa();

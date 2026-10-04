@@ -53,13 +53,28 @@
     const p = ordem.startsWith('pop-') ? ordem.slice(4) : '';
     const livros = LIVROS.slice().sort(p ? (a, b) => pop(b, p) - pop(a, p) || az(a, b) : ordem === 'recentes' ? (a, b) => b.data - a.data || az(a, b) : az);
     $('#libraryGrid').innerHTML = livros.map(b =>
-      `<article class="book-card reveal in" data-genre="${esc(b.gen1)}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p><span class="tag">${esc(b.genero || b.gen1)}</span>${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
+      `<article class="book-card reveal in" data-genre="${esc(b.gen1)}" data-i="${b.i}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p><span class="tag">${esc(b.genero || b.gen1)}</span>${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
       || '<p class="muted-note">Nenhum livro publicado ainda.</p>';
     filtrar();
   }
+  // busca por titulo, autor ou genero (MiniSearch, public/vendor/busca.js): carrega na primeira tecla
+  let buscar = null, achados = null;
+  async function aoBuscar(texto){
+    if (!buscar) {
+      try { const m = await import('/vendor/busca.js'); buscar = m.criarBusca(LIVROS.map((b) => ({ id: b.i, titulo: b.titulo, autorNome: b.autorNome, genero: b.genero }))); }
+      catch { buscar = (t) => { const q = t.trim().toLowerCase(); return q ? new Set(LIVROS.filter((b) => (b.titulo + ' ' + b.autorNome + ' ' + b.genero).toLowerCase().includes(q)).map((b) => b.i)) : null; }; }
+    }
+    achados = buscar(texto); filtrar();
+  }
   function filtrar(){
     const c = document.querySelector('#chips .chip.active'), f = c ? c.dataset.filter : 'all';
-    document.querySelectorAll('#libraryGrid .book-card').forEach((k) => { k.style.display = (f === 'all' || k.dataset.genre === f) ? '' : 'none'; });
+    let n = 0;
+    document.querySelectorAll('#libraryGrid .book-card').forEach((k) => {
+      const ver = (f === 'all' || k.dataset.genre === f) && (!achados || achados.has(Number(k.dataset.i)));
+      k.style.display = ver ? '' : 'none'; if (ver) n++;
+    });
+    const aviso = $('#buscaVazia');
+    if (aviso) aviso.hidden = n > 0 || !LIVROS.length;
   }
 
   function render(){
@@ -190,6 +205,8 @@
       periodos.forEach((x) => x.classList.toggle('active', x === c));
       periodo = c.dataset.periodo; desenharPopulares();
     }));
+    const campo = $('#buscaLivro');
+    if (campo) campo.addEventListener('input', () => aoBuscar(campo.value));
     const sel = $('#ordem');
     sel.addEventListener('change', () => { ordem = sel.value; desenharGrade(); });
     $('#popVejaMais').addEventListener('click', (e) => {
@@ -204,7 +221,7 @@
     fetch('/api/vitrine').then(r => r.ok ? r.json() : null).catch(() => null),
   ]).then(([d, v]) => {
     DATA = d; authors = d.autores;
-    LIVROS = v ? v.livros.map(doBanco) : d.livros.map(doArquivo);
+    LIVROS = (v ? v.livros.map(doBanco) : d.livros.map(doArquivo)).map((b, i) => Object.assign(b, { i }));
     render(); bind();
   }).catch(() => {
     $('main').insertAdjacentHTML('afterbegin', '<p style="padding:3rem;text-align:center;color:#8c8c95">Não foi possível carregar o conteúdo.</p>');

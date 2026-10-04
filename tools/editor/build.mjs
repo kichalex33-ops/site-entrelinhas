@@ -10,13 +10,15 @@ import path from 'node:path';
 import { statSync } from 'node:fs';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const modulos = [['entry.mjs', 'estudio-editor.js'], ['importar.mjs', 'estudio-importar.js'], ['exportar.mjs', 'estudio-exportar.js'], ['leitura.mjs', 'estudio-leitura.js']];
+//   recorte.js           Cropper.js: enquadrar capa/foto antes do envio (carregado so ao escolher a imagem)
+//   busca.js             MiniSearch: busca da Biblioteca na vitrine (carregado quando a pessoa digita)
+const modulos = [['entry.mjs', 'estudio-editor.js'], ['importar.mjs', 'estudio-importar.js'], ['exportar.mjs', 'estudio-exportar.js'], ['leitura.mjs', 'estudio-leitura.js'], ['recorte.mjs', 'recorte.js'], ['busca.mjs', 'busca.js']];
 
 for (const [entrada, saida] of modulos) {
   const arquivo = path.join(raiz, 'public', 'vendor', saida);
   await build({
     entryPoints: [path.join(raiz, 'tools', 'editor', entrada)],
-    outfile: arquivo, bundle: true, format: 'esm', minify: true, target: ['es2022'], legalComments: 'none', platform: 'browser',
+    outfile: arquivo, bundle: true, format: 'esm', minify: true, target: ['es2022'], legalComments: 'none', platform: 'browser', loader: { '.css': 'text' },
     banner: { js: `/* Estudio Entrelinhas: ${saida.replace('.js', '')}. Gerado por tools/editor/build.mjs a partir de bibliotecas MIT/BSD. Nao edite. */` },
   });
   console.log('gerado', path.relative(raiz, arquivo), (statSync(arquivo).size / 1024).toFixed(1) + ' KB');

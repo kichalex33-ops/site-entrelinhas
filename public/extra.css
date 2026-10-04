@@ -472,6 +472,9 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .pop-periodos{display:flex;gap:.4rem;flex-wrap:wrap;margin:-.6rem 0 1.2rem}
 .pop-nota{font-size:.75rem;margin-top:.6rem}
 .bib-ordem{display:flex;gap:.6rem;align-items:center;justify-content:center;margin:1.4rem 0 .8rem;font-size:.82rem;color:var(--muted)}
+.bib-busca{display:flex;justify-content:center;margin:0 0 .8rem;padding:0 16px}
+.bib-busca input{width:min(460px,100%);background:var(--panel);color:var(--text);border:1px solid var(--line-strong);border-radius:999px;padding:.6rem 1.1rem;font:inherit;font-size:.9rem}
+.bib-busca input:focus{outline:none;border-color:var(--accent)}
 .bib-ordem select{background:var(--panel);color:var(--text);border:1px solid var(--line-strong);border-radius:999px;padding:.45rem .9rem;font:inherit;font-size:.82rem}
 .rel-card .badge-new{align-self:flex-start}
 

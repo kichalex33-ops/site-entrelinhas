@@ -190,8 +190,11 @@
     try { const p = await api(`/api/leitor/${me.slug}`); foto = p.foto; f.bio.value = p.bio; f.local.value = p.local; f.privado.checked = p.privado; mostrar(); } catch { /* segue com o basico */ }
     document.getElementById('ltArquivo').addEventListener('change', async (e) => {
       const arq = e.target.files[0]; if (!arq) return;
-      nota.innerHTML = note('Enviando a foto...', true);
-      try { foto = await EL.enviarImagem(arq); mostrar(); nota.innerHTML = note('Foto pronta. Clique em Salvar perfil.', true); } catch (err) { nota.innerHTML = note(err.message); }
+      try {
+        const rec = await EL.recortar(arq, { proporcao: 1, largura: 600, redondo: true, titulo: 'Ajustar sua foto' });
+        e.target.value = ''; if (!rec) return;
+        nota.innerHTML = note('Enviando a foto...', true);
+        foto = await EL.enviarImagem(rec); mostrar(); nota.innerHTML = note('Foto pronta. Clique em Salvar perfil.', true); } catch (err) { nota.innerHTML = note(err.message); }
       e.target.value = '';
     });
     document.getElementById('ltTirar').addEventListener('click', () => { foto = ''; mostrar(); });
@@ -269,7 +272,9 @@
       const f = inp.files[0]; if (!f) return;
       const holder = inp.closest('.photo-row');
       try {
-        const blob = await shrink(f);
+        const rec = await EL.recortar(f, { proporcao: 3 / 4, largura: 900, titulo: 'Ajustar a foto de perfil' });
+        inp.value = ''; if (!rec) return;
+        const blob = await shrink(rec);
         const r = await fetch('/api/image', { method: 'POST', headers: { 'X-Requested-With': 'fetch', 'Content-Type': blob.type }, body: blob });
         const d = await r.json(); if (!r.ok) throw new Error(d.erro || 'Falha no envio.');
         setAt(P, inp.dataset.up, d.id); editorView();
@@ -376,9 +381,11 @@
     });
     f.querySelector('input[type=file]').addEventListener('change', async (e) => {
       const arq = e.target.files[0]; if (!arq) return;
-      estado.innerHTML = note('Enviando a capa...', true);
       try {
-        const blob = await shrink(arq);
+        const rec = await EL.recortar(arq, { titulo: 'Ajustar a capa' });
+        e.target.value = ''; if (!rec) return;
+        estado.innerHTML = note('Enviando a capa...', true);
+        const blob = await shrink(rec);
         const r = await fetch('/api/image', { method: 'POST', headers: { 'X-Requested-With': 'fetch', 'Content-Type': blob.type }, body: blob });
         const d = await r.json(); if (!r.ok) throw new Error(d.erro || 'Falha no envio.');
         o.capa = d.id; desenharCapa(); estado.innerHTML = note('Capa enviada.', true);
