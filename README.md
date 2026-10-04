@@ -10,7 +10,7 @@ Um Cloudflare Worker (`src/`) com banco D1 serve a API, e os arquivos de `public
 |---|---|---|
 | Vitrine: página inicial, Biblioteca (com busca), Lançamentos, Projetos, Serviços | `index.html`, `app.js` | `src/vitrine.js` (livros), `src/site.js` (notícias, projetos, selos, serviços e contato, editáveis pelos moderadores) |
 | Contas: login, cadastro de leitor (Turnstile) e de autor (por convite), recuperar senha, apagar conta | `conta.html`, `conta.js`, `recuperar.html`, `redefinir.html` | `src/index.js` |
-| Perfil público do autor e lista de autores | `autor.html`, `autores.html` | `src/index.js` (`profiles`) |
+| Perfil público do autor e lista de autores | `autor.html`, `autores.html` | `src/index.js` (`profiles`); título e prévia de link do autor e do livro saem do servidor (`src/meta.js`) |
 | Estúdio: editor de manuscrito com autosave, notas, fichas, links `[[...]]`, tags, busca, importar/exportar DOCX/TXT/Markdown, publicar e agendar | `estudio.html`, `estudio/*.js` | `src/studio.js` |
 | Leitura pública das obras publicadas (cópia feita ao publicar, não o rascunho) | `ler.html` | `src/leitura.js` |
 | Página do livro: personagens, galeria, materiais, extras, avaliações, favoritos | `obra.html`, `reviews.js` | `src/livro.js` |
@@ -41,6 +41,8 @@ npm run build:editor  # só depois de mexer em tools/editor/ ou atualizar biblio
 Push na `main` → GitHub Actions (`.github/workflows/deploy.yml`):
 **testes de unidade + navegador → migrações do D1 → `wrangler deploy` → conferência do site no ar** (`tools/smoke.mjs`).
 Se um teste falha, nada vai para produção. Pull requests rodam só os testes.
+
+Os testes de navegador rodam pelo `tools/e2e/rodar.mjs`: um arquivo que falha roda de novo uma vez, sozinho, e se passar aparece no log como **instável**. Alguns testes do Estúdio estouram o tempo de espera de vez em quando sob carga (sempre um diferente); a causa ainda não foi achada.
 
 O site fica na conta Cloudflare do Entrelinhas, não na do Sinal/Ruído. Não rode `wrangler deploy` local sem conferir `wrangler whoami`. Mudanças em dados de produção também vão por migração.
 

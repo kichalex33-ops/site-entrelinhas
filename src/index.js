@@ -8,6 +8,7 @@ import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOfert
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine, livrosPublicos } from './vitrine.js';
 import { verLeitor, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
+import { comMetadados } from './meta.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
@@ -706,7 +707,8 @@ export default {
     }
 
     if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
-    if (!path.startsWith('/api/')) return env.ASSETS.fetch(req);
+    // paginas de livro e autor saem com titulo, descricao e previa de link proprios (src/meta.js)
+    if (!path.startsWith('/api/')) return comMetadados(req, env, await env.ASSETS.fetch(req), { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
 
     // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
     if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);

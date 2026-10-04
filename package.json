@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --no-warnings --test \"tools/tests/*.test.mjs\"",
     "build:editor": "node tools/editor/build.mjs",
-    "e2e": "node --no-warnings --test --test-concurrency=2 \"tools/e2e/*.test.mjs\""
+    "e2e": "node tools/e2e/rodar.mjs"
   },
   "devDependencies": {
     "cropperjs": "^1.6.3",
