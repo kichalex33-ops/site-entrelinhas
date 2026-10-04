@@ -81,6 +81,15 @@ async function tooManyFails(env, key) {
   const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM login_fails WHERE key = ? AND at > ?').bind(key, now() - FAIL_WINDOW).first();
   return r.n >= FAIL_LIMIT;
 }
+// limite geral de escritas: toda rota que muda algo (Estudio, favoritos, curtidas, seguir, estantes...).
+// Conta por sessao (ou por IP, sem login) no Rate Limiting do Cloudflare (wrangler.jsonc: ratelimits ESCRITAS).
+// Sem a ligacao (testes locais) nao limita. Se o limitador falhar, deixa passar: ele protege, nao derruba o site.
+async function excedeuEscritas(env, req) {
+  if (!env.ESCRITAS) return false;
+  const sid = getCookie(req, 'sid');
+  const chave = sid ? 's:' + (await sha256Hex(sid)).slice(0, 32) : 'ip:' + (req.headers.get('CF-Connecting-IP') || '?');
+  try { return !(await env.ESCRITAS.limit({ key: chave })).success; } catch { return false; }
+}
 const recordFail = (env, key) => env.DB.prepare('INSERT INTO login_fails (key, at) VALUES (?, ?)').bind(key, now()).run();
 
 // ---------- validacao ----------
@@ -700,6 +709,7 @@ export default {
 
     // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
     if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
+    if (req.method !== 'GET' && await excedeuEscritas(env, req)) return fail('Muitas ações em pouco tempo. Espere um minuto e tente de novo.', 429);
 
     // publicacao do Estudio: so com a chave ligada (wrangler.jsonc: ESTUDIO_PUBLICACAO = "on")
     const publicacao = env.ESTUDIO_PUBLICACAO === 'on';
