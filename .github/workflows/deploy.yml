@@ -1,4 +1,5 @@
-# Deploy no Cloudflare a cada push na main: aplica as migracoes do D1 e publica o Worker.
+# Deploy no Cloudflare a cada push na main: testes -> migracoes do D1 -> publicar o Worker -> conferir o site no ar.
+# Se algum teste falhar, nada chega a producao (nem as migracoes).
 # Precisa de dois segredos no GitHub (Settings > Secrets and variables > Actions), da conta Cloudflare do Entrelinhas:
 #   CLOUDFLARE_API_TOKEN   token com permissao "Edit Cloudflare Workers" + "D1: Edit"
 #   CLOUDFLARE_ACCOUNT_ID  ID da conta (aparece na lateral do painel do Cloudflare)
@@ -7,13 +8,36 @@ name: Deploy
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
-concurrency: deploy-producao
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  testes:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Testes de unidade e da API
+        run: npm test
+      - name: Testes no navegador (Chrome do runner)
+        run: node --no-warnings --test --test-concurrency=2 "tools/e2e/*.test.mjs"
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+
+  deploy:
+    needs: testes
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploy-producao
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,3 +56,5 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Conferir o site no ar
+        run: node tools/smoke.mjs https://entrelinhasbr.com.br
