@@ -245,6 +245,7 @@ input[type=file]::file-selector-button{
         <button class="btn" id="zoomIn" title="Ampliar">+</button>
         <button class="btn" id="zoomFit" title="Ajustar à tela">Ajustar</button>
       </div>
+      <button class="btn" id="btn3d">🧊 Ver em 3D</button>
       <button class="btn" id="btnJpg">⬇ Exportar JPG</button>
       <button class="btn primary" id="btnPdf">⬇ Exportar PDF</button>
     </div>
@@ -1010,7 +1011,7 @@ function bindInspector() {
 /* =====================================================================
    EXPORTAÇÃO (JPG / PDF)
    ===================================================================== */
-async function exportFile(type) {
+async function captureCanvas() {
   selectBlock(null);
   await document.fonts.ready;
 
@@ -1047,13 +1048,20 @@ async function exportFile(type) {
     AB.style.transform = prevTransform;
     STAGE.style.width = prevStageW;
     STAGE.style.height = prevStageH;
-    return;
+    return null;
   }
 
   AB.classList.remove('exporting');
   AB.style.transform = prevTransform;
   STAGE.style.width = prevStageW;
   STAGE.style.height = prevStageH;
+  return canvas;
+}
+
+async function exportFile(type) {
+  let canvas = await captureCanvas();
+  if (!canvas) return;
+  const m = getMetrics();
 
   /* NOVO: se o usuário NÃO quer sangria no arquivo exportado,
      recorta as bordas externas correspondentes à sangria. */
@@ -1094,6 +1102,40 @@ async function exportFile(type) {
     pdf.save(`capa_${Date.now()}.pdf`);
     toast('PDF exportado com sucesso!');
   }
+}
+
+/* Visualização 3D: recorta sangria e orelhas (o 3D usa só capa+lombada+contracapa)
+   e entrega a imagem ao visualizador em um iframe. */
+async function view3D() {
+  const full = await captureCanvas();
+  if (!full) return;
+  const m = getMetrics();
+  const sx = Math.round(full.width  * (S.bleed + S.flap) / m.totalW);
+  const sy = Math.round(full.height * S.bleed / m.totalH);
+  const c = document.createElement('canvas');
+  c.width = full.width - 2 * sx;
+  c.height = full.height - 2 * sy;
+  c.getContext('2d').drawImage(full, sx, sy, c.width, c.height, 0, 0, c.width, c.height);
+  const payload = { tipo: '3d-capa', img: c.toDataURL('image/jpeg', 0.92), w: S.pageW, h: S.pageH, spine: m.spine };
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:#121212';
+  const fr = document.createElement('iframe');
+  fr.src = 'visualizador-capa.html';
+  fr.style.cssText = 'width:100%;height:100%;border:0';
+  const x = document.createElement('button');
+  x.textContent = '✕ Voltar ao editor';
+  x.className = 'btn';
+  x.style.cssText = 'position:absolute;top:12px;right:12px;z-index:2';
+  const onMsg = (e) => {
+    if (e.origin === location.origin && e.source === fr.contentWindow && e.data && e.data.tipo === '3d-pronto') {
+      fr.contentWindow.postMessage(payload, location.origin);
+    }
+  };
+  x.onclick = () => { window.removeEventListener('message', onMsg); ov.remove(); };
+  window.addEventListener('message', onMsg);
+  ov.append(fr, x);
+  document.body.append(ov);
 }
 
 /* =====================================================================
@@ -1191,6 +1233,7 @@ function bindUI() {
   $('zoomFit').addEventListener('click', zoomToFit);
 
   /* --- Exportação --- */
+  $('btn3d').addEventListener('click', view3D);
   $('btnJpg').addEventListener('click', () => exportFile('jpg'));
   $('btnPdf').addEventListener('click', () => exportFile('pdf'));
 

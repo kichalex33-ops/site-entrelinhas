@@ -508,6 +508,19 @@
             }
         });
 
+        // Recebe a capa do editor (visualização 3D integrada)
+        window.addEventListener('message', (e) => {
+            const d = e.data;
+            if (e.origin !== location.origin || !d || d.tipo !== '3d-capa') return;
+            bookWidthInput.value = d.w;
+            bookHeightInput.value = d.h;
+            bookSpineInput.value = d.spine;
+            const img = new Image();
+            img.onload = () => { loadedImage = img; updateBook(); };
+            img.src = d.img;
+        });
+        if (window.parent !== window) window.parent.postMessage({ tipo: '3d-pronto' }, location.origin);
+
         // Baixar Imagem
         document.getElementById('downloadBtn').addEventListener('click', () => {
             renderer.render(scene, camera);
