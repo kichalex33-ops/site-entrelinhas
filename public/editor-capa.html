@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BookCover Studio — Gerador de Capas (300 DPI)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@400;700;900&family=Montserrat:wght@400;600;800;900&family=Lora:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box}
+
+:root{
+  --bg:#0a0d12; --bg-elev:#11151c; --panel:#141922; --panel-2:#1a212b;
+  --border:#232c38; --border-2:#2f3a49;
+  --text:#e7edf5; --text-dim:#93a1b3; --text-mute:#63707f;
+  --accent:#4d8dff; --accent-2:#8b5cf6; --danger:#ff5f6d; --ok:#35d0a5;
+  --fold:#22d3ee; --trim:#ff4d8d;
+}
+
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  font-size:13px; overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* ---------- TOPBAR ---------- */
+#topbar{
+  flex:none; height:58px; display:flex; align-items:center; gap:18px;
+  padding:0 16px; background:var(--bg-elev); border-bottom:1px solid var(--border); z-index:20;
+}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .logo{
+  width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:17px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 4px 14px rgba(77,141,255,.3);
+}
+.brand h1{font-size:14px;margin:0;font-weight:700;letter-spacing:-.01em}
+.brand span{font-size:10.5px;color:var(--text-mute);letter-spacing:.04em}
+.top-spacer{flex:1}
+.top-actions{display:flex;align-items:center;gap:10px}
+
+.zoom-group{
+  display:flex;align-items:center;gap:4px;background:var(--panel);
+  border:1px solid var(--border);border-radius:9px;padding:3px;
+}
+.zoom-group .btn{border:none;background:transparent;padding:5px 9px}
+.zoom-group .btn:hover{background:var(--panel-2)}
+#zoomLabel{min-width:46px;text-align:center;font-size:11.5px;color:var(--text-dim);
+  font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ---------- LAYOUT ---------- */
+#main{flex:1;display:flex;min-height:0}
+.sidebar{
+  flex:none;width:292px;background:var(--panel);overflow-y:auto;
+  padding:16px 16px 60px;border-right:1px solid var(--border);
+}
+.sidebar.right{border-right:none;border-left:1px solid var(--border)}
+.sidebar::-webkit-scrollbar{width:9px}
+.sidebar::-webkit-scrollbar-thumb{background:#232c38;border-radius:9px;border:2px solid var(--panel)}
+.sidebar::-webkit-scrollbar-thumb:hover{background:#33404f}
+
+/* ---------- WORKSPACE ---------- */
+#workspace{
+  flex:1;min-width:0;overflow:auto;display:flex;padding:48px;
+  background-color:#0c1017;
+  background-image:radial-gradient(circle,#1a212c 1px,transparent 1px);
+  background-size:22px 22px;
+}
+#workspace::-webkit-scrollbar{width:12px;height:12px}
+#workspace::-webkit-scrollbar-thumb{background:#232c38;border-radius:9px;border:3px solid #0c1017}
+#workspace::-webkit-scrollbar-thumb:hover{background:#33404f}
+#stage{margin:auto;position:relative;flex:none}
+
+/* ---------- ARTBOARD ---------- */
+#artboard{
+  position:absolute;top:0;left:0;transform-origin:0 0;
+  overflow:hidden;
+  box-shadow:0 26px 70px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.07);
+  --gw:2px; --dash:14px; --lfs:14px;
+}
+.ab-layer{position:absolute;inset:0;pointer-events:none}
+
+/* ---------- GUIAS ---------- */
+.guide{position:absolute;pointer-events:none}
+.guide.v{top:0;bottom:0;width:var(--gw);margin-left:calc(var(--gw)/-2)}
+.guide.h{left:0;right:0;height:var(--gw);margin-top:calc(var(--gw)/-2)}
+
+.guide.trim.v{background-image:repeating-linear-gradient(to bottom,
+  var(--trim) 0,var(--trim) var(--dash),transparent var(--dash),transparent calc(var(--dash)*2))}
+.guide.trim.h{background-image:repeating-linear-gradient(to right,
+  var(--trim) 0,var(--trim) var(--dash),transparent var(--dash),transparent calc(var(--dash)*2))}
+.guide.fold.v{background-image:repeating-linear-gradient(to bottom,
+  var(--fold) 0,var(--fold) calc(var(--dash)*.55),transparent calc(var(--dash)*.55),transparent calc(var(--dash)*1.55))}
+.guide.fold.h{background-image:repeating-linear-gradient(to right,
+  var(--fold) 0,var(--fold) calc(var(--dash)*.55),transparent calc(var(--dash)*.55),transparent calc(var(--dash)*1.55))}
+
+/* ---------- ZONAS ---------- */
+.zone{position:absolute}
+.zone.flap{background:rgba(77,141,255,.07)}
+.zone.spine{background:rgba(255,77,141,.11)}
+.zone.page{background:rgba(128,140,160,.035)}
+.zlabel{
+  position:absolute;left:0;right:0;bottom:calc(var(--gw)*3);
+  text-align:center;font-family:'Inter',sans-serif;font-size:var(--lfs);
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(120,132,150,.8);
+}
+.zlabel.vert{
+  left:50%;right:auto;bottom:auto;top:50%;
+  transform:translate(-50%,-50%) rotate(-90deg);white-space:nowrap;
+}
+
+/* ---------- BLOCOS DE TEXTO ---------- */
+.tblock{position:absolute;pointer-events:auto;cursor:move;touch-action:none;user-select:none}
+.tblock .tb-inner{white-space:pre-wrap;word-break:break-word;outline:none;min-height:1em}
+.tblock.editing{cursor:text}
+.tblock.editing .tb-inner{user-select:text;cursor:text}
+.tblock.selected::after{
+  content:'';position:absolute;inset:calc(var(--gw)*-4);
+  border:var(--gw) solid var(--accent);border-radius:calc(var(--gw)*2);
+  pointer-events:none;box-shadow:0 0 0 calc(var(--gw)*1.5) rgba(77,141,255,.18);
+}
+.tblock.editing::after{border-style:dashed}
+
+#artboard.exporting .guide,
+#artboard.exporting .zone,
+#artboard.exporting .tblock::after{display:none!important}
+
+/* ---------- UI COMPONENTS ---------- */
+.panel-section{margin-bottom:24px}
+.panel-section>h3{
+  font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--text-mute);
+  font-weight:700;margin:0 0 11px;display:flex;align-items:center;gap:9px;
+}
+.panel-section>h3::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.field{margin-bottom:11px}
+.field>label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:500}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+
+input[type=number],input[type=text],select,textarea{
+  width:100%;background:#0d1219;color:var(--text);border:1px solid var(--border);
+  border-radius:7px;padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;
+  transition:border-color .15s,box-shadow .15s;
+}
+input[type=number]:focus,input[type=text]:focus,select:focus,textarea:focus{
+  border-color:var(--accent);box-shadow:0 0 0 3px rgba(77,141,255,.15);
+}
+textarea{resize:vertical;line-height:1.5}
+select{cursor:pointer}
+input[type=color]{
+  width:100%;height:33px;padding:2px;cursor:pointer;background:#0d1219;
+  border:1px solid var(--border);border-radius:7px;
+}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:5px}
+input[type=file]{
+  width:100%;font-size:11.5px;color:var(--text-dim);
+  background:#0d1219;border:1px solid var(--border);border-radius:7px;padding:6px;
+}
+input[type=file]::file-selector-button{
+  background:var(--panel-2);color:var(--text);border:1px solid var(--border-2);
+  border-radius:5px;padding:4px 9px;font-family:inherit;font-size:11.5px;
+  font-weight:600;cursor:pointer;margin-right:8px;
+}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  background:var(--panel-2);color:var(--text);border:1px solid var(--border-2);
+  border-radius:8px;padding:8px 13px;font-size:12.5px;font-weight:600;font-family:inherit;
+  cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,transform .08s,filter .15s;
+}
+.btn:hover{background:#212a36;border-color:#3a4759}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(77,141,255,.28);
+}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn.danger{color:var(--danger);border-color:rgba(255,95,109,.3);background:rgba(255,95,109,.08)}
+.btn.danger:hover{background:rgba(255,95,109,.16)}
+.btn.block{width:100%}
+.btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.check{
+  display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-dim);
+  cursor:pointer;margin-bottom:9px;user-select:none;
+}
+.check input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+
+.summary{background:#0d1219;border:1px solid var(--border);border-radius:9px;padding:11px 12px;font-size:12px}
+.summary>div{display:flex;justify-content:space-between;padding:3.5px 0;gap:10px}
+.summary span:first-child{color:var(--text-mute)}
+.summary span:last-child{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+
+.empty-state{
+  font-size:12.5px;color:var(--text-mute);line-height:1.6;text-align:center;
+  padding:26px 14px;border:1px dashed var(--border-2);border-radius:10px;
+}
+.hint{font-size:11px;color:var(--text-mute);line-height:1.5;margin-top:6px}
+
+#toast{
+  position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(18px);
+  background:#1c2431;border:1px solid var(--border-2);padding:11px 22px;border-radius:10px;
+  font-size:13px;font-weight:500;opacity:0;pointer-events:none;
+  transition:opacity .25s,transform .25s;z-index:9999;box-shadow:0 12px 34px rgba(0,0,0,.5);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.spin{
+  width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
+  border-top-color:#fff;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <div class="logo">📖</div>
+      <div>
+        <h1>BookCover Studio</h1>
+        <span>CAPA ABERTA · 300 DPI</span>
+      </div>
+    </div>
+    <div class="top-spacer"></div>
+    <div class="top-actions">
+      <div class="zoom-group">
+        <button class="btn" id="zoomOut" title="Reduzir">−</button>
+        <span id="zoomLabel">100%</span>
+        <button class="btn" id="zoomIn" title="Ampliar">+</button>
+        <button class="btn" id="zoomFit" title="Ajustar à tela">Ajustar</button>
+      </div>
+      <button class="btn" id="btnJpg">⬇ Exportar JPG</button>
+      <button class="btn primary" id="btnPdf">⬇ Exportar PDF</button>
+    </div>
+  </header>
+
+  <div id="main">
+
+    <aside class="sidebar">
+      <div class="panel-section">
+        <h3>Documento</h3>
+        <div class="row">
+          <div class="field">
+            <label>Largura da Página (cm)</label>
+            <input type="number" id="inPageW" step="0.1" min="5" max="40" value="14.8">
+          </div>
+          <div class="field">
+            <label>Altura da Página (cm)</label>
+            <input type="number" id="inPageH" step="0.1" min="5" max="40" value="21">
+          </div>
+        </div>
+        <div class="field">
+          <label>Sangria (cm)</label>
+          <input type="number" id="inBleed" step="0.1" min="0" max="5" value="0.5">
+          <div class="hint">Margem extra em cada borda para o corte. Use 0 para não incluir.</div>
+        </div>
+        <label class="check"><input type="checkbox" id="inExportBleed" checked> Incluir sangria no arquivo exportado</label>
+        <div class="field">
+          <label>Número de Páginas</label>
+          <input type="number" id="inPages" step="2" min="8" max="2000" value="150">
+        </div>
+        <div class="field">
+          <label>Tamanho da Orelha (cm)</label>
+          <input type="number" id="inFlap" step="0.5" min="0" max="20" value="8">
+          <div class="hint">Use 0 para brochura sem orelha.</div>
+        </div>
+        <div class="field">
+          <label>Tipo de Papel (miolo)</label>
+          <select id="inPaper"></select>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Cálculo</h3>
+        <div class="summary">
+          <div><span>Papel</span><span id="sPaper">—</span></div>
+          <div><span>Espessura / folha</span><span id="sThick">—</span></div>
+          <div><span>Lombada</span><span id="sSpine">—</span></div>
+          <div><span>Largura total</span><span id="sTotalW">—</span></div>
+          <div><span>Altura total</span><span id="sTotalH">—</span></div>
+          <div><span>Pixels (300 DPI)</span><span id="sPx">—</span></div>
+        </div>
+      </div>
+
+      <!-- ============ IMAGENS DE FUNDO (reescrito) ============ -->
+      <div class="panel-section">
+        <h3>Imagens de Fundo</h3>
+
+        <div class="field">
+          <label>Área de destino</label>
+          <select id="inImgArea"></select>
+        </div>
+
+        <div class="field">
+          <label>Arquivo (JPG / PNG)</label>
+          <input type="file" id="inImage" accept="image/*">
+        </div>
+
+        <div class="field">
+          <label>Ajuste da área selecionada</label>
+          <select id="inImgFit">
+            <option value="cover">Preencher (cover)</option>
+            <option value="contain">Conter (contain)</option>
+            <option value="fill">Esticar</option>
+          </select>
+        </div>
+
+        <button class="btn block danger" id="btnClearImg">Remover imagem da área</button>
+        <button class="btn block danger" id="btnClearAllImg" style="margin-top:6px">Remover todas as imagens</button>
+
+        <div class="hint" id="imgStatus" style="margin-top:9px">—</div>
+      </div>
+      <!-- ============ /IMAGENS DE FUNDO ============ -->
+
+      <div class="panel-section">
+        <h3>Aparência</h3>
+        <div class="field">
+          <label>Cor de fundo da capa</label>
+          <input type="color" id="inBgColor" value="#ffffff">
+        </div>
+        <label class="check"><input type="checkbox" id="inShowGuides" checked> Mostrar guias (corte / vinco)</label>
+        <label class="check"><input type="checkbox" id="inShowZones" checked> Mostrar áreas e rótulos</label>
+      </div>
+
+      <div class="panel-section">
+        <h3>Elementos</h3>
+        <button class="btn block" id="btnAddText">＋ Adicionar bloco de texto</button>
+        <div class="hint">
+          Arraste os blocos pela capa. <strong>Duplo clique</strong> para editar o texto.
+          <strong>Delete</strong> remove o bloco selecionado.
+        </div>
+      </div>
+    </aside>
+
+    <main id="workspace">
+      <div id="stage">
+        <div id="artboard">
+          <div id="layerBg"      class="ab-layer"></div>
+          <div id="layerZones"   class="ab-layer"></div>
+          <div id="layerGuides"  class="ab-layer"></div>
+          <div id="layerContent" class="ab-layer"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="sidebar right">
+      <div class="panel-section">
+        <h3>Propriedades</h3>
+
+        <div id="inspectorEmpty" class="empty-state">
+          Nenhum elemento selecionado.<br>
+          Clique em um bloco de texto na capa.
+        </div>
+
+        <div id="inspectorBody" hidden>
+          <div class="field">
+            <label>Conteúdo</label>
+            <textarea id="pText" rows="3"></textarea>
+          </div>
+          <div class="field">
+            <label>Fonte</label>
+            <select id="pFont">
+              <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
+              <option value="'Lora', Georgia, serif">Lora</option>
+              <option value="'Montserrat', sans-serif">Montserrat</option>
+              <option value="Inter, sans-serif">Inter</option>
+              <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="'Times New Roman', serif">Times New Roman</option>
+              <option value="Arial, Helvetica, sans-serif">Arial</option>
+              <option value="'Courier New', monospace">Courier New</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Tamanho (pt)</label>
+              <input type="number" id="pSize" step="0.5" min="4" max="300" value="24">
+            </div>
+            <div class="field">
+              <label>Cor</label>
+              <input type="color" id="pColor" value="#111111">
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label>Alinhamento</label>
+              <select id="pAlign">
+                <option value="left">Esquerda</option>
+                <option value="center" selected>Centro</option>
+                <option value="right">Direita</option>
+                <option value="justify">Justificado</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Estilo</label>
+              <div style="display:flex;gap:6px">
+                <button class="btn" id="pBold"   style="flex:1;font-weight:800" title="Negrito">B</button>
+                <button class="btn" id="pItalic" style="flex:1;font-style:italic" title="Itálico">I</button>
+              </div>
+            </div>
+          </div>
+          <div class="row3">
+            <div class="field"><label>X (cm)</label>   <input type="number" id="pX" step="0.1"></div>
+            <div class="field"><label>Y (cm)</label>   <input type="number" id="pY" step="0.1"></div>
+            <div class="field"><label>Larg. (cm)</label><input type="number" id="pW" step="0.1" min="0.5"></div>
+          </div>
+          <button class="btn block danger" id="pDelete">🗑 Excluir bloco</button>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =====================================================================
+   BOOKCOVER STUDIO
+   ---------------------------------------------------------------------
+   Conversão cm → px a 300 DPI:
+      1 polegada = 2.54 cm
+      px = cm / 2.54 * 300   →   cm × 118.11023622
+   ===================================================================== */
+
+const DPI      = 300;
+const CM_TO_PX = DPI / 2.54;   // 118.11023622047244 px por cm
+const PX_TO_CM = 2.54 / DPI;   // 0.0084666... cm por px
+const PT_TO_PX = DPI / 72;     // 4.1666... px por pt (a 300 DPI)
+
+/* Tabela de papéis — espessura por FOLHA (a fórmula usa páginas/2) */
+const PAPERS = [
+  { id: 'polen90',     label: 'Pólen 90g',          thick: 0.0130 },
+  { id: 'polen80',     label: 'Pólen 80g',          thick: 0.0115 },
+  { id: 'offset75',    label: 'Offset 75g',         thick: 0.0100 },
+  { id: 'offset90',    label: 'Offset 90g',         thick: 0.0120 },
+  { id: 'sulfite75',   label: 'Sulfite 75g',        thick: 0.0100 },
+  { id: 'couche115',   label: 'Couché Matte 115g',  thick: 0.0095 },
+  { id: 'reciclato90', label: 'Reciclato 90g',      thick: 0.0125 },
+  { id: 'polen120',    label: 'Pólen 120g',         thick: 0.0160 },
+];
+
+/* Áreas onde imagens podem ser aplicadas (independentes entre si) */
+const IMG_AREAS = [
+  { id: 'full',      label: 'Capa inteira (base)' },
+  { id: 'flapLeft',  label: 'Orelha esquerda' },
+  { id: 'back',      label: 'Contracapa' },
+  { id: 'spine',     label: 'Lombada' },
+  { id: 'front',     label: 'Capa (frente)' },
+  { id: 'flapRight', label: 'Orelha direita' },
+];
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- Estado global ---------------- */
+const S = {
+  pageW: 14.8, pageH: 21.0, pages: 150, flap: 8.0,
+  paper: 'polen90', bgColor: '#ffffff',
+  bleed: 0.5,            // sangria (cm) em cada borda externa
+  exportBleed: true,     // incluir sangria no arquivo exportado?
+  showGuides: true, showZones: true,
+  /* Cada área guarda sua própria imagem e ajuste — nenhuma substitui a outra */
+  images: {
+    full:      { data: null, fit: 'cover' },
+    flapLeft:  { data: null, fit: 'cover' },
+    back:      { data: null, fit: 'cover' },
+    spine:     { data: null, fit: 'cover' },
+    front:     { data: null, fit: 'cover' },
+    flapRight: { data: null, fit: 'cover' },
+  },
+  imgTarget: 'front',    // área atualmente selecionada no painel
+  zoom: 0.35,
+};
+
+const AB           = $('artboard');
+const STAGE        = $('stage');
+const WORKSPACE    = $('workspace');
+const layerBg      = $('layerBg');
+const layerZones   = $('layerZones');
+const layerGuides  = $('layerGuides');
+const layerContent = $('layerContent');
+
+/* =====================================================================
+   HELPERS
+   ===================================================================== */
+const cmToPx = (cm) => cm * CM_TO_PX;
+const pxToCm = (px) => px * PX_TO_CM;
+
+function toast(msg, ms = 2200) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* =====================================================================
+   MÉTRICAS DO DOCUMENTO
+   ===================================================================== */
+function getMetrics() {
+  const paper  = PAPERS.find(p => p.id === S.paper) || PAPERS[0];
+  const spine  = (S.pages / 2) * paper.thick;                          // cm
+  const totalW = (2 * S.bleed) + (2 * S.flap) + (2 * S.pageW) + spine; // cm
+  const totalH = (2 * S.bleed) + S.pageH;                              // cm
+  return { paper, spine, totalW, totalH };
+}
+
+/* Posições (em cm) das colunas horizontais, da esquerda para a direita */
+function getColumns(m) {
+  const x0 = 0;                       // sangria esq.
+  const x1 = S.bleed;                 // início orelha esq.
+  const x2 = x1 + S.flap;             // início contracapa
+  const x3 = x2 + S.pageW;            // início lombada
+  const x4 = x3 + m.spine;            // início capa
+  const x5 = x4 + S.pageW;            // início orelha dir.
+  const x6 = x5 + S.flap;             // início sangria dir.
+  const x7 = x6 + S.bleed;            // fim do documento
+  return { x0, x1, x2, x3, x4, x5, x6, x7 };
+}
+
+/* =====================================================================
+   POPULAR O SELECT DE PAPEL
+   ===================================================================== */
+function initPaperSelect() {
+  const sel = $('inPaper');
+  sel.innerHTML = '';
+  PAPERS.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.label} — ${p.thick.toFixed(4).replace('.', ',')} cm/folha`;
+    sel.appendChild(opt);
+  });
+  sel.value = S.paper;
+  sel.addEventListener('change', (e) => {
+    S.paper = e.target.value;
+    rebuild();
+  });
+}
+
+/* =====================================================================
+   POPULAR O SELECT DE ÁREA DE IMAGEM  (NOVO)
+   ===================================================================== */
+function initImgAreaSelect() {
+  const sel = $('inImgArea');
+  sel.innerHTML = '';
+  IMG_AREAS.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.label;
+    sel.appendChild(opt);
+  });
+  sel.value = S.imgTarget;
+
+  sel.addEventListener('change', (e) => {
+    S.imgTarget = e.target.value;
+    syncImgPanel();
+  });
+
+  syncImgPanel();
+}
+
+/* Reflete o estado da área selecionada no painel */
+function syncImgPanel() {
+  const cur = S.images[S.imgTarget];
+  $('inImgFit').value = cur.fit;
+  $('inImage').value  = '';           // limpa o input (para permitir recarregar o mesmo arquivo)
+  updateImgStatus();
+}
+
+/* Lista quais áreas já têm imagem carregada */
+function updateImgStatus() {
+  const loaded = IMG_AREAS
+    .filter(a => S.images[a.id].data)
+    .map(a => a.label.replace(' (base)', ''));
+  $('imgStatus').textContent = loaded.length
+    ? '✓ Com imagem: ' + loaded.join(' · ')
+    : 'Nenhuma imagem carregada ainda.';
+}
+
+/* =====================================================================
+   CONSTRUÇÃO DA ARTBOARD (zonas + guias)
+   ===================================================================== */
+function rebuild() {
+  const m = getMetrics();
+  const Wpx = cmToPx(m.totalW);
+  const Hpx = cmToPx(m.totalH);
+
+  AB.style.width  = Wpx + 'px';
+  AB.style.height = Hpx + 'px';
+  AB.style.background = S.bgColor;
+
+  STAGE.style.width  = (Wpx * S.zoom) + 'px';
+  STAGE.style.height = (Hpx * S.zoom) + 'px';
+  AB.style.transform = `scale(${S.zoom})`;
+
+  buildBackground(m, Wpx, Hpx);
+  buildZones(m, Wpx, Hpx);
+  buildGuides(m, Wpx, Hpx);
+
+  updateSummary(m, Wpx, Hpx);
+  updateGuideScale();
+}
+
+/* ---------------- Fundo: desenha cada área com sua própria imagem ------- */
+function buildBackground(m, Wpx, Hpx) {
+  layerBg.innerHTML = '';
+  layerBg.style.background = S.bgColor;
+
+  const c = getColumns(m);
+
+  /* Mapeia cada área para sua faixa horizontal (em cm) dentro do documento */
+  const regionOf = (id) => {
+    switch (id) {
+      case 'full':      return { left: 0,     width: m.totalW };
+      case 'flapLeft':  return { left: c.x1,  width: S.flap };
+      case 'back':      return { left: c.x2,  width: S.pageW };
+      case 'spine':     return { left: c.x3,  width: m.spine };
+      case 'front':     return { left: c.x4,  width: S.pageW };
+      case 'flapRight': return { left: c.x5,  width: S.flap };
+    }
+    return null;
+  };
+
+  /* Ordem de desenho: 'full' primeiro (base) e depois as áreas específicas
+     por cima. Assim o usuário pode usar 1 imagem geral OU composições
+     separadas por área. */
+  const drawOrder = ['full', 'flapLeft', 'back', 'spine', 'front', 'flapRight'];
+
+  drawOrder.forEach(id => {
+    const slot = S.images[id];
+    if (!slot || !slot.data) return;
+
+    const r = regionOf(id);
+    if (!r || r.width <= 0) return;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `
+      position:absolute;
+      left:${cmToPx(r.left)}px; top:0;
+      width:${cmToPx(r.width)}px; height:${Hpx}px;
+      overflow:hidden;
+    `;
+
+    const img = document.createElement('img');
+    img.src = slot.data;
+    img.style.cssText = `width:100%;height:100%;display:block;object-fit:${
+      slot.fit === 'fill' ? 'fill' : slot.fit
+    };`;
+    wrap.appendChild(img);
+    layerBg.appendChild(wrap);
+  });
+}
+
+/* ---------------- Zonas (áreas coloridas + rótulos) ---------------- */
+function buildZones(m, Wpx, Hpx) {
+  layerZones.innerHTML = '';
+  if (!S.showZones) return;
+
+  const c = getColumns(m);
+  const topTrim = cmToPx(S.bleed);
+  const botTrim = Hpx - cmToPx(S.bleed);
+  const hInner = botTrim - topTrim;
+
+  const zones = [
+    { x: c.x1, w: S.flap, cls: 'flap',  label: 'ORELHA' },
+    { x: c.x2, w: S.pageW, cls: 'page', label: 'CONTRACAPA' },
+    { x: c.x3, w: m.spine, cls: 'spine', label: 'LOMBADA', vert: true },
+    { x: c.x4, w: S.pageW, cls: 'page', label: 'CAPA' },
+    { x: c.x5, w: S.flap, cls: 'flap',  label: 'ORELHA' },
+  ];
+
+  zones.forEach(z => {
+    const el = document.createElement('div');
+    el.className = `zone ${z.cls}`;
+    el.style.left   = cmToPx(z.x) + 'px';
+    el.style.top    = topTrim + 'px';
+    el.style.width  = cmToPx(z.w) + 'px';
+    el.style.height = hInner + 'px';
+
+    const lab = document.createElement('div');
+    lab.className = 'zlabel' + (z.vert ? ' vert' : '');
+    lab.textContent = z.label;
+    el.appendChild(lab);
+
+    layerZones.appendChild(el);
+  });
+}
+
+/* ---------------- Guias (corte + vincos) ---------------- */
+function buildGuides(m, Wpx, Hpx) {
+  layerGuides.innerHTML = '';
+  if (!S.showGuides) return;
+
+  const c = getColumns(m);
+  const bleedPx = cmToPx(S.bleed);
+
+  /* Linhas de CORTE (sangria) — 4 linhas tracejadas magenta */
+  addGuide('v', 'trim', bleedPx);
+  addGuide('v', 'trim', Wpx - bleedPx);
+  addGuide('h', 'trim', bleedPx);
+  addGuide('h', 'trim', Hpx - bleedPx);
+
+  /* Linhas de VINCO (dobras) — 5 verticais tracejadas ciano */
+  [c.x1, c.x2, c.x3, c.x4, c.x5].forEach(xcm => {
+    if (xcm > 0.001 && xcm < m.totalW - 0.001) {
+      addGuide('v', 'fold', cmToPx(xcm));
+    }
+  });
+
+  function addGuide(dir, kind, pos) {
+    const g = document.createElement('div');
+    g.className = `guide ${kind} ${dir}`;
+    if (dir === 'v') g.style.left = pos + 'px';
+    else             g.style.top  = pos + 'px';
+    layerGuides.appendChild(g);
+  }
+}
+
+/* =====================================================================
+   ZOOM
+   ===================================================================== */
+function updateGuideScale() {
+  const z = S.zoom;
+  AB.style.setProperty('--gw',   (1.5 / z) + 'px');
+  AB.style.setProperty('--dash', (12  / z) + 'px');
+  AB.style.setProperty('--lfs',  (11  / z) + 'px');
+}
+
+function applyZoom(newZoom) {
+  S.zoom = Math.max(0.05, Math.min(4, newZoom));
+  const m = getMetrics();
+  const Wpx = cmToPx(m.totalW);
+  const Hpx = cmToPx(m.totalH);
+
+  STAGE.style.width  = (Wpx * S.zoom) + 'px';
+  STAGE.style.height = (Hpx * S.zoom) + 'px';
+  AB.style.transform = `scale(${S.zoom})`;
+
+  $('zoomLabel').textContent = Math.round(S.zoom * 100) + '%';
+  updateGuideScale();
+}
+
+function zoomToFit() {
+  const m = getMetrics();
+  const Wpx = cmToPx(m.totalW);
+  const Hpx = cmToPx(m.totalH);
+  const pad = 96;
+  const zx = (WORKSPACE.clientWidth  - pad) / Wpx;
+  const zy = (WORKSPACE.clientHeight - pad) / Hpx;
+  applyZoom(Math.min(zx, zy, 1));
+}
+
+/* =====================================================================
+   RESUMO NUMÉRICO (sidebar)
+   ===================================================================== */
+function updateSummary(m, Wpx, Hpx) {
+  $('sPaper').textContent  = m.paper.label;
+  $('sThick').textContent  = m.paper.thick.toFixed(4).replace('.', ',') + ' cm';
+  $('sSpine').textContent  = m.spine.toFixed(3).replace('.', ',') + ' cm';
+  $('sTotalW').textContent = m.totalW.toFixed(2).replace('.', ',') + ' cm';
+  $('sTotalH').textContent = m.totalH.toFixed(2).replace('.', ',') + ' cm';
+  $('sPx').textContent     = `${Math.round(Wpx)} × ${Math.round(Hpx)} px`;
+}
+
+/* =====================================================================
+   BLOCOS DE TEXTO  (inalterado)
+   ===================================================================== */
+let blocks = [];
+let nextId = 1;
+let selectedId = null;
+
+function addBlock(opts = {}) {
+  const m = getMetrics();
+  const c = getColumns(m);
+
+  const b = {
+    id: nextId++,
+    text: opts.text ?? 'Digite aqui',
+    x: opts.x ?? cmToPx(c.x4 + S.pageW * 0.15),
+    y: opts.y ?? cmToPx(S.bleed + S.pageH * 0.35),
+    w: opts.w ?? cmToPx(S.pageW * 0.7),
+    font: opts.font ?? "'Playfair Display', Georgia, serif",
+    size: opts.size ?? 36,
+    color: opts.color ?? '#111111',
+    align: opts.align ?? 'center',
+    bold: opts.bold ?? true,
+    italic: opts.italic ?? false,
+  };
+  blocks.push(b);
+  renderBlock(b);
+  selectBlock(b.id);
+  return b;
+}
+
+function renderBlock(b) {
+  const el = document.createElement('div');
+  el.className = 'tblock';
+  el.dataset.id = b.id;
+
+  const inner = document.createElement('div');
+  inner.className = 'tb-inner';
+  inner.textContent = b.text;
+  el.appendChild(inner);
+
+  layerContent.appendChild(el);
+  b.el = el;
+  b.inner = inner;
+
+  applyBlockStyle(b);
+  positionBlock(b);
+  attachBlockEvents(b);
+}
+
+function applyBlockStyle(b) {
+  const inner = b.inner;
+  inner.style.fontFamily = b.font;
+  inner.style.fontSize   = (b.size * PT_TO_PX) + 'px';
+  inner.style.color      = b.color;
+  inner.style.textAlign  = b.align;
+  inner.style.fontWeight = b.bold ? '800' : '400';
+  inner.style.fontStyle  = b.italic ? 'italic' : 'normal';
+  inner.style.lineHeight = '1.15';
+  b.el.style.width = b.w + 'px';
+}
+
+function positionBlock(b) {
+  b.el.style.left = b.x + 'px';
+  b.el.style.top  = b.y + 'px';
+}
+
+function selectBlock(id) {
+  if (selectedId && selectedId !== id) {
+    const prev = blocks.find(x => x.id === selectedId);
+    if (prev && prev.el) prev.el.classList.remove('selected');
+  }
+  selectedId = id;
+
+  if (id == null) {
+    inspectorEmpty.hidden = false;
+    inspectorBody.hidden  = true;
+    return;
+  }
+  const b = blocks.find(x => x.id === id);
+  if (!b) return;
+  b.el.classList.add('selected');
+  inspectorEmpty.hidden = true;
+  inspectorBody.hidden  = false;
+  syncInspector(b);
+}
+
+function attachBlockEvents(b) {
+  b.el.addEventListener('pointerdown', (e) => {
+    if (b.el.classList.contains('editing')) return;
+    if (e.button !== 0) return;
+    e.preventDefault();
+    selectBlock(b.id);
+
+    const startX = e.clientX, startY = e.clientY;
+    const ox = b.x, oy = b.y;
+
+    b.el.setPointerCapture(e.pointerId);
+
+    const onMove = (ev) => {
+      const dx = (ev.clientX - startX) / S.zoom;
+      const dy = (ev.clientY - startY) / S.zoom;
+      b.x = ox + dx;
+      b.y = oy + dy;
+      positionBlock(b);
+      syncInspectorPosition(b);
+    };
+    const onUp = () => {
+      try { b.el.releasePointerCapture(e.pointerId); } catch (_) {}
+      b.el.removeEventListener('pointermove', onMove);
+      b.el.removeEventListener('pointerup', onUp);
+      b.el.removeEventListener('pointercancel', onUp);
+    };
+    b.el.addEventListener('pointermove', onMove);
+    b.el.addEventListener('pointerup', onUp);
+    b.el.addEventListener('pointercancel', onUp);
+  });
+
+  b.el.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    startEditing(b);
+  });
+}
+
+function startEditing(b) {
+  b.el.classList.add('editing');
+  b.inner.contentEditable = 'true';
+  b.inner.focus();
+
+  const r = document.createRange();
+  r.selectNodeContents(b.inner);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+
+  const finish = () => {
+    b.text = b.inner.innerText.replace(/\u00A0/g, ' ');
+    b.inner.contentEditable = 'false';
+    b.el.classList.remove('editing');
+    syncInspector(b);
+  };
+  b.inner.addEventListener('blur', finish, { once: true });
+
+  b.inner.addEventListener('keydown', function onKey(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); b.inner.blur(); }
+  });
+}
+
+function deleteBlock(id) {
+  const idx = blocks.findIndex(b => b.id === id);
+  if (idx === -1) return;
+  const b = blocks[idx];
+  if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el);
+  blocks.splice(idx, 1);
+  if (selectedId === id) selectBlock(null);
+}
+
+/* =====================================================================
+   INSPECTOR (painel direito)  (inalterado)
+   ===================================================================== */
+function syncInspector(b) {
+  $('pText').value   = b.text;
+  $('pFont').value   = b.font;
+  $('pSize').value   = b.size;
+  $('pColor').value  = b.color;
+  $('pAlign').value  = b.align;
+  $('pBold').classList.toggle('active', b.bold);
+  $('pItalic').classList.toggle('active', b.italic);
+  syncInspectorPosition(b);
+}
+
+function syncInspectorPosition(b) {
+  $('pX').value = pxToCm(b.x).toFixed(2);
+  $('pY').value = pxToCm(b.y).toFixed(2);
+  $('pW').value = pxToCm(b.w).toFixed(2);
+}
+
+function getSelected() {
+  return blocks.find(b => b.id === selectedId) || null;
+}
+
+function bindInspector() {
+  $('pText').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.text = e.target.value;
+    b.inner.textContent = b.text;
+  });
+  $('pFont').addEventListener('change', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.font = e.target.value; applyBlockStyle(b);
+  });
+  $('pSize').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.size = parseFloat(e.target.value) || 12; applyBlockStyle(b);
+  });
+  $('pColor').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.color = e.target.value; applyBlockStyle(b);
+  });
+  $('pAlign').addEventListener('change', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.align = e.target.value; applyBlockStyle(b);
+  });
+  $('pBold').addEventListener('click', () => {
+    const b = getSelected(); if (!b) return;
+    b.bold = !b.bold; applyBlockStyle(b);
+    $('pBold').classList.toggle('active', b.bold);
+  });
+  $('pItalic').addEventListener('click', () => {
+    const b = getSelected(); if (!b) return;
+    b.italic = !b.italic; applyBlockStyle(b);
+    $('pItalic').classList.toggle('active', b.italic);
+  });
+  $('pX').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.x = cmToPx(parseFloat(e.target.value) || 0); positionBlock(b);
+  });
+  $('pY').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.y = cmToPx(parseFloat(e.target.value) || 0); positionBlock(b);
+  });
+  $('pW').addEventListener('input', (e) => {
+    const b = getSelected(); if (!b) return;
+    b.w = cmToPx(parseFloat(e.target.value) || 1); applyBlockStyle(b);
+  });
+  $('pDelete').addEventListener('click', () => {
+    const b = getSelected(); if (b) deleteBlock(b.id);
+  });
+}
+
+/* =====================================================================
+   EXPORTAÇÃO (JPG / PDF)
+   ===================================================================== */
+async function exportFile(type) {
+  selectBlock(null);
+  await document.fonts.ready;
+
+  const m = getMetrics();
+  const Wpx = cmToPx(m.totalW);
+  const Hpx = cmToPx(m.totalH);
+
+  const prevTransform = AB.style.transform;
+  const prevStageW = STAGE.style.width;
+  const prevStageH = STAGE.style.height;
+
+  AB.style.transform = 'none';
+  AB.classList.add('exporting');
+
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  let canvas;
+  try {
+    canvas = await html2canvas(AB, {
+      scale: 1,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: S.bgColor,
+      width: Wpx,
+      height: Hpx,
+      windowWidth: Wpx,
+      windowHeight: Hpx,
+      scrollX: 0, scrollY: 0,
+    });
+  } catch (err) {
+    console.error(err);
+    toast('Falha ao gerar a imagem.');
+    AB.classList.remove('exporting');
+    AB.style.transform = prevTransform;
+    STAGE.style.width = prevStageW;
+    STAGE.style.height = prevStageH;
+    return;
+  }
+
+  AB.classList.remove('exporting');
+  AB.style.transform = prevTransform;
+  STAGE.style.width = prevStageW;
+  STAGE.style.height = prevStageH;
+
+  /* NOVO: se o usuário NÃO quer sangria no arquivo exportado,
+     recorta as bordas externas correspondentes à sangria. */
+  if (!S.exportBleed && S.bleed > 0) {
+    const bpX = Math.round(canvas.width  * (S.bleed / m.totalW));
+    const bpY = Math.round(canvas.height * (S.bleed / m.totalH));
+    const newW = canvas.width  - 2 * bpX;
+    const newH = canvas.height - 2 * bpY;
+    if (newW > 0 && newH > 0) {
+      const cropped = document.createElement('canvas');
+      cropped.width  = newW;
+      cropped.height = newH;
+      cropped.getContext('2d').drawImage(
+        canvas, bpX, bpY, newW, newH, 0, 0, newW, newH
+      );
+      canvas = cropped;
+    }
+  }
+
+  if (type === 'jpg') {
+    const a = document.createElement('a');
+    a.download = `capa_${Date.now()}.jpg`;
+    a.href = canvas.toDataURL('image/jpeg', 0.95);
+    a.click();
+    toast('JPG exportado com sucesso!');
+  } else {
+    const { jsPDF } = window.jspdf;
+    const pdfW = pxToCm(canvas.width);
+    const pdfH = pxToCm(canvas.height);
+    const pdf = new jsPDF({
+      orientation: pdfW > pdfH ? 'landscape' : 'portrait',
+      unit: 'cm',
+      format: [pdfW, pdfH],
+      compress: true,
+    });
+    const img = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(img, 'JPEG', 0, 0, pdfW, pdfH);
+    pdf.save(`capa_${Date.now()}.pdf`);
+    toast('PDF exportado com sucesso!');
+  }
+}
+
+/* =====================================================================
+   EVENTOS DE UI
+   ===================================================================== */
+function bindUI() {
+
+  /* --- Inputs do documento --- */
+  $('inPageW').addEventListener('input', (e) => {
+    S.pageW = Math.max(5, parseFloat(e.target.value) || 0); rebuild();
+  });
+  $('inPageH').addEventListener('input', (e) => {
+    S.pageH = Math.max(5, parseFloat(e.target.value) || 0); rebuild();
+  });
+  $('inPages').addEventListener('input', (e) => {
+    S.pages = Math.max(2, parseInt(e.target.value) || 0); rebuild();
+  });
+  $('inFlap').addEventListener('input', (e) => {
+    S.flap = Math.max(0, parseFloat(e.target.value) || 0); rebuild();
+  });
+
+  /* --- Sangria (cm) --- */
+  $('inBleed').addEventListener('input', (e) => {
+    S.bleed = Math.max(0, parseFloat(e.target.value) || 0); rebuild();
+  });
+
+  /* --- Incluir sangria no arquivo exportado --- */
+  $('inExportBleed').addEventListener('change', (e) => {
+    S.exportBleed = e.target.checked;
+  });
+
+  /* --- Cor de fundo --- */
+  $('inBgColor').addEventListener('input', (e) => {
+    S.bgColor = e.target.value;
+    AB.style.background = S.bgColor;
+    layerBg.style.background = S.bgColor;
+  });
+
+  /* --- Mostrar / ocultar --- */
+  $('inShowGuides').addEventListener('change', (e) => {
+    S.showGuides = e.target.checked; rebuild();
+  });
+  $('inShowZones').addEventListener('change', (e) => {
+    S.showZones = e.target.checked; rebuild();
+  });
+
+  /* --- Imagem: upload vai para a área selecionada (sem apagar as outras) --- */
+  $('inImage').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('Selecione um arquivo de imagem.'); return; }
+
+    const target = S.imgTarget;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      S.images[target].data = ev.target.result;
+      rebuild();
+      updateImgStatus();
+      const label = IMG_AREAS.find(a => a.id === target).label;
+      toast('Imagem aplicada em: ' + label);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  /* --- Ajuste: altera só a área selecionada --- */
+  $('inImgFit').addEventListener('change', (e) => {
+    S.images[S.imgTarget].fit = e.target.value;
+    rebuild();
+  });
+
+  /* --- Remover imagem apenas da área selecionada --- */
+  $('btnClearImg').addEventListener('click', () => {
+    S.images[S.imgTarget].data = null;
+    $('inImage').value = '';
+    rebuild();
+    updateImgStatus();
+    toast('Imagem removida da área selecionada.');
+  });
+
+  /* --- Remover TODAS as imagens --- */
+  $('btnClearAllImg').addEventListener('click', () => {
+    Object.keys(S.images).forEach(k => { S.images[k].data = null; });
+    $('inImage').value = '';
+    rebuild();
+    updateImgStatus();
+    toast('Todas as imagens foram removidas.');
+  });
+
+  /* --- Adicionar texto --- */
+  $('btnAddText').addEventListener('click', () => addBlock());
+
+  /* --- Zoom --- */
+  $('zoomIn').addEventListener('click',  () => applyZoom(S.zoom * 1.25));
+  $('zoomOut').addEventListener('click', () => applyZoom(S.zoom * 0.8));
+  $('zoomFit').addEventListener('click', zoomToFit);
+
+  /* --- Exportação --- */
+  $('btnJpg').addEventListener('click', () => exportFile('jpg'));
+  $('btnPdf').addEventListener('click', () => exportFile('pdf'));
+
+  /* --- Delete global --- */
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    const editing = e.target.isContentEditable ||
+                    tag === 'input' || tag === 'textarea' || tag === 'select';
+    if (editing) return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId != null) {
+      e.preventDefault();
+      deleteBlock(selectedId);
+    }
+  });
+
+  /* --- Clique no vazio desmarca --- */
+  WORKSPACE.addEventListener('pointerdown', (e) => {
+    if (e.target === WORKSPACE || e.target === STAGE || e.target === AB ||
+        e.target.classList.contains('ab-layer') ||
+        e.target.classList.contains('zone') ||
+        e.target.classList.contains('zlabel')) {
+      selectBlock(null);
+    }
+  });
+
+  /* --- Redimensionamento --- */
+  window.addEventListener('resize', () => {
+    applyZoom(S.zoom);
+  });
+}
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+function boot() {
+  initPaperSelect();
+  initImgAreaSelect();        // ← NOVO: inicializa o seletor de área de imagem
+  bindUI();
+  bindInspector();
+  rebuild();
+
+  requestAnimationFrame(() => {
+    zoomToFit();
+
+    const m = getMetrics();
+    const c = getColumns(m);
+    addBlock({
+      text: 'O NOME DO\nVENTO',
+      x: cmToPx(c.x4 + S.pageW * 0.1),
+      y: cmToPx(S.bleed + S.pageH * 0.28),
+      w: cmToPx(S.pageW * 0.8),
+      size: 42, bold: true, align: 'center',
+      color: '#111111',
+    });
+    selectBlock(null);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

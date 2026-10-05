@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador 3D de Livro - Mockup</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+            --border-color: #333;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin: 0;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h1 span {
+            font-size: 0.8rem;
+            color: #888;
+            font-weight: normal;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: #aaa;
+            font-weight: 500;
+        }
+
+        input[type="file"] {
+            background: #2a2a2a;
+            border: 1px dashed #444;
+            padding: 10px;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input[type="file"]::file-selector-button {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background 0.2s;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: var(--accent-hover);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+        }
+
+        input[type="number"] {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        button.secondary {
+            background: #333;
+            color: #fff;
+        }
+
+        button.secondary:hover {
+            background: #444;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-value {
+            font-size: 0.8rem;
+            color: #fff;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* Canvas Container */
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #2a2a2a 0%, #0a0a0a 100%);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 1.2rem;
+            display: none;
+            pointer-events: none;
+        }
+
+        .instructions {
+            font-size: 0.8rem;
+            color: #666;
+            line-height: 1.4;
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>📖 Mockup 3D <span>Visualizador</span></h1>
+
+        <div class="control-group">
+            <label>1. Upload da Capa Aberta (JPG/PNG)</label>
+            <input type="file" id="imageInput" accept="image/jpeg, image/png">
+        </div>
+
+        <div class="control-group">
+            <label>2. Dimensões do Livro (cm)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" id="bookWidth" value="14.8" step="0.1" title="Largura da Capa">
+                <input type="number" id="bookHeight" value="21" step="0.1" title="Altura do Livro">
+                <input type="number" id="bookSpine" value="0.975" step="0.01" title="Largura da Lombada">
+            </div>
+            <small style="color:#666; font-size:0.7rem; margin-top:4px;">Largura x Altura x Lombada (cm)</small>
+        </div>
+
+        <div class="control-group">
+            <label>3. Acabamento</label>
+            <div class="slider-container">
+                <span style="font-size:0.8rem; width:60px;">Brilho</span>
+                <input type="range" id="roughnessSlider" min="0" max="1" step="0.05" value="0.4">
+            </div>
+            <div class="slider-container">
+                <span style="font-size:0.8rem; width:60px;">Metal</span>
+                <input type="range" id="metalnessSlider" min="0" max="1" step="0.05" value="0.1">
+            </div>
+        </div>
+
+        <!-- Bloco adicionado: Seletor de cor do fundo -->
+        <div class="control-group">
+            <label>4. Cor do Fundo</label>
+            <input type="color" id="bgColorPicker" value="#1e1e1e" style="width: 100%; height: 40px; cursor: pointer; background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 2px;">
+        </div>
+
+        <button id="resetCameraBtn" class="secondary">🔄 Resetar Câmera</button>
+        <button id="downloadBtn">📸 Baixar Imagem</button>
+
+        <div class="instructions">
+            <strong>Instruções:</strong><br>
+            1. Envie a imagem gerada pela ferramenta anterior.<br>
+            2. Insira as dimensões exatas em centímetros (Largura, Altura e Lombada).<br>
+            3. Arraste com o mouse para girar, use o scroll para dar zoom.
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <div id="loading">Processando imagem...</div>
+    </div>
+
+    <!-- Importação do Three.js e OrbitControls via CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuração da Cena 3D ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Câmera
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 5, 25);
+
+        // Renderizador
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        container.appendChild(renderer.domElement);
+
+        // Controles
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 5;
+        controls.maxDistance = 50;
+        controls.target.set(0, 0, 0);
+
+        // --- Iluminação ---
+        // Luz Ambiente
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+        scene.add(ambientLight);
+
+        // Luz Principal (Direita)
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.5);
+        dirLight1.position.set(10, 15, 10);
+        dirLight1.castShadow = true;
+        dirLight1.shadow.mapSize.width = 2048;
+        dirLight1.shadow.mapSize.height = 2048;
+        dirLight1.shadow.camera.near = 0.5;
+        dirLight1.shadow.camera.far = 50;
+        scene.add(dirLight1);
+
+        // Luz de Preenchimento (Esquerda)
+        const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight2.position.set(-10, 10, -10);
+        scene.add(dirLight2);
+
+        // Luz de Destaque (Trás)
+        const dirLight3 = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight3.position.set(0, -10, -15);
+        scene.add(dirLight3);
+
+        // Chão para sombra
+        const planeGeometry = new THREE.PlaneGeometry(100, 100);
+        const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -12; // Posição do chão
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // --- Variáveis Globais ---
+        let bookMesh = null;
+        let loadedImage = null;
+
+        // --- Função para Fatiar a Imagem ---
+        function sliceImage(image, spineWidthPercent) {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(image, 0, 0);
+
+            const totalWidth = image.width;
+            const spineWidth = totalWidth * (spineWidthPercent / 100);
+            const sideWidth = (totalWidth - spineWidth) / 2;
+
+            // 1. Contracapa (Esquerda)
+            const backCanvas = document.createElement('canvas');
+            backCanvas.width = sideWidth;
+            backCanvas.height = image.height;
+            const backCtx = backCanvas.getContext('2d');
+            backCtx.drawImage(image, 0, 0, sideWidth, image.height, 0, 0, sideWidth, image.height);
+
+            // 2. Lombada (Centro)
+            const spineCanvas = document.createElement('canvas');
+            spineCanvas.width = spineWidth;
+            spineCanvas.height = image.height;
+            const spineCtx = spineCanvas.getContext('2d');
+            spineCtx.drawImage(image, sideWidth, 0, spineWidth, image.height, 0, 0, spineWidth, image.height);
+
+            // 3. Capa (Direita)
+            const frontCanvas = document.createElement('canvas');
+            frontCanvas.width = sideWidth;
+            frontCanvas.height = image.height;
+            const frontCtx = frontCanvas.getContext('2d');
+            frontCtx.drawImage(image, sideWidth + spineWidth, 0, sideWidth, image.height, 0, 0, sideWidth, image.height);
+
+            return {
+                back: backCanvas.toDataURL('image/jpeg', 0.95),
+                spine: spineCanvas.toDataURL('image/jpeg', 0.95),
+                front: frontCanvas.toDataURL('image/jpeg', 0.95)
+            };
+        }
+
+        // --- Função para Criar o Livro 3D ---
+        function createBook(slicedImages, width, height, spinePercent) {
+            if (bookMesh) {
+                scene.remove(bookMesh);
+                bookMesh.geometry.dispose();
+                bookMesh.material.forEach(m => m.dispose());
+            }
+
+            // Proporções
+            const aspect = width / height;
+            const bookHeight = 10; // Tamanho base na cena 3D
+            const bookWidth = bookHeight * aspect;
+            const spineWidth = bookWidth * (spinePercent / 100);
+
+            // Carregar Texturas
+            const textureLoader = new THREE.TextureLoader();
+            
+            const frontTexture = textureLoader.load(slicedImages.front);
+            frontTexture.colorSpace = THREE.SRGBColorSpace;
+            
+            const backTexture = textureLoader.load(slicedImages.back);
+            backTexture.colorSpace = THREE.SRGBColorSpace;
+            
+            const spineTexture = textureLoader.load(slicedImages.spine);
+            spineTexture.colorSpace = THREE.SRGBColorSpace;
+
+            // Materiais
+            const roughness = parseFloat(document.getElementById('roughnessSlider').value);
+            const metalness = parseFloat(document.getElementById('metalnessSlider').value);
+
+            const frontMat = new THREE.MeshStandardMaterial({ map: frontTexture, roughness: roughness, metalness: metalness });
+            const backMat = new THREE.MeshStandardMaterial({ map: backTexture, roughness: roughness, metalness: metalness });
+            const spineMat = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: roughness, metalness: metalness });
+            
+            // Material das Páginas (Branco/Off-white)
+            const pagesMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.9, metalness: 0.0 });
+
+            // Geometria da Caixa (Largura, Altura, Profundidade)
+            // Ordem das faces: right, left, top, bottom, front, back
+            const geometry = new THREE.BoxGeometry(bookWidth, bookHeight, spineWidth);
+            
+            // Aplicar materiais
+            // Frente = Capa, Trás = Contracapa, Esquerda = Lombada, Direita = Páginas, Topo/Base = Páginas
+            const materials = [
+                pagesMat,  // Right (Páginas)
+                spineMat,  // Left (Lombada)
+                pagesMat,  // Top (Páginas)
+                pagesMat,  // Bottom (Páginas)
+                frontMat,  // Front (Capa)
+                backMat    // Back (Contracapa)
+            ];
+
+            bookMesh = new THREE.Mesh(geometry, materials);
+            bookMesh.castShadow = true;
+            bookMesh.receiveShadow = true;
+            
+            // Centralizar o livro na cena
+            bookMesh.position.y = 0; 
+            
+            scene.add(bookMesh);
+
+            // Ajustar a câmera para enquadrar o livro
+            camera.position.set(bookWidth * 1.5, bookHeight * 0.8, bookWidth * 2);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        // --- Manipuladores de Eventos ---
+        const imageInput = document.getElementById('imageInput');
+        const bookWidthInput = document.getElementById('bookWidth');
+        const bookHeightInput = document.getElementById('bookHeight');
+        const bookSpineInput = document.getElementById('bookSpine');
+        const roughnessSlider = document.getElementById('roughnessSlider');
+        const metalnessSlider = document.getElementById('metalnessSlider');
+        const loadingDiv = document.getElementById('loading');
+        
+        // Variável adicionada para o seletor de cor
+        const bgColorPicker = document.getElementById('bgColorPicker');
+
+        let currentSlicedImages = null;
+
+        // Inicialização da cor de fundo da cena 3D
+        scene.background = new THREE.Color(bgColorPicker.value);
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            loadingDiv.style.display = 'block';
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    loadedImage = img;
+                    updateBook();
+                    loadingDiv.style.display = 'none';
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function updateBook() {
+            if (!loadedImage) return;
+
+            const width = parseFloat(bookWidthInput.value) || 14.8;
+            const height = parseFloat(bookHeightInput.value) || 21;
+            const spine = parseFloat(bookSpineInput.value) || 0.975;
+
+            // Cálculo da porcentagem da lombada em relação à largura total da capa aberta (capa + lombada + contracapa)
+            const totalWidth = (width * 2) + spine;
+            const sliceSpinePercent = (spine / totalWidth) * 100;
+
+            // Cálculo da porcentagem da lombada para o modelo 3D (relativa à largura de uma capa)
+            const modelSpinePercent = (spine / width) * 100;
+
+            // Fatiar a imagem
+            currentSlicedImages = sliceImage(loadedImage, sliceSpinePercent);
+            
+            // Criar o modelo 3D
+            createBook(currentSlicedImages, width, height, modelSpinePercent);
+        }
+
+        // Atualizar ao alterar as dimensões
+        bookWidthInput.addEventListener('change', updateBook);
+        bookHeightInput.addEventListener('change', updateBook);
+        bookSpineInput.addEventListener('change', updateBook);
+
+        // Evento adicionado para atualizar a cor de fundo em tempo real
+        bgColorPicker.addEventListener('input', (e) => {
+            scene.background = new THREE.Color(e.target.value);
+        });
+
+        // Atualizar materiais em tempo real
+        roughnessSlider.addEventListener('input', () => {
+            if (bookMesh) {
+                bookMesh.material.forEach(mat => {
+                    if (mat.map) mat.roughness = parseFloat(roughnessSlider.value);
+                });
+            }
+        });
+
+        metalnessSlider.addEventListener('input', () => {
+            if (bookMesh) {
+                bookMesh.material.forEach(mat => {
+                    if (mat.map) mat.metalness = parseFloat(metalnessSlider.value);
+                });
+            }
+        });
+
+        // Resetar Câmera
+        document.getElementById('resetCameraBtn').addEventListener('click', () => {
+            if (bookMesh) {
+                const box = new THREE.Box3().setFromObject(bookMesh);
+                const size = box.getSize(new THREE.Vector3());
+                camera.position.set(size.x * 1.5, size.y * 0.8, size.x * 2);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            }
+        });
+
+        // Baixar Imagem
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = 'mockup-livro-3d.png';
+            link.href = renderer.domElement.toDataURL('image/png');
+            link.click();
+        });
+
+        // --- Loop de Animação ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Ajustar ao redimensionar a janela
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        animate();
+
+        // Mensagem inicial
+        console.log("Aguardando upload da capa...");
+    </script>
+</body>
+</html>
