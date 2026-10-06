@@ -585,6 +585,7 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .topo-acoes{position:absolute;top:1rem;right:1rem;display:flex;gap:.5rem;align-items:center;z-index:5}
 .tema-bt{width:2.4rem;height:2.4rem;border-radius:50%;border:1px solid var(--line-strong);background:var(--panel);color:var(--text);font-size:1.05rem;line-height:1;cursor:pointer}
 .tema-bt:hover{border-color:var(--accent);color:var(--accent)}
+.rastro-mouse{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
 .topo-entrar{display:inline-flex;align-items:center;height:2.4rem;padding:0 1.1rem;border-radius:999px;background:var(--accent);color:#0a0700;font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-decoration:none}
 .topo-entrar:hover{filter:brightness(1.08)}
 .topo-criar{display:inline-flex;align-items:center;height:2.4rem;padding:0 1rem;border-radius:999px;border:1px solid var(--line-strong);color:var(--text);font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-decoration:none}
