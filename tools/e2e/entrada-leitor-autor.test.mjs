@@ -31,6 +31,7 @@ test('entrada: quem quer ler ve "Criar conta" de leitor; o cadastro de autor fic
   // criar a conta de leitor de verdade (sem captcha no ambiente de teste)
   await p.fill('#authForm input[name=nome]', 'Lia Leitora');
   await p.fill('#authForm input[name=email]', 'lia@teste.local');
+  await p.check('#authForm input[name=aceite]');
   await p.fill('#authForm input[name=senha]', 'senha-bem-longa');
   await p.click('#authForm button[type=submit]');
   await p.waitForSelector('#leitorForm');
