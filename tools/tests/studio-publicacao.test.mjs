@@ -180,3 +180,16 @@ test('salvar o perfil nao apaga a capa usada no Estudio', async () => {
   await app.call('PUT', '/api/profile', { tok: a.tok, body: { data: { nome: 'Ana Autora', obras: [] } } });
   assert.ok(app.db.prepare('SELECT 1 FROM images WHERE id = ?').get('ef'.repeat(12)));
 });
+
+test('declaracao definitiva (versao 2): nao provisoria, com os compromissos; aceite da versao 1 nao vale mais e o historico fica', async () => {
+  const { app, a, w, pub } = await cenario();
+  const d = (await app.call('GET', `${base}/${w}/publicacao`, { tok: a.tok })).j.declaracao;
+  assert.equal(d.versao, 2); assert.equal(d.provisoria, false);
+  for (const trecho of ['autorização suficiente', 'plagiada ou pirateada', 'apenas a licença necessária', 'não se torna dono da obra', 'tirar a obra do ar', 'Termos de Uso, a Política de Privacidade e as Diretrizes'])
+    assert.ok(d.texto.includes(trecho), trecho);
+  const v1 = app.db.prepare('SELECT provisorio FROM studio_declarations WHERE versao = 1').get();
+  assert.equal(v1.provisorio, 1, 'a versao 1 continua como foi (historico)');
+  assert.equal((await pub({ aceite: 1 })).s, 400, 'aceite da versao provisoria nao publica');
+  assert.equal((await pub()).s, 200);
+  assert.deepEqual(app.db.prepare('SELECT declaration_version FROM studio_acceptances WHERE work_id = ?').all(w).map((r) => r.declaration_version), [2]);
+});

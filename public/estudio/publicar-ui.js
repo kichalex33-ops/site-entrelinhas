@@ -10,6 +10,17 @@ const carregarLeitura = () => leitura || (leitura = import('../vendor/estudio-le
 const urlLeitura = (autor, slug) => `ler.html?a=${encodeURIComponent(autor)}&o=${encodeURIComponent(slug)}`;
 const PROSA = ['capitulo', 'cena'];
 
+// texto da declaracao (migrations/0021): linhas comecando com "- " viram lista; as outras, paragrafos
+function textoDaDeclaracao(texto) {
+  const out = [];
+  let lista = null;
+  for (const linha of String(texto || '').split('\n').map((l) => l.trim()).filter(Boolean)) {
+    if (linha.startsWith('- ')) { if (!lista) out.push(lista = h('ul', { class: 'st-pub-dec-lista' })); lista.append(h('li', null, linha.slice(2))); }
+    else { lista = null; out.push(h('p', null, linha)); }
+  }
+  return out;
+}
+
 // mesma reducao do perfil (conta.js): JPEG de ate ~550 KB
 async function reduzir(file) {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Envie uma imagem JPEG, PNG ou WebP.');
@@ -109,7 +120,10 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
   const declaracao = P.declaracao
     ? h('div', { class: 'st-pub-dec' },
       h('h3', null, 'Declaração de autoria'),
-      h('p', null, P.declaracao.texto),
+      ...textoDaDeclaracao(P.declaracao.texto),
+      h('p', { class: 'hint' }, 'Leia: ', h('a', { href: '/termos.html', target: '_blank' }, 'Termos de Uso'), ' · ',
+        h('a', { href: '/privacidade.html', target: '_blank' }, 'Privacidade'), ' · ',
+        h('a', { href: '/diretrizes.html', target: '_blank' }, 'Diretrizes da Comunidade')),
       P.declaracao.provisoria ? h('p', { class: 'hint' }, `Texto provisório (versão ${P.declaracao.versao}), sujeito a revisão.`) : null,
       h('label', { class: 'st-pub-aceite' }, aceite, ' Li e aceito a declaração acima.'))
     : h('p', { class: 'hint' }, 'A declaração de autoria não está disponível agora.');

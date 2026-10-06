@@ -36,6 +36,9 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   assert.equal(await dlg.locator('.st-pub-caps input:checked').count(), 2, 'os capitulos do manuscrito vem marcados');
   const ok = dlg.locator('.st-dialogo-rodape .btn-primary');
   assert.ok(await ok.isDisabled(), 'sem aceitar a declaracao, nao publica');
+  assert.equal(await dlg.locator('.st-pub-dec-lista li').count(), 9, 'declaracao definitiva: os nove compromissos em lista');
+  assert.equal(await dlg.locator('.st-pub-dec:has-text("provisório")').count(), 0, 'sem aviso de texto provisorio');
+  assert.equal(await dlg.locator('.st-pub-dec a[href="/termos.html"]').count(), 1);
   await dlg.locator('textarea').fill('Um rio que lembra de tudo.');
   await dlg.locator('.st-pub-aceite input').check();
   await ok.click();
