@@ -10,6 +10,7 @@ import { vitrine, livrosPublicos } from './vitrine.js';
 import { verLeitor, listarLeitores, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
 import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
+import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
 
@@ -784,10 +785,17 @@ async function deleteChat(env, user, id) {
 
 export default {
   // tarefa diaria (wrangler.jsonc: triggers.crons): exclui de vez os livros com mais de 15 dias na lixeira
+  // e as mensagens do contato com mais de 1 ano
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       for (const userId of await limparLixeiraVencida(env, now())) await limparImagens(env, userId);
+      await limparMensagensAntigas(env, now());
     })());
+  },
+
+  // e-mails para contato@entrelinhasbr.com.br (Cloudflare Email Routing -> este Worker): src/contato.js
+  async email(message, env) {
+    await receberEmail(message, env, now());
   },
 
   // toda resposta passa pelos cabecalhos de seguranca (comSeguranca); a rota de verdade fica em rotear()
@@ -883,6 +891,11 @@ async function rotear(req, env) {
         const u = await currentUser(env, req);
         if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
         return listarDenunciasLivros(env, url, { json });
+      }
+      if (path === '/api/admin/mensagens') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return listarMensagens(env, url, { json });
       }
       if (path === '/api/admin/feedback') {
         const u = await currentUser(env, req);
@@ -993,6 +1006,8 @@ async function rotear(req, env) {
     }
     const cp = path.match(/^\/api\/livro\/posts\/(\d{1,12})\/curtir$/);
     if (cp && req.method === 'POST') return curtirPost(env, user, Number(cp[1]), { json, fail });
+    const mg = path.match(/^\/api\/admin\/mensagens\/(\d{1,12})$/);
+    if (mg && req.method === 'POST') return user.is_admin ? marcarMensagem(env, req, user, Number(mg[1]), { json, fail, body, now }) : fail('Apenas moderadores.', 403);
     const fb = path.match(/^\/api\/admin\/feedback\/(\d{1,12})$/);
     if (fb && req.method === 'POST') return user.is_admin ? marcarFeedback(env, req, Number(fb[1]), { json, fail, body }) : fail('Apenas moderadores.', 403);
     const da = path.match(/^\/api\/admin\/denuncias-avaliacoes\/(\d{1,12})$/);

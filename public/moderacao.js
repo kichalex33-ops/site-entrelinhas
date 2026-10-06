@@ -250,6 +250,58 @@
     recarregar();
   }
 
+  // ---------- mensagens do contato@entrelinhasbr.com.br ----------
+  // Chegam pelo Email Routing (src/contato.js). Cada moderador le com a propria conta; responder abre o e-mail de quem
+  // modera, com destinatario e assunto prontos. Uma copia de tudo fica na caixa do Proton.
+  let montandoMsg = false;
+  async function montarMensagens() {
+    const ref = document.getElementById('mod-feedback');
+    if (montandoMsg || document.getElementById('mod-mensagens') || !ref) return;
+    montandoMsg = true;
+    const sec = document.createElement('details');
+    sec.id = 'mod-mensagens';
+    sec.className = 'blk';
+    sec.innerHTML = `<summary>Moderação · mensagens do contato <span class="mod-badge" hidden></span></summary>
+      <p class="hint">E-mails enviados para contato@entrelinhasbr.com.br. Ao responder, avise na conversa da moderação para ninguém responder duas vezes.</p>
+      <label class="mod-todas"><input type="checkbox" id="mod-msg-todas"> Mostrar também as arquivadas</label>
+      <div id="mod-msg-lista"><p class="hint">Carregando...</p></div>`;
+    ref.after(sec);
+    montandoMsg = false;
+    const lista = sec.querySelector('#mod-msg-lista'), badge = sec.querySelector('.mod-badge'), todas = sec.querySelector('#mod-msg-todas');
+    const quando = (t) => new Date(t * 1000).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const recarregar = async () => {
+      let ms = [];
+      try { ms = await api('/api/admin/mensagens' + (todas.checked ? '?todas=1' : '')); } catch (e) { lista.innerHTML = `<p class="note err">${esc(e.message)}</p>`; return; }
+      const novas = ms.filter((m) => m.status === 'nova').length;
+      badge.hidden = !novas; badge.textContent = novas;
+      if (!ms.length) { lista.innerHTML = '<p class="hint">Nenhuma mensagem.</p>'; return; }
+      lista.innerHTML = ms.map((m) => {
+        const para = m.responder_para || m.remetente;
+        const responder = `mailto:${encodeURIComponent(para)}?subject=${encodeURIComponent('Re: ' + (m.assunto || 'sua mensagem ao Entrelinhas'))}`;
+        const botao = (status, rotulo) => `<button type="button" class="btn btn-ghost" data-status="${status}">${rotulo}</button>`;
+        return `<div class="mod-den mod-msg${m.status === 'nova' ? ' nova' : ''}" data-id="${m.id}">
+          <p><b>${esc(m.assunto || '(sem assunto)')}</b></p>
+          <p class="hint">${esc(m.nome ? m.nome + ' · ' : '')}${esc(m.remetente)} · ${quando(m.recebida_em)}${m.status !== 'nova' ? ` · ${esc(m.status)}${m.lida_por ? ' por ' + esc(m.lida_por) : ''}` : ''}</p>
+          <p class="mod-den-txt mod-msg-txt">${esc(m.texto || '(sem texto)')}</p>
+          ${m.anexos.length ? `<p class="hint">Anexos (veja na caixa do Proton): ${m.anexos.map(esc).join(', ')}</p>` : ''}
+          <div class="mod-den-acoes"><a class="btn btn-primary" href="${esc(responder)}">Responder</a>
+            ${m.status === 'nova' ? botao('lida', 'Marcar como lida') : botao('nova', 'Marcar como nova')}
+            ${m.status !== 'arquivada' ? botao('arquivada', 'Arquivar') : ''}</div>
+        </div>`;
+      }).join('');
+    };
+    todas.addEventListener('change', recarregar);
+    lista.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-status]'); if (!b) return;
+      b.disabled = true;
+      try {
+        await api('/api/admin/mensagens/' + b.closest('.mod-den').dataset.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.status }) });
+        recarregar();
+      } catch (err) { b.disabled = false; b.insertAdjacentHTML('afterend', `<p class="note err">${esc(err.message)}</p>`); }
+    });
+    recarregar();
+  }
+
   // ---------- conteudo da pagina inicial (noticias, projetos, selos, servicos, contato) ----------
   // Os formularios saem do esquema que o servidor manda (src/site.js): campo novo no servidor aparece aqui sozinho.
   let montandoSite = false;
@@ -262,7 +314,7 @@
     const sec = novo('details', { id: 'mod-site', className: 'blk' },
       novo('summary', {}, 'Moderação · conteúdo da página inicial'),
       novo('p', { className: 'hint' }, 'Notícias, projetos em andamento, selos, serviços e contato da página inicial. Cada seção é salva separadamente e muda no site na hora.'));
-    (document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
+    (document.getElementById('mod-mensagens') || document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
     montandoSite = false;
     const corpo = novo('div', {}, novo('p', { className: 'hint' }, 'Carregando...'));
     sec.append(corpo);
@@ -325,7 +377,7 @@
     return caixa;
   }
 
-  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarDenunciasAvaliacoes(); montarFeedback(); montarSite(); }).observe(app, { childList: true });
+  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarDenunciasAvaliacoes(); montarFeedback(); montarMensagens(); montarSite(); }).observe(app, { childList: true });
   // o painel de senha monta de forma assincrona; quando ele entra em #app, o observador monta o de convites
   montar();
 })();

@@ -26,5 +26,8 @@
     "prosemirror-state": "^1.4.4",
     "prosemirror-view": "^1.42.6",
     "wrangler": "^4.147.0"
+  },
+  "dependencies": {
+    "postal-mime": "^4.0.4"
   }
 }

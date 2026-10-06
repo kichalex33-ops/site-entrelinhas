@@ -76,11 +76,13 @@ export async function listarDenunciasAvaliacoes(env, url, h) {
   const todas = url.searchParams.get('todas') === '1';
   const r = await env.DB.prepare(
     `SELECT v.id, v.author_slug, v.obra_id, v.nota, v.texto, v.spoiler, v.hidden, v.created_at,
-       COALESCE(NULLIF(u.nome, ''), u.slug) AS escreveu,
-       d.motivo, d.status, d.created_at AS denunciada_em, d.decided_at, COALESCE(NULLIF(q.nome, ''), q.slug) AS quem,
-       COALESCE(NULLIF(m.nome, ''), m.slug) AS moderador
+       COALESCE(NULLIF(json_extract(pu.data, '$.nome'), ''), NULLIF(u.nome, ''), u.slug) AS escreveu,
+       d.motivo, d.status, d.created_at AS denunciada_em, d.decided_at,
+       COALESCE(NULLIF(json_extract(pq.data, '$.nome'), ''), NULLIF(q.nome, ''), q.slug) AS quem,
+       COALESCE(NULLIF(json_extract(pm.data, '$.nome'), ''), NULLIF(m.nome, ''), m.slug) AS moderador
      FROM review_reports d JOIN reviews v ON v.id = d.review_id JOIN users u ON u.id = v.user_id JOIN users q ON q.id = d.user_id
      LEFT JOIN users m ON m.id = d.decided_by
+     LEFT JOIN profiles pu ON pu.user_id = u.id LEFT JOIN profiles pq ON pq.user_id = q.id LEFT JOIN profiles pm ON pm.user_id = m.id
      ${todas ? '' : "WHERE d.status = 'aberta'"} ORDER BY d.status = 'aberta' DESC, d.created_at DESC LIMIT 300`
   ).all();
   const porAvaliacao = new Map();

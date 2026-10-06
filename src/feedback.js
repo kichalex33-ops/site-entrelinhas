@@ -29,8 +29,9 @@ export async function enviarFeedback(env, req, h) {
 export async function listarFeedback(env, url, h) {
   const todos = url.searchParams.get('todos') === '1';
   const r = await env.DB.prepare(
-    `SELECT f.id, f.area, f.categoria, f.descricao, f.pagina, f.status, f.created_at, COALESCE(NULLIF(u.nome, ''), u.slug) AS quem, u.role
-     FROM feedback f LEFT JOIN users u ON u.id = f.user_id ${todos ? '' : "WHERE f.status = 'novo'"} ORDER BY f.created_at DESC LIMIT 200`
+    `SELECT f.id, f.area, f.categoria, f.descricao, f.pagina, f.status, f.created_at, u.role,
+       COALESCE(NULLIF(json_extract(p.data, '$.nome'), ''), NULLIF(u.nome, ''), u.slug) AS quem
+     FROM feedback f LEFT JOIN users u ON u.id = f.user_id LEFT JOIN profiles p ON p.user_id = u.id ${todos ? '' : "WHERE f.status = 'novo'"} ORDER BY f.created_at DESC LIMIT 200`
   ).all();
   return h.json(r.results.map((f) => ({ ...f, area_rotulo: AREAS[f.area] || f.area, categoria_rotulo: CATEGORIAS[f.categoria] || f.categoria })));
 }

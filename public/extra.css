@@ -669,3 +669,6 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .fb-tipos label{display:flex;gap:.6rem;align-items:center;justify-content:flex-start;text-align:left;color:var(--text-3);font-size:.92rem;cursor:pointer}
 .fb-tipos input{width:1.1rem;height:1.1rem;flex:none;margin:0;accent-color:var(--accent)}
 .mod-av-den{margin:.3rem 0 .6rem 1.1rem;font-size:.85rem;color:var(--text-3)}
+/* mensagens do contato no painel da moderacao */
+.mod-msg.nova{border-left:3px solid var(--accent);padding-left:.8rem}
+.mod-msg-txt{white-space:pre-wrap;max-height:16rem;overflow:auto}

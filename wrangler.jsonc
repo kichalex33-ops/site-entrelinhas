@@ -9,7 +9,8 @@
   },
   // PUBLIC_LAUNCH: "off" no beta (todas as paginas saem noindex e o robots.txt nao anuncia o sitemap).
   // Mudar para "on" so depois do beta com usuarios reais: libera a indexacao das paginas publicas (src/meta.js).
-  "vars": { "TURNSTILE_SITEKEY": "0x4AAAAAAFMNJfStOwu_LM0f", "ESTUDIO_PUBLICACAO": "on", "DISQUS_SHORTNAME": "entrelinhas-1", "PUBLIC_LAUNCH": "off" },
+  // CONTATO_COPIA: para onde vai a copia de cada e-mail do contato@ (precisa estar verificado no Email Routing).
+  "vars": { "TURNSTILE_SITEKEY": "0x4AAAAAAFMNJfStOwu_LM0f", "ESTUDIO_PUBLICACAO": "on", "DISQUS_SHORTNAME": "entrelinhas-1", "PUBLIC_LAUNCH": "off", "CONTATO_COPIA": "entrelinhas.comm@protonmail.com" },
   // limite geral de escritas por sessao/IP (src/index.js: excedeuEscritas). 120 por minuto: o autosave do Estudio
   // faz no maximo ~40 por minuto digitando sem parar; um script abusivo para aqui.
   "ratelimits": [{ "name": "ESCRITAS", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
