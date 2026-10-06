@@ -168,7 +168,9 @@ a.tab{text-decoration:none;display:inline-block}
 .brand-mark{display:inline-block;margin-bottom:.5rem;line-height:0}
 .brand-mark img{width:clamp(38px,5vw,56px);height:auto;transition:transform .3s ease}
 .brand-mark:hover img{transform:scale(1.06)}
-.hero-simbolo{display:block;width:min(280px,70vw);height:auto;margin:0 auto 1.6rem;mix-blend-mode:lighten}
+/* emblema grande e translucido ao fundo da pagina inicial (abaixo do rastro do mouse, que fica em -1) */
+.fundo-emblema{position:fixed;inset:0;z-index:-2;pointer-events:none;background:url(/marca/emblema.webp) center 70%/min(860px,92vw,78vh) auto no-repeat;opacity:.07}
+:root[data-tema="claro"] .fundo-emblema{opacity:.1}
 
 /* ler.html: leitura publica das obras do Estudio */
 .ler{max-width:1000px;margin:0 auto;padding:2rem 1.5rem 3rem}
