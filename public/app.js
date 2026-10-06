@@ -114,7 +114,7 @@
 
     const goTo = (id, scroll) => {
       if (!document.getElementById(id)) return;
-      tabs.forEach(t => t.classList.toggle('active', t.dataset.target === id));
+      tabs.forEach(t => { t.classList.toggle('active', t.dataset.target === id); if (t.dataset.target === id) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current'); });
       pages.forEach(p => p.classList.toggle('active', p.id === id));
       watch();
       if (scroll !== false) window.scrollTo({ top: 0, behavior: 'smooth' });

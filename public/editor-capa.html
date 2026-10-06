@@ -18,7 +18,7 @@
 :root{
   --bg:#0a0d12; --bg-elev:#11151c; --panel:#141922; --panel-2:#1a212b;
   --border:#232c38; --border-2:#2f3a49;
-  --text:#e7edf5; --text-dim:#93a1b3; --text-mute:#63707f;
+  --text:#e7edf5; --text-dim:#93a1b3; --text-mute:#8592a3; /* contraste AA sobre os paineis escuros (antes #63707f, 3.5:1) */
   --accent:#4d8dff; --accent-2:#8b5cf6; --danger:#ff5f6d; --ok:#35d0a5;
   --fold:#22d3ee; --trim:#ff4d8d;
 }
@@ -46,7 +46,7 @@ body{
 .brand h1{font-size:14px;margin:0;font-weight:700;letter-spacing:-.01em}
 .brand span{font-size:10.5px;color:var(--text-mute);letter-spacing:.04em}
 .top-spacer{flex:1}
-.top-actions{display:flex;align-items:center;gap:10px}
+.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
 .zoom-group{
   display:flex;align-items:center;gap:4px;background:var(--panel);
@@ -223,6 +223,18 @@ input[type=file]::file-selector-button{
   border-top-color:#fff;animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ---------- CELULAR E TABLET ESTREITO ----------
+   No computador sao duas colunas laterais fixas e a capa no meio. Em tela estreita isso nao cabe:
+   empilha topo, configuracoes, capa (com rolagem propria) e camadas, e a pagina rola na vertical. */
+@media (max-width:820px){
+  body{overflow:auto}
+  #app{height:auto;min-height:100vh}
+  #topbar{height:auto;flex-wrap:wrap;gap:10px;padding:10px 12px}
+  .top-spacer{display:none}
+  #main{flex-direction:column}
+  .sidebar,.sidebar.right{width:auto;overflow:visible;border:0;border-bottom:1px solid var(--border)}
+  #workspace{order:-1;height:72vh;min-height:320px;padding:16px;border-bottom:1px solid var(--border)}
+}
 </style>
 </head>
 
@@ -258,31 +270,31 @@ input[type=file]::file-selector-button{
         <h3>Documento</h3>
         <div class="row">
           <div class="field">
-            <label>Largura da Página (cm)</label>
+            <label for="inPageW">Largura da Página (cm)</label>
             <input type="number" id="inPageW" step="0.1" min="5" max="40" value="14.8">
           </div>
           <div class="field">
-            <label>Altura da Página (cm)</label>
+            <label for="inPageH">Altura da Página (cm)</label>
             <input type="number" id="inPageH" step="0.1" min="5" max="40" value="21">
           </div>
         </div>
         <div class="field">
-          <label>Sangria (cm)</label>
+          <label for="inBleed">Sangria (cm)</label>
           <input type="number" id="inBleed" step="0.1" min="0" max="5" value="0.5">
           <div class="hint">Margem extra em cada borda para o corte. Use 0 para não incluir.</div>
         </div>
         <label class="check"><input type="checkbox" id="inExportBleed" checked> Incluir sangria no arquivo exportado</label>
         <div class="field">
-          <label>Número de Páginas</label>
+          <label for="inPages">Número de Páginas</label>
           <input type="number" id="inPages" step="2" min="8" max="2000" value="150">
         </div>
         <div class="field">
-          <label>Tamanho da Orelha (cm)</label>
+          <label for="inFlap">Tamanho da Orelha (cm)</label>
           <input type="number" id="inFlap" step="0.5" min="0" max="20" value="8">
           <div class="hint">Use 0 para brochura sem orelha.</div>
         </div>
         <div class="field">
-          <label>Tipo de Papel (miolo)</label>
+          <label for="inPaper">Tipo de Papel (miolo)</label>
           <select id="inPaper"></select>
         </div>
       </div>
@@ -304,17 +316,17 @@ input[type=file]::file-selector-button{
         <h3>Imagens de Fundo</h3>
 
         <div class="field">
-          <label>Área de destino</label>
+          <label for="inImgArea">Área de destino</label>
           <select id="inImgArea"></select>
         </div>
 
         <div class="field">
-          <label>Arquivo (JPG / PNG)</label>
+          <label for="inImage">Arquivo (JPG / PNG)</label>
           <input type="file" id="inImage" accept="image/*">
         </div>
 
         <div class="field">
-          <label>Ajuste da área selecionada</label>
+          <label for="inImgFit">Ajuste da área selecionada</label>
           <select id="inImgFit">
             <option value="cover">Preencher (cover)</option>
             <option value="contain">Conter (contain)</option>
@@ -332,7 +344,7 @@ input[type=file]::file-selector-button{
       <div class="panel-section">
         <h3>Aparência</h3>
         <div class="field">
-          <label>Cor de fundo da capa</label>
+          <label for="inBgColor">Cor de fundo da capa</label>
           <input type="color" id="inBgColor" value="#ffffff">
         </div>
         <label class="check"><input type="checkbox" id="inShowGuides" checked> Mostrar guias (corte / vinco)</label>
@@ -349,7 +361,7 @@ input[type=file]::file-selector-button{
       </div>
     </aside>
 
-    <main id="workspace">
+    <main id="workspace" tabindex="0" aria-label="Área de trabalho da capa">
       <div id="stage">
         <div id="artboard">
           <div id="layerBg"      class="ab-layer"></div>
@@ -371,11 +383,11 @@ input[type=file]::file-selector-button{
 
         <div id="inspectorBody" hidden>
           <div class="field">
-            <label>Conteúdo</label>
+            <label for="pText">Conteúdo</label>
             <textarea id="pText" rows="3"></textarea>
           </div>
           <div class="field">
-            <label>Fonte</label>
+            <label for="pFont">Fonte</label>
             <select id="pFont">
               <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
               <option value="'Lora', Georgia, serif">Lora</option>
@@ -390,17 +402,17 @@ input[type=file]::file-selector-button{
           </div>
           <div class="row">
             <div class="field">
-              <label>Tamanho (pt)</label>
+              <label for="pSize">Tamanho (pt)</label>
               <input type="number" id="pSize" step="0.5" min="4" max="300" value="24">
             </div>
             <div class="field">
-              <label>Cor</label>
+              <label for="pColor">Cor</label>
               <input type="color" id="pColor" value="#111111">
             </div>
           </div>
           <div class="row">
             <div class="field">
-              <label>Alinhamento</label>
+              <label for="pAlign">Alinhamento</label>
               <select id="pAlign">
                 <option value="left">Esquerda</option>
                 <option value="center" selected>Centro</option>
@@ -417,9 +429,9 @@ input[type=file]::file-selector-button{
             </div>
           </div>
           <div class="row3">
-            <div class="field"><label>X (cm)</label>   <input type="number" id="pX" step="0.1"></div>
-            <div class="field"><label>Y (cm)</label>   <input type="number" id="pY" step="0.1"></div>
-            <div class="field"><label>Larg. (cm)</label><input type="number" id="pW" step="0.1" min="0.5"></div>
+            <div class="field"><label for="pX">X (cm)</label>   <input type="number" id="pX" step="0.1"></div>
+            <div class="field"><label for="pY">Y (cm)</label>   <input type="number" id="pY" step="0.1"></div>
+            <div class="field"><label for="pW">Larg. (cm)</label><input type="number" id="pW" step="0.1" min="0.5"></div>
           </div>
           <button class="btn block danger" id="pDelete">🗑 Excluir bloco</button>
         </div>

@@ -17,6 +17,8 @@
 
   document.addEventListener('DOMContentLoaded', async function () {
     // rodape: "Feedback do beta" leva a pagina de origem (so o caminho, sem parametros: nunca um token de link)
+    // menu principal: o item da pagina atual e anunciado pelos leitores de tela
+    document.querySelectorAll('.tabs a.tab.active').forEach(function (t) { t.setAttribute('aria-current', 'page'); });
     var fb = document.querySelector('.f-feedback');
     if (fb) fb.href = 'feedback.html?de=' + encodeURIComponent(location.pathname);
     var cab = document.querySelector('.site-header');
