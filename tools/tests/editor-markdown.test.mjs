@@ -32,10 +32,12 @@ test('a normalizacao e estavel: salvar, reabrir e salvar de novo nao muda o text
 test('texto longo (muitos capitulos) converte rapido e sem perdas', () => {
   const paragrafo = 'Era uma vez um rio que lembrava de tudo, mas nunca contou. ';
   const md = Array.from({ length: 4000 }, (_, i) => `${paragrafo.repeat(3)}(${i})`).join('\n\n');
-  const t = Date.now();
+  // tempo de CPU deste processo, nao o relogio: a suite roda arquivos em paralelo e o relogio contaria a espera pela vez
+  const t = process.cpuUsage();
   const out = ida(md);
+  const d = process.cpuUsage(t), ms = (d.user + d.system) / 1000; // microssegundos -> ms
   assert.equal(out, md);
-  assert.ok(Date.now() - t < 3000, 'abaixo de 3 s para ~700 mil caracteres');
+  assert.ok(ms < 3000, `abaixo de 3 s de CPU para ~700 mil caracteres (levou ${Math.round(ms)} ms)`);
 });
 
 test('HTML cru no texto nao vira HTML (seguranca)', () => {

@@ -460,13 +460,32 @@
     }
   }
 
+  // e-mail ainda nao confirmado: aviso no topo da conta, com reenvio (o servidor limita a 1 por minuto e 3 por hora)
+  function avisoEmail(me){
+    if (!me.confirmar_email) return;
+    const box = document.createElement('div');
+    box.className = 'aviso-email';
+    box.setAttribute('role', 'status');
+    box.innerHTML = `<p><b>Confirme seu e-mail.</b> Enviamos um link para <b>${esc(me.email)}</b>. Até confirmar, você pode ler e navegar, mas não avaliar, denunciar ou publicar.</p>
+      <p><button type="button" class="btn btn-ghost">Enviar o link de novo</button> <span class="aviso-email-nota"></span></p>`;
+    const nota = box.querySelector('.aviso-email-nota');
+    box.querySelector('button').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        const r = await api('/api/email/reenviar', { method: 'POST' });
+        nota.textContent = r.ja_confirmado ? 'Seu e-mail já está confirmado.' : 'Enviado. Confira a caixa de entrada e o spam.';
+      } catch (err) { nota.textContent = err.message; e.target.disabled = false; }
+    });
+    app.prepend(box);
+  }
+
   async function load(){
     try {
       const me = await api('/api/me');
       slug = me.slug; isMod = !!me.mod;
-      if (me.role === 'leitor') return readerView(me);
+      if (me.role === 'leitor') { readerView(me); return avisoEmail(me); }
       const p = await api('/api/profile/' + slug);
-      P = p.data; editorView(); openFromHash();
+      P = p.data; editorView(); avisoEmail(me); openFromHash();
     } catch (e) {
       // link de convite (conta.html#convite=CODIGO): abre o cadastro de autor com o codigo preenchido.
       // O codigo fica no fragmento (#), que o navegador nao envia ao servidor.

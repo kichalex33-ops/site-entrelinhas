@@ -659,3 +659,7 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .aceite{display:flex;gap:.6rem;align-items:flex-start;margin:.2rem 0 1rem;font-size:.85rem;color:var(--text-3);line-height:1.5;cursor:pointer}
 .aceite input{width:1.15rem;height:1.15rem;margin-top:.15rem;flex:none;accent-color:var(--accent)}
 .aceite a{color:var(--accent)}
+/* aviso de e-mail nao confirmado (Minha conta) */
+.aviso-email{max-width:720px;margin:0 auto 1.4rem;padding:1rem 1.2rem;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-dim);color:var(--text-2);font-size:.92rem}
+.aviso-email p+p{margin-top:.6rem}
+.aviso-email .aviso-email-nota{font-size:.85rem;color:var(--text-3)}

@@ -585,6 +585,7 @@ async function getPublicacao(env, work, user, h) {
 }
 
 async function publicar(env, req, work, user, h) {
+  if (h.precisaConfirmar && h.precisaConfirmar()) return h.faltaConfirmar();
   const b = await h.body(req);
   if (!b) return h.fail('Requisição inválida.');
   const t = h.now();

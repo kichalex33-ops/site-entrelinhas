@@ -37,11 +37,11 @@ export function makeApp(extraEnv = {}) {
   let nextId = 1;
 
   // usuario + sessao direta no banco (a senha nao importa nos testes de API)
-  const addUser = ({ role = 'autor', mod = false, nome = 'Autor' } = {}) => {
+  const addUser = ({ role = 'autor', mod = false, nome = 'Autor', email_status = 'confirmado' } = {}) => {
     const id = nextId++;
     const slug = (role === 'leitor' ? 'leitor-' : 'autor-') + id;
-    db.prepare('INSERT INTO users (id, email, pass_hash, pass_salt, slug, is_admin, created_at, role, nome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, `u${id}@teste.local`, 'x', 'x', slug, mod ? 1 : 0, 1, role, role === 'leitor' ? nome : '');
+    db.prepare('INSERT INTO users (id, email, pass_hash, pass_salt, slug, is_admin, created_at, role, nome, email_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, `u${id}@teste.local`, 'x', 'x', slug, mod ? 1 : 0, 1, role, role === 'leitor' ? nome : '', email_status);
     if (role === 'autor') db.prepare('INSERT INTO profiles (slug, user_id, data, badges, published, updated_at) VALUES (?, ?, ?, ?, 1, 1)').run(slug, id, JSON.stringify({ nome, obras: [] }), '[]');
     const tok = `tok-${id}-${Math.random().toString(16).slice(2)}`;
     db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(sha(tok), id, 9999999999);

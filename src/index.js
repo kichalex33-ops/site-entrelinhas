@@ -22,6 +22,8 @@ const FUNDOS = ['preto', 'azul', 'vinho', 'verde', 'grafite'];
 const STATUS = ['Publicado', 'Em desenvolvimento', 'Em escrita', 'Revisão', 'Em breve'];
 const SERVICOS = ['beta', 'critica', 'divulgacao', 'capa']; // chaves de "Serviços que ofereço"
 const SHORT_SESSION_HOURS = 12;
+// rotas de escrita publica bloqueadas para conta com e-mail pendente (a publicacao do Estudio confere em src/studio.js)
+const ESCRITA_PUBLICA = [/^\/api\/reviews(\/\d+\/denunciar)?$/, /^\/api\/livro\/[a-z0-9-]+\/[a-f0-9]{12}\/denuncia$/, /^\/api\/livro\/[a-f0-9]{12}(\/posts)?$/, /^\/api\/ajuda(\/\d+\/oferta)?$/];
 const IMG_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -72,7 +74,7 @@ async function currentUser(env, req) {
   const t = getCookie(req, 'sid');
   if (!t) return null;
   const row = await env.DB.prepare(
-    'SELECT u.id, u.email, u.slug, u.is_admin, u.role, u.nome FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.email, u.slug, u.is_admin, u.role, u.nome, u.email_status FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(await sha256Hex(t), now()).first();
   return row || null;
 }
@@ -224,7 +226,8 @@ async function register(env, req) {
     await env.DB.prepare('INSERT INTO profiles (slug, user_id, data, badges, published, updated_at) VALUES (?, ?, ?, ?, 1, ?)')
       .bind(slug, userId, JSON.stringify(defaultProfile(nome)), '[]', now()).run();
   }
-  return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, userId) });
+  if (confirmacaoAtiva(env)) await iniciarConfirmacao(env, userId, email, new URL(req.url).origin);
+  return json({ ok: true, slug, confirmar_email: confirmacaoAtiva(env) }, 200, { 'Set-Cookie': await newSession(env, userId) });
 }
 
 // Turnstile (captcha do Cloudflare). So e exigido quando o segredo esta configurado (producao);
@@ -266,7 +269,8 @@ async function registerLeitor(env, req) {
   const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at, role, nome, accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(email, hash, b64(salt), slug, now(), 'leitor', nome, now()).run();
   await recordFail(env, key);
-  return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, res.meta.last_row_id) });
+  if (confirmacaoAtiva(env)) await iniciarConfirmacao(env, res.meta.last_row_id, email, new URL(req.url).origin);
+  return json({ ok: true, slug, confirmar_email: confirmacaoAtiva(env) }, 200, { 'Set-Cookie': await newSession(env, res.meta.last_row_id) });
 }
 
 async function login(env, req) {
@@ -401,19 +405,67 @@ async function doReset(env, req) {
   return json({ ok: true });
 }
 
-async function enviarEmailReset(env, email, link) {
+// envio de e-mail pelo Resend (segredo RESEND_API_KEY; remetente em RESET_FROM). Falha de envio nao vaza para quem pediu.
+async function enviarEmail(env, to, subject, text) {
+  if (!env.RESEND_API_KEY) return false;
   try {
-    await fetch('https://api.resend.com/emails', {
+    const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: env.RESET_FROM || 'Entrelinhas <nao-responda@entrelinhasbr.com.br>',
-        to: email,
-        subject: 'Redefinir sua senha — Entrelinhas',
-        text: `Recebemos um pedido para redefinir sua senha.\n\nCrie uma nova senha neste link (vale 30 minutos):\n${link}\n\nSe não foi você, ignore este e-mail.`,
-      }),
+      body: JSON.stringify({ from: env.RESET_FROM || 'Entrelinhas <nao-responda@entrelinhasbr.com.br>', to, subject, text }),
     });
-  } catch { /* falha de envio nao vaza para quem pediu */ }
+    return r.ok;
+  } catch { return false; }
+}
+
+const enviarEmailReset = (env, email, link) => enviarEmail(env, email, 'Redefinir sua senha — Entrelinhas',
+  `Recebemos um pedido para redefinir sua senha.\n\nCrie uma nova senha neste link (vale 30 minutos):\n${link}\n\nSe não foi você, ignore este e-mail.`);
+
+// ---------- confirmacao de e-mail ----------
+// Conta nova nasce 'pendente' e recebe um link (uso unico, 48 h; no banco so o hash). Enquanto pendente, navega, le,
+// edita a conta, segue, favorita e monta estantes, mas nao publica, nao avalia e nao denuncia.
+// Contas anteriores (migracao 0022) ficam 'legado', sem bloqueio. Sem RESEND_API_KEY nao ha como confirmar,
+// entao o bloqueio fica desligado (confirmacaoAtiva).
+const CONFIRMA_TTL = 48 * 3600;
+const REENVIOS_POR_HORA = 3;
+const REENVIO_INTERVALO = 60;
+const confirmacaoAtiva = (env) => !!env.RESEND_API_KEY;
+const precisaConfirmar = (env, user) => confirmacaoAtiva(env) && user.email_status === 'pendente';
+const faltaConfirmar = () => json({ erro: 'Confirme seu e-mail para fazer isso. O link está no e-mail que enviamos; em Minha conta você pede outro.', codigo: 'confirmar_email' }, 403);
+
+async function iniciarConfirmacao(env, userId, email, origem) {
+  const token = toHex(rand(32));
+  // um link valido por vez: o anterior deixa de valer (a linha fica ate vencer, para contar no limite de reenvio)
+  await env.DB.prepare('UPDATE email_confirmations SET used = 1 WHERE user_id = ? AND used = 0').bind(userId).run();
+  await env.DB.prepare('DELETE FROM email_confirmations WHERE expires_at < ?').bind(now()).run();
+  await env.DB.prepare('INSERT INTO email_confirmations (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
+    .bind(await sha256Hex(token), userId, now() + CONFIRMA_TTL, now()).run();
+  return enviarEmail(env, email, 'Confirme seu e-mail — Entrelinhas',
+    `Boas-vindas ao Entrelinhas!\n\nConfirme que este e-mail é seu neste link (vale 48 horas):\n${origem}/confirmar-email.html?token=${token}\n\nSem a confirmação você pode ler e navegar, mas não publicar, avaliar ou denunciar.\n\nSe você não criou uma conta no Entrelinhas, ignore este e-mail.`);
+}
+
+// POST /api/email/confirmar { token } (sem login: o link pode ser aberto em outro aparelho)
+async function confirmarEmail(env, req) {
+  const b = await body(req);
+  const th = await sha256Hex(str(b && b.token, 64));
+  const invalido = () => fail('Este link de confirmação é inválido ou expirou. Entre na sua conta e peça outro.', 400);
+  const row = await env.DB.prepare('SELECT user_id FROM email_confirmations WHERE token_hash = ? AND used = 0 AND expires_at > ?').bind(th, now()).first();
+  if (!row) return invalido();
+  // marca como usado antes: dois cliques simultaneos nao usam o mesmo link
+  const mark = await env.DB.prepare('UPDATE email_confirmations SET used = 1 WHERE token_hash = ? AND used = 0').bind(th).run();
+  if (!mark.meta || mark.meta.changes !== 1) return invalido();
+  await env.DB.prepare("UPDATE users SET email_status = 'confirmado', email_confirmado_em = ? WHERE id = ? AND email_status != 'confirmado'").bind(now(), row.user_id).run();
+  return json({ ok: true });
+}
+
+// POST /api/email/reenviar (logado): no maximo 3 por hora e 1 por minuto
+async function reenviarConfirmacao(env, req, user) {
+  if (user.email_status !== 'pendente') return json({ ok: true, ja_confirmado: true });
+  if (!confirmacaoAtiva(env)) return fail('O envio de e-mails não está disponível agora.', 503);
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n, MAX(created_at) AS ultimo FROM email_confirmations WHERE user_id = ? AND created_at > ?').bind(user.id, now() - 3600).first();
+  if (r.n >= REENVIOS_POR_HORA || (r.ultimo && now() - r.ultimo < REENVIO_INTERVALO)) return fail('Você pediu vários e-mails em pouco tempo. Espere um pouco e tente de novo.', 429);
+  await iniciarConfirmacao(env, user.id, user.email, new URL(req.url).origin);
+  return json({ ok: true });
 }
 
 // ---------- convites (painel de moderacao) ----------
@@ -727,7 +779,7 @@ export default {
       if (path.startsWith('/api/studio/')) {
         const su = await currentUser(env, req);
         if (!su) return fail('Faça login para continuar.', 401);
-        return studioApi(req, env, url, su, { json, fail, str, body, now, rand, toHex });
+        return studioApi(req, env, url, su, { json, fail, str, body, now, rand, toHex, precisaConfirmar: () => precisaConfirmar(env, su), faltaConfirmar });
       }
 
       if (req.method === 'GET') {
@@ -739,7 +791,7 @@ export default {
             "SELECT u.foto, json_extract(p.data, '$.retrato') AS retrato, json_extract(p.data, '$.nome') AS pnome FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?"
           ).bind(u.id).first();
           const autor = u.role === 'autor';
-          return json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: (autor && ex.pnome) || u.nome, foto: (autor ? ex.retrato : ex.foto) || '' });
+          return json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: (autor && ex.pnome) || u.nome, foto: (autor ? ex.retrato : ex.foto) || '', email_status: u.email_status, confirmar_email: precisaConfirmar(env, u) });
         }
         if (path === '/api/reviews') return listReviews(env, req, url);
         // leitura publica das obras publicadas no Estudio
@@ -812,6 +864,7 @@ export default {
       if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
       if (path === '/api/recuperar' && req.method === 'POST') return requestReset(env, req);
       if (path === '/api/redefinir' && req.method === 'POST') return doReset(env, req);
+      if (path === '/api/email/confirmar' && req.method === 'POST') return confirmarEmail(env, req);
       const vi = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/visita$/);
       if (vi && req.method === 'POST') return visitarLivro(env, req, vi[1], vi[2], { json, fail, now, currentUser, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
 
@@ -831,6 +884,9 @@ export default {
         if (es && !es[2] && req.method === 'DELETE') return apagarLista(env, user, Number(es[1]), he);
         return fail('Não encontrado.', 404);
       }
+      if (path === '/api/email/reenviar' && req.method === 'POST') return reenviarConfirmacao(env, req, user);
+      // escritas publicas (avaliar, denunciar, extras e pagina do livro, leitura beta) exigem e-mail confirmado
+      if (precisaConfirmar(env, user) && ESCRITA_PUBLICA.some((r) => r.test(path))) return faltaConfirmar();
       if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user, publicacao);
       const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
       if (rm) {
