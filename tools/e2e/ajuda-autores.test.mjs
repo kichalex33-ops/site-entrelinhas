@@ -35,6 +35,12 @@ test('leitura beta: a autora pede, outro autor se oferece, ela aceita e conclui;
 
   await b.reload();
   await b.waitForSelector('.aj-acesso a[href="https://docs.exemplo.com/rio"]');
+  // so quem foi aceito ve o original: um terceiro autor continua sem o link
+  const caio = await E2E.novoAutor({ nome: 'Caio' });
+  await caio.pagina.goto(`${E2E.url}/ajuda.html`);
+  await caio.pagina.waitForSelector('.aj-card:has-text("O Rio")');
+  assert.doesNotMatch(await caio.pagina.innerText('main'), /docs\.exemplo\.com/, 'link so para quem foi aceito');
+  assert.ok(!JSON.stringify((await E2E.app.call('GET', '/api/ajuda', { tok: caio.tok })).j).includes('docs.exemplo.com'), 'nem pela API');
 
   await ana.pagina.click('button:has-text("Recebi o retorno")');
   await ana.pagina.waitForSelector('.aj-tag.aj-concluido');

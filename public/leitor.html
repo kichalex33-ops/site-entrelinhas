@@ -60,7 +60,6 @@
   const slug = new URLSearchParams(location.search).get('u') || '';
   const mes = (t) => new Date(t * 1000).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
-  const estrelas = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
   const milhar = (n) => Number(n || 0).toLocaleString('pt-BR');
   const ICONE = { lendo: '📖', quero: '🔖', lidos: '✅', pausado: '⏸', abandonado: '✕' };
   const ABAS = [['estante', 'Estante'], ['atividade', 'Atividade'], ['seguindo', 'Seguindo']];

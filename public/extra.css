@@ -544,11 +544,6 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .lt-status.lt-lendo{border-color:var(--accent);color:var(--accent)}
 .lt-status.lt-lidos{border-color:#3f8f5f;color:#7fcf9a}
 .lt-status.lt-abandonado{border-color:#7a3a3a;color:#d98a8a}
-.lt-review{display:flex;gap:1rem;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1rem;margin-bottom:.8rem}
-.lt-review a{color:var(--accent)}
-.lt-review p{margin-bottom:.35rem;font-size:.9rem;color:var(--text-2)}
-.lt-mini{width:56px;flex:0 0 auto}
-.lt-mini img,.lt-mini span{width:56px;aspect-ratio:2/3;object-fit:cover;border-radius:4px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1c2f4a,#070b14);font-family:'Playfair Display',serif}
 .lt-atividade{list-style:none;padding:0;display:grid;gap:.6rem}
 .lt-atividade li{display:flex;gap:.8rem;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:.6rem}
 .lt-atividade a{color:var(--accent);text-decoration:none}
@@ -647,7 +642,7 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 :root[data-tema="claro"] .tinta-autor,:root[data-tema="claro"] .author-card{--accent:color-mix(in srgb,var(--cor-autor,#d9a94a) 62%,#000);--accent-dim:color-mix(in srgb,var(--cor-autor,#d9a94a) 16%,transparent)}
 :root[data-tema="claro"] .tinta-autor{background:radial-gradient(900px 420px at 50% 0,color-mix(in srgb,var(--cor-autor,#d9a94a) 16%,transparent),transparent 70%)}
 /* capas sem imagem, retratos sem foto e avatares continuam "objetos escuros": texto claro por cima */
-:root[data-tema="claro"] :is(.cover,.lt-sem-capa,.typo,.pers-foto,.extra-avatar,.lt-av,.lt-foto,.lt-mini span,.obra-mini,.project-visual,.livro-capa){--text:#ececec;--accent:#d9a94a;--muted:#a8a8b0;color:#ececec}
+:root[data-tema="claro"] :is(.cover,.lt-sem-capa,.typo,.pers-foto,.extra-avatar,.lt-av,.lt-foto,.obra-mini,.project-visual,.livro-capa){--text:#ececec;--accent:#d9a94a;--muted:#a8a8b0;color:#ececec}
 :root[data-tema="claro"] dialog::backdrop{background:rgba(30,25,15,.45)}
 .auth-box .hint a{color:var(--accent)}
 /* aceite dos termos no cadastro */
