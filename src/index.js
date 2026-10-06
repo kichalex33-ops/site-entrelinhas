@@ -176,6 +176,9 @@ async function body(req) {
   try { return await req.json(); } catch { return null; }
 }
 
+// aceite dos Termos de Uso, Privacidade e Diretrizes no cadastro (users.accepted_at guarda quando)
+const ACEITE_MSG = 'Para criar a conta, leia e aceite os Termos de Uso, a Política de Privacidade e as Diretrizes da Comunidade.';
+
 async function register(env, req) {
   const b = await body(req);
   if (!b) return fail('Requisição inválida.');
@@ -188,6 +191,7 @@ async function register(env, req) {
   const nome = str(b.nome, 80);
   if (!isEmail(email)) return fail('E-mail inválido.');
   if (senha.length < 10 || senha.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
+  if (b.aceite !== true) return fail(ACEITE_MSG);
 
   const codeHash = await sha256Hex(str(b.convite, 100).toUpperCase());
   const inv = await env.DB.prepare('SELECT claim_slug, used_by, reusable, expires_at FROM invites WHERE code_hash = ?').bind(codeHash).first();
@@ -209,8 +213,8 @@ async function register(env, req) {
 
   const salt = rand(16);
   const hash = await hashPassword(senha, salt);
-  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(email, hash, b64(salt), slug, now()).run();
+  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at, accepted_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(email, hash, b64(salt), slug, now(), now()).run();
   const userId = res.meta.last_row_id;
   if (inv.reusable) await recordFail(env, key); // convite universal: cada cadastro conta no limite por IP
   else await env.DB.prepare('UPDATE invites SET used_by = ? WHERE code_hash = ?').bind(userId, codeHash).run();
@@ -253,13 +257,14 @@ async function registerLeitor(env, req) {
   if (nome.length < 2) return fail('Informe seu nome (pelo menos 2 letras).');
   if (!isEmail(email)) return fail('E-mail inválido.');
   if (senha.length < 10 || senha.length > 200) return fail('A senha precisa ter pelo menos 10 caracteres.');
+  if (b.aceite !== true) return fail(ACEITE_MSG);
   if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(email).first()) return fail('Este e-mail já está cadastrado.', 409);
 
   const salt = rand(16);
   const hash = await hashPassword(senha, salt);
   const slug = 'leitor-' + toHex(rand(5));
-  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at, role, nome) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(email, hash, b64(salt), slug, now(), 'leitor', nome).run();
+  const res = await env.DB.prepare('INSERT INTO users (email, pass_hash, pass_salt, slug, created_at, role, nome, accepted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(email, hash, b64(salt), slug, now(), 'leitor', nome, now()).run();
   await recordFail(env, key);
   return json({ ok: true, slug }, 200, { 'Set-Cookie': await newSession(env, res.meta.last_row_id) });
 }

@@ -32,6 +32,7 @@ test('convite: moderador gera no painel, a pessoa abre o link e cria a conta de 
   await p.fill('#authForm input[name=nome]', 'Maria Contista');
   await p.fill('#authForm input[name=email]', 'maria@teste.local');
   await p.fill('#authForm input[name=senha]', 'senha-segura-123');
+  await p.check('#authForm input[name=aceite]');
   await p.click('#authForm button[type=submit]');
   await p.waitForSelector('#ed');
 

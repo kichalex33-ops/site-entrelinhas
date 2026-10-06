@@ -53,6 +53,7 @@
           ${mode === 'leitor' ? field('Seu nome (aparece nas suas avaliações)', '<input name="nome" maxlength="40" minlength="2" required autocomplete="nickname">') : ''}
           ${field('E-mail', '<input name="email" type="email" required autocomplete="email">')}
           ${field('Senha' + (mode !== 'login' ? ' (mínimo 10 caracteres)' : ''), `<input name="senha" type="password" required minlength="${mode !== 'login' ? 10 : 1}" autocomplete="${mode !== 'login' ? 'new-password' : 'current-password'}">`)}
+          ${mode !== 'login' ? '<label class="aceite"><input type="checkbox" name="aceite" required> <span>Li e aceito os <a href="termos.html" target="_blank">Termos de Uso</a>, a <a href="privacidade.html" target="_blank">Política de Privacidade</a> e as <a href="diretrizes.html" target="_blank">Diretrizes da Comunidade</a>.</span></label>' : ''}
           ${mode === 'leitor' ? '<div id="tsBox" style="margin:.4rem 0"></div>' : ''}
           <button class="btn btn-primary" type="submit">${mode === 'login' ? 'Entrar' : mode === 'leitor' ? 'Criar conta de leitor' : 'Criar conta de autor'}</button>
           <div id="authNote"></div>
@@ -69,6 +70,7 @@
     document.getElementById('authForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
+      if (mode !== 'login') f.aceite = !!f.aceite;
       if (mode === 'leitor' && tsId !== null && window.turnstile) f.turnstile = window.turnstile.getResponse(tsId);
       const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
       try {

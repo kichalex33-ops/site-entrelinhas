@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeApp } from './helpers.mjs';
 
-const cadastrar = (app, convite, email = 'nova@teste.local') => app.call('POST', '/api/register', { body: { convite, email, senha: 'senha-segura-123', nome: 'Nova Autora' } });
+const cadastrar = (app, convite, email = 'nova@teste.local') => app.call('POST', '/api/register', { body: { convite, email, senha: 'senha-segura-123', nome: 'Nova Autora', aceite: true } });
 
 test('moderador gera convite; autor se cadastra com ele; o convite nao serve de novo', async () => {
   const app = makeApp();
@@ -53,4 +53,19 @@ test('perfil: faixa etaria e lancamento validados; data de entrada no site e do 
   r = await salvar([{ id: o.id, titulo: 'Livro', faixa: '99', publicado_em: '1800' }]);
   const o2 = JSON.parse(app.db.prepare('SELECT data FROM profiles WHERE slug = ?').get(a.slug).data).obras[0];
   assert.equal(o2.faixa, ''); assert.equal(o2.publicado_em, ''); assert.equal(o2.no_site_em, t, 'mantem a data de entrada');
+});
+
+test('cadastro exige aceite dos Termos, Privacidade e Diretrizes e grava quando foi aceito', async () => {
+  const app = makeApp();
+  const m = app.addUser({ mod: true });
+  const conv = (await app.call('POST', '/api/admin/convites', { tok: m.tok, body: {} })).j.codigo;
+  const sem = await app.call('POST', '/api/register', { body: { convite: conv, email: 'sem@teste.local', senha: 'senha-segura-123', nome: 'Sem Aceite' } });
+  assert.equal(sem.s, 400); assert.match(sem.j.erro, /Termos de Uso/);
+  assert.equal((await cadastrar(app, conv, 'com@teste.local')).s, 200);
+  assert.ok(app.db.prepare('SELECT accepted_at FROM users WHERE email = ?').get('com@teste.local').accepted_at > 0);
+
+  const leitor = (aceite) => app.call('POST', '/api/register-leitor', { body: { nome: 'Lia', email: `lia${aceite}@teste.local`, senha: 'senha-segura-123', aceite } });
+  assert.equal((await leitor('on')).s, 400, 'so true conta como aceite');
+  assert.equal((await leitor(true)).s, 200);
+  assert.ok(app.db.prepare('SELECT accepted_at FROM users WHERE email = ?').get('liatrue@teste.local').accepted_at > 0);
 });
