@@ -453,8 +453,10 @@ async function enviarEmail(env, to, subject, text) {
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: env.RESET_FROM || 'Entrelinhas <nao-responda@entrelinhasbr.com.br>', to, subject, text }),
     });
+    // so o codigo vai para o log do Worker (nunca o destinatario nem o link): ajuda a ver dominio ou chave errados
+    if (!r.ok) console.error('resend: envio recusado', r.status);
     return r.ok;
-  } catch { return false; }
+  } catch (e) { console.error('resend: falha de rede', e && e.message); return false; }
 }
 
 const enviarEmailReset = (env, email, link) => enviarEmail(env, email, 'Redefinir sua senha — Entrelinhas',
