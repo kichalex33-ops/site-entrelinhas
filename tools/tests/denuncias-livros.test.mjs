@@ -57,3 +57,48 @@ test('denuncia so vale para livro existente', async () => {
   const l = app.addUser({ role: 'leitor' });
   assert.equal((await app.call('POST', `/api/livro/${autora.slug}/aaaaaaaaaaaa/denuncia`, { tok: l.tok, body: { motivo: 'ia' } })).s, 404);
 });
+
+test('direitos autorais: "publicacao sem autorizacao" exige descricao; o painel mostra titulo, autor, motivo, quem e quando', async () => {
+  const { app, autora, mod, obra, den } = await cenario();
+  const l = app.addUser({ role: 'leitor', nome: 'Titular' });
+  assert.equal((await den(l.tok, { motivo: 'sem_autorizacao' })).s, 400, 'precisa dizer de quem sao os direitos');
+  assert.equal((await den(l.tok, { motivo: 'sem_autorizacao', detalhe: 'Sou a tradutora; esta traducao e minha e nao autorizei.' })).s, 200);
+  const painel = (await app.call('GET', '/api/admin/denuncias-livros', { tok: mod.tok })).j;
+  const d = painel.find((x) => x.motivo === 'sem_autorizacao');
+  assert.equal(d.titulo, 'Livro Suspeito'); assert.equal(d.autor_slug, autora.slug); assert.equal(d.obra_id, obra);
+  assert.equal(d.rotulo, 'Publicação sem autorização do titular dos direitos');
+  assert.equal(d.quem, 'Titular'); assert.ok(d.created_at > 0); assert.equal(d.status, 'aberta');
+  // a autora ve o motivo, nunca quem denunciou
+  const livro = (await app.call('GET', `/api/livro/${autora.slug}/${obra}`, { tok: autora.tok })).j;
+  assert.ok(!JSON.stringify(livro).includes('Titular'), 'nome de quem denunciou nao vaza para a autora');
+});
+
+test('avaliacoes denunciadas chegam ao painel; ocultar tira do ar; manter arquiva; quem escreveu nao ve quem denunciou', async () => {
+  const { app, autora, mod, obra } = await cenario();
+  const escritor = app.addUser({ role: 'leitor', nome: 'Rui' });
+  const d1 = app.addUser({ role: 'leitor', nome: 'Denunciante Um' });
+  const d2 = app.addUser({ role: 'leitor', nome: 'Denunciante Dois' });
+  await app.call('PUT', '/api/reviews', { tok: escritor.tok, body: { autor: autora.slug, obra, nota: 1, texto: 'Texto ofensivo de teste aqui.' } });
+  const rid = (await app.call('GET', `/api/reviews?autor=${autora.slug}&obra=${obra}`)).j.reviews[0].id;
+  assert.equal((await app.call('POST', `/api/reviews/${rid}/denunciar`, { tok: d1.tok, body: { motivo: 'ofensivo' } })).s, 200);
+  assert.equal((await app.call('POST', `/api/reviews/${rid}/denunciar`, { tok: d2.tok, body: { motivo: 'spam' } })).s, 200);
+
+  assert.equal((await app.call('GET', '/api/admin/denuncias-avaliacoes', { tok: d1.tok })).s, 403, 'so moderador');
+  let painel = (await app.call('GET', '/api/admin/denuncias-avaliacoes', { tok: mod.tok })).j;
+  assert.equal(painel.length, 1);
+  assert.equal(painel[0].titulo, 'Livro Suspeito'); assert.equal(painel[0].escreveu, 'Rui');
+  assert.deepEqual(painel[0].denuncias.map((d) => d.quem).sort(), ['Denunciante Dois', 'Denunciante Um']);
+  const publico = (await app.call('GET', `/api/reviews?autor=${autora.slug}&obra=${obra}`, { tok: escritor.tok })).j;
+  assert.ok(!JSON.stringify(publico).includes('Denunciante'), 'quem escreveu nao ve quem denunciou');
+
+  assert.equal((await app.call('POST', `/api/admin/denuncias-avaliacoes/${rid}`, { tok: mod.tok, body: { acao: 'apagar' } })).s, 400);
+  assert.equal((await app.call('POST', `/api/admin/denuncias-avaliacoes/${rid}`, { tok: mod.tok, body: { acao: 'ocultar' } })).j.oculta, true);
+  assert.equal((await app.call('GET', `/api/reviews?autor=${autora.slug}&obra=${obra}`)).j.reviews.length, 0, 'saiu do ar');
+  assert.equal((await app.call('GET', '/api/admin/denuncias-avaliacoes', { tok: mod.tok })).j.length, 0, 'nada aberto');
+  painel = (await app.call('GET', '/api/admin/denuncias-avaliacoes?todas=1', { tok: mod.tok })).j;
+  assert.ok(painel[0].oculta); assert.ok(painel[0].denuncias.every((d) => d.status === 'ocultada'));
+
+  // manter: a avaliacao volta e as denuncias ficam arquivadas
+  assert.equal((await app.call('POST', `/api/admin/denuncias-avaliacoes/${rid}`, { tok: mod.tok, body: { acao: 'manter' } })).j.oculta, false);
+  assert.equal((await app.call('GET', `/api/reviews?autor=${autora.slug}&obra=${obra}`)).j.reviews.length, 1);
+});

@@ -125,7 +125,7 @@
     sec.id = 'mod-denuncias';
     sec.className = 'blk';
     sec.innerHTML = `<summary>Moderação · denúncias de livros <span class="mod-badge" hidden></span></summary>
-      <p class="hint">Plágio, pirataria, IA sem aviso, classificação errada... Analise, fale com o autor se preciso e registre a decisão. O autor vê os motivos em análise, nunca quem denunciou.</p>
+      <p class="hint">Plágio, pirataria, publicação sem autorização, IA sem aviso, classificação errada... Analise, fale com o autor se preciso e registre a decisão. O autor vê os motivos em análise, nunca quem denunciou.</p>
       <label class="mod-todas"><input type="checkbox" id="mod-den-todas"> Mostrar também as já decididas</label>
       <div id="mod-den-lista"><p class="hint">Carregando...</p></div>`;
     conv.after(sec);
@@ -141,7 +141,7 @@
       for (const d of ds) { const k = d.autor_slug + '/' + d.obra_id; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(d); }
       lista.innerHTML = [...grupos.entries()].map(([k, itens]) => {
         const [a, o] = k.split('/');
-        return `<div class="mod-den-grupo"><p><a href="obra.html?a=${encodeURIComponent(a)}&o=${encodeURIComponent(o)}" target="_blank" rel="noopener"><b>Ver o livro</b></a> <span class="hint">de ${esc(a)} · ${itens.length} denúncia(s)</span></p>
+        return `<div class="mod-den-grupo"><p><a href="obra.html?a=${encodeURIComponent(a)}&o=${encodeURIComponent(o)}" target="_blank" rel="noopener"><b>${esc(itens[0].titulo || 'Ver o livro')}</b></a> <span class="hint">de ${esc(a)} · ${itens.length} denúncia(s)</span></p>
           ${itens.map((d) => `<div class="mod-den" data-id="${d.id}">
             <p><b>${esc(d.rotulo)}</b> <span class="hint">· por ${esc(d.quem)} em ${data(d.created_at)}${d.status !== 'aberta' ? ` · ${d.status} por ${esc(d.moderador || '?')}` : ''}</span></p>
             ${d.detalhe ? `<p class="mod-den-txt">${esc(d.detalhe)}</p>` : ''}
@@ -163,6 +163,93 @@
     recarregar();
   }
 
+  // ---------- denuncias de avaliacoes ----------
+  // Antes so eram gravadas. Ocultar tira a avaliacao do ar (e da nota media); manter arquiva as denuncias.
+  let montandoAv = false;
+  async function montarDenunciasAvaliacoes() {
+    const den = document.getElementById('mod-denuncias');
+    if (montandoAv || document.getElementById('mod-den-av') || !den) return;
+    montandoAv = true;
+    const sec = document.createElement('details');
+    sec.id = 'mod-den-av';
+    sec.className = 'blk';
+    sec.innerHTML = `<summary>Moderação · denúncias de avaliações <span class="mod-badge" hidden></span></summary>
+      <p class="hint">Avaliações denunciadas por spoiler, ofensa ou spam. Quem escreveu não fica sabendo quem denunciou.</p>
+      <label class="mod-todas"><input type="checkbox" id="mod-av-todas"> Mostrar também as já decididas</label>
+      <div id="mod-av-lista"><p class="hint">Carregando...</p></div>`;
+    den.after(sec);
+    montandoAv = false;
+    const lista = sec.querySelector('#mod-av-lista'), badge = sec.querySelector('.mod-badge'), todas = sec.querySelector('#mod-av-todas');
+    const recarregar = async () => {
+      let av = [];
+      try { av = await api('/api/admin/denuncias-avaliacoes' + (todas.checked ? '?todas=1' : '')); } catch (e) { lista.innerHTML = `<p class="note err">${esc(e.message)}</p>`; return; }
+      const abertas = av.filter((a) => a.denuncias.some((d) => d.status === 'aberta')).length;
+      badge.hidden = !abertas; badge.textContent = abertas;
+      if (!av.length) { lista.innerHTML = '<p class="hint">Nenhuma avaliação denunciada.</p>'; return; }
+      lista.innerHTML = av.map((a) => {
+        const aberta = a.denuncias.some((d) => d.status === 'aberta');
+        return `<div class="mod-den" data-id="${a.id}">
+          <p><a href="obra.html?a=${encodeURIComponent(a.autor_slug)}&o=${encodeURIComponent(a.obra_id)}" target="_blank" rel="noopener"><b>${esc(a.titulo || 'Ver o livro')}</b></a>
+            <span class="hint">· avaliação de ${esc(a.escreveu)} (${'★'.repeat(a.nota)}) em ${data(a.em)}${a.oculta ? ' · <b>oculta</b>' : ''}</span></p>
+          <p class="mod-den-txt">${esc(a.texto)}</p>
+          <ul class="mod-av-den">${a.denuncias.map((d) => `<li>${esc(d.rotulo)} <span class="hint">· por ${esc(d.quem)} em ${data(d.em)}${d.status !== 'aberta' ? ` · ${esc(d.status)} por ${esc(d.moderador || '?')}` : ''}</span></li>`).join('')}</ul>
+          ${aberta ? '<div class="mod-den-acoes"><button type="button" class="btn btn-primary" data-acao="ocultar">Ocultar avaliação</button><button type="button" class="btn btn-ghost" data-acao="manter">Manter (sem problema)</button></div>' : ''}
+        </div>`;
+      }).join('');
+    };
+    todas.addEventListener('change', recarregar);
+    lista.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-acao]'); if (!b) return;
+      const box = b.closest('.mod-den');
+      b.disabled = true;
+      try {
+        await api('/api/admin/denuncias-avaliacoes/' + box.dataset.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: b.dataset.acao }) });
+        recarregar();
+      } catch (err) { b.disabled = false; box.insertAdjacentHTML('beforeend', `<p class="note err">${esc(err.message)}</p>`); }
+    });
+    recarregar();
+  }
+
+  // ---------- feedback do beta (feedback.html) ----------
+  let montandoFb = false;
+  async function montarFeedback() {
+    const ref = document.getElementById('mod-den-av');
+    if (montandoFb || document.getElementById('mod-feedback') || !ref) return;
+    montandoFb = true;
+    const sec = document.createElement('details');
+    sec.id = 'mod-feedback';
+    sec.className = 'blk';
+    sec.innerHTML = `<summary>Moderação · feedback do beta <span class="mod-badge" hidden></span></summary>
+      <p class="hint">O que os testadores mandaram pela página de feedback. Marque como visto depois de ler (ou de abrir a tarefa).</p>
+      <label class="mod-todas"><input type="checkbox" id="mod-fb-todos"> Mostrar também os já vistos</label>
+      <div id="mod-fb-lista"><p class="hint">Carregando...</p></div>`;
+    ref.after(sec);
+    montandoFb = false;
+    const lista = sec.querySelector('#mod-fb-lista'), badge = sec.querySelector('.mod-badge'), todos = sec.querySelector('#mod-fb-todos');
+    const recarregar = async () => {
+      let fs = [];
+      try { fs = await api('/api/admin/feedback' + (todos.checked ? '?todos=1' : '')); } catch (e) { lista.innerHTML = `<p class="note err">${esc(e.message)}</p>`; return; }
+      const novos = fs.filter((f) => f.status === 'novo').length;
+      badge.hidden = !novos; badge.textContent = novos;
+      if (!fs.length) { lista.innerHTML = '<p class="hint">Nenhum feedback novo.</p>'; return; }
+      lista.innerHTML = fs.map((f) => `<div class="mod-den" data-id="${f.id}">
+        <p><b>${esc(f.categoria_rotulo)}</b> <span class="hint">· ${esc(f.area_rotulo)}${f.pagina ? ' · ' + esc(f.pagina) : ''} · ${f.quem ? 'por ' + esc(f.quem) : 'sem conta'} em ${data(f.created_at)}${f.status === 'visto' ? ' · visto' : ''}</span></p>
+        <p class="mod-den-txt">${esc(f.descricao)}</p>
+        <div class="mod-den-acoes"><button type="button" class="btn btn-ghost" data-status="${f.status === 'novo' ? 'visto' : 'novo'}">${f.status === 'novo' ? 'Marcar como visto' : 'Voltar para novo'}</button></div>
+      </div>`).join('');
+    };
+    todos.addEventListener('change', recarregar);
+    lista.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-status]'); if (!b) return;
+      b.disabled = true;
+      try {
+        await api('/api/admin/feedback/' + b.closest('.mod-den').dataset.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.status }) });
+        recarregar();
+      } catch (err) { b.disabled = false; b.insertAdjacentHTML('afterend', `<p class="note err">${esc(err.message)}</p>`); }
+    });
+    recarregar();
+  }
+
   // ---------- conteudo da pagina inicial (noticias, projetos, selos, servicos, contato) ----------
   // Os formularios saem do esquema que o servidor manda (src/site.js): campo novo no servidor aparece aqui sozinho.
   let montandoSite = false;
@@ -175,7 +262,7 @@
     const sec = novo('details', { id: 'mod-site', className: 'blk' },
       novo('summary', {}, 'Moderação · conteúdo da página inicial'),
       novo('p', { className: 'hint' }, 'Notícias, projetos em andamento, selos, serviços e contato da página inicial. Cada seção é salva separadamente e muda no site na hora.'));
-    den.after(sec);
+    (document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
     montandoSite = false;
     const corpo = novo('div', {}, novo('p', { className: 'hint' }, 'Carregando...'));
     sec.append(corpo);
@@ -238,7 +325,7 @@
     return caixa;
   }
 
-  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarSite(); }).observe(app, { childList: true });
+  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarDenunciasAvaliacoes(); montarFeedback(); montarSite(); }).observe(app, { childList: true });
   // o painel de senha monta de forma assincrona; quando ele entra em #app, o observador monta o de convites
   montar();
 })();

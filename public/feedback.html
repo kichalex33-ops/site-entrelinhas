@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback do beta | Entrelinhas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#000000">
+<script src="tema.js"></script>
+<script src="menu.js" defer></script>
+<meta name="description" content="Conte o que quebrou, o que confundiu ou o que pode melhorar no Entrelinhas durante o beta.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <a class="brand-mark" href="index.html" aria-label="Entrelinhas, página inicial"><img src="/marca/raposa.png" alt="" width="56" height="56"></a>
+    <h1><a href="index.html" style="color:inherit;text-decoration:none">ENTRE<b>LINHAS</b></a></h1>
+    <p class="tagline">Coletivo de Escritores Independentes</p>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html#home">Início</a>
+    <a class="tab" href="index.html#biblioteca">Biblioteca</a>
+    <a class="tab" href="index.html#lancamentos">Lançamentos</a>
+    <a class="tab" href="index.html#projetos">Projetos</a>
+    <a class="tab" href="index.html#servicos">Serviços</a>
+    <a class="tab" href="autores.html">Autores</a>
+    <a class="tab" href="leitores.html">Leitores</a>
+  </nav>
+</header>
+
+<main>
+  <section class="page active">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Beta</span>
+      <h2>Feedback do <em>beta</em></h2>
+      <p>O Entrelinhas está em teste. Conte o que quebrou, o que confundiu ou o que pode melhorar. Cada mensagem é lida pelos moderadores.</p>
+    </div>
+    <div class="auth-box">
+      <form id="fb">
+        <label class="fld"><span>Área do site</span>
+          <select name="area" required>
+            <option value="">Escolha...</option>
+            <option value="inicio">Página inicial e Biblioteca</option>
+            <option value="livro">Página do livro e leitura</option>
+            <option value="autores">Autores e perfis</option>
+            <option value="leitores">Leitores e estantes</option>
+            <option value="conta">Conta, cadastro e senha</option>
+            <option value="estudio">Estúdio (escrever)</option>
+            <option value="publicacao">Publicação</option>
+            <option value="capa">Editor de capa e 3D</option>
+            <option value="beta">Leitura beta</option>
+            <option value="moderacao">Moderação e denúncias</option>
+            <option value="outro">Outro</option>
+          </select></label>
+        <fieldset class="fld fb-tipos"><legend>Tipo</legend>
+          <label><input type="radio" name="categoria" value="bug" required> Bug: algo quebrou</label>
+          <label><input type="radio" name="categoria" value="confusao"> Confusão: não entendi</label>
+          <label><input type="radio" name="categoria" value="sugestao"> Sugestão</label>
+          <label><input type="radio" name="categoria" value="visual"> Visual</label>
+        </fieldset>
+        <label class="fld"><span>O que aconteceu? (o que você fez, o que esperava, o que viu)</span>
+          <textarea name="descricao" rows="6" minlength="10" maxlength="3000" required></textarea></label>
+        <p class="hint" id="fbOrigem"></p>
+        <button class="btn btn-primary" type="submit">Enviar feedback</button>
+        <div id="fbNota"></div>
+      </form>
+      <p class="hint" style="margin-top:1rem">Não escreva senhas nem dados pessoais aqui. Para assuntos privados, use <a href="mailto:contato@entrelinhasbr.com.br">contato@entrelinhasbr.com.br</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="f-links">
+    <a href="#" class="to-top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Voltar ao topo &#8593;</a>
+    <a href="conta.html">Minha conta</a>
+  </div>
+  <div class="f-brand">ENTRE<b>LINHAS</b></div>
+  <nav class="f-legal" aria-label="Institucional"><a href="sobre.html">Sobre</a><a href="termos.html">Termos de Uso</a><a href="privacidade.html">Privacidade</a><a href="diretrizes.html">Diretrizes</a><a href="mailto:contato@entrelinhasbr.com.br">Contato</a></nav>
+  <p>© 2026 Coletivo Entrelinhas</p>
+</footer>
+
+<script>
+// feedback.html?de=/caminho: a area ja vem marcada pela pagina de onde a pessoa veio (o caminho vai sem parametros)
+(function () {
+  const f = document.getElementById('fb'), nota = document.getElementById('fbNota');
+  const de = (new URLSearchParams(location.search).get('de') || '').split(/[?#]/)[0];
+  const AREA = [[/^\/(index(\.html)?)?$/, 'inicio'], [/^\/(obra|ler)/, 'livro'], [/^\/autor/, 'autores'], [/^\/leitor/, 'leitores'],
+    [/^\/(conta|recuperar|redefinir|confirmar-email)/, 'conta'], [/^\/estudio/, 'estudio'], [/^\/(editor|visualizador)-capa/, 'capa'],
+    [/^\/ajuda/, 'beta'], [/^\/(chat|lixeira)/, 'moderacao']];
+  const achada = AREA.find(([re]) => re.test(de));
+  if (achada) f.area.value = achada[1];
+  if (de) document.getElementById('fbOrigem').textContent = 'Página de origem: ' + de;
+  const msg = (t, ok) => { nota.innerHTML = `<p class="note ${ok ? 'ok' : 'err'}" role="status">${EL.esc(t)}</p>`; };
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const b = f.querySelector('button[type=submit]'); b.disabled = true;
+    try {
+      await EL.api('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ area: f.area.value, categoria: f.categoria.value, descricao: f.descricao.value, pagina: de }) });
+      f.descricao.value = '';
+      msg('Recebido. Obrigado por ajudar a melhorar o Entrelinhas!', true);
+    } catch (err) { msg(err.message); }
+    b.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

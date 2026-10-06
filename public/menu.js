@@ -2,6 +2,7 @@
 //  - canto superior direito: "Criar conta" (leitor) e "Entrar" para quem nao entrou; a foto (ou inicial) de quem entrou,
 //    com um menu (Meu perfil, Minha conta, Estudio, Sair)
 //  - menu principal: leitor logado ganha "Meu perfil" ao lado de Autores
+//  - rodape: o link "Feedback do beta" leva junto a pagina de onde a pessoa veio
 (function () {
   'use strict';
   var ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -15,6 +16,9 @@
   }
 
   document.addEventListener('DOMContentLoaded', async function () {
+    // rodape: "Feedback do beta" leva a pagina de origem (so o caminho, sem parametros: nunca um token de link)
+    var fb = document.querySelector('.f-feedback');
+    if (fb) fb.href = 'feedback.html?de=' + encodeURIComponent(location.pathname);
     var cab = document.querySelector('.site-header');
     if (!cab) return;
     var me = null;

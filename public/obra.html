@@ -43,7 +43,7 @@
     <a href="conta.html">Minha conta</a>
   </div>
   <div class="f-brand">ENTRE<b>LINHAS</b></div>
-  <nav class="f-legal" aria-label="Institucional"><a href="sobre.html">Sobre</a><a href="termos.html">Termos de Uso</a><a href="privacidade.html">Privacidade</a><a href="diretrizes.html">Diretrizes</a><a href="mailto:contato@entrelinhasbr.com.br">Contato</a></nav>
+  <nav class="f-legal" aria-label="Institucional"><a href="sobre.html">Sobre</a><a href="termos.html">Termos de Uso</a><a href="privacidade.html">Privacidade</a><a href="diretrizes.html">Diretrizes</a><a href="mailto:contato@entrelinhasbr.com.br">Contato</a><a href="feedback.html" class="f-feedback">Feedback do beta</a></nav>
   <p>© 2026 Coletivo Entrelinhas</p>
 </footer>
 
@@ -364,7 +364,7 @@
   }
 
   // ---------- denuncia (qualquer conta logada, menos o dono) ----------
-  const MOTIVOS = [['plagio', 'Plágio ou cópia de outra obra'], ['pirataria', 'Pirataria ou violação de direitos autorais'], ['ia', 'Texto gerado por IA sem aviso'],
+  const MOTIVOS = [['plagio', 'Plágio ou cópia de outra obra'], ['pirataria', 'Pirataria ou violação de direitos autorais'], ['sem_autorizacao', 'Publicação sem autorização do titular dos direitos'], ['ia', 'Texto gerado por IA sem aviso'],
     ['classificacao', 'Classificação etária errada'], ['ofensivo', 'Conteúdo ofensivo ou ilegal'], ['spam', 'Spam ou propaganda'], ['outro', 'Outro motivo']];
   function denunciar() {
     if (D.dono) return;

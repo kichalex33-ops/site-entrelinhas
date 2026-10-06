@@ -9,8 +9,9 @@ import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, cr
 import { vitrine, livrosPublicos } from './vitrine.js';
 import { verLeitor, listarLeitores, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
 import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
+import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
-import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
+import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
 
 const SESSION_DAYS = 30;
 const PBKDF2_ITER = 100000; // maximo permitido pelo Workers
@@ -171,6 +172,42 @@ async function sanitizeProfile(env, d, userId) {
 
 function defaultProfile(nome) {
   return { nome, frase: '', servicos: [], bio: '', citacao: '', local: '', cor: '#d9a94a', fundo: 'preto', retrato: '', links: [], secoes: [], obras: [] };
+}
+
+// ---------- cabecalhos de seguranca (todas as respostas) ----------
+// CSP so nas paginas HTML. Fontes de fora: Google Fonts; Turnstile (cadastro); Disqus (so quando a pessoa abre os
+// comentarios); cdnjs (html2canvas e jsPDF no editor de capa) e unpkg (three.js no visualizador 3D).
+// 'unsafe-inline' em script e style continua por enquanto: varias paginas tem <script> e style="" no proprio HTML.
+// Sem 'unsafe-eval'. frame-ancestors 'self': o visualizador 3D abre num iframe do proprio editor de capa.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdnjs.cloudflare.com https://unpkg.com https://*.disqus.com https://*.disquscdn.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.disquscdn.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://challenges.cloudflare.com https://*.disqus.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com",
+  "frame-src 'self' https://challenges.cloudflare.com https://disqus.com https://*.disqus.com",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  'upgrade-insecure-requests',
+].join('; ');
+const SEGURANCA = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin', // links com token (senha, e-mail) nao vazam o endereco para fora
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), fullscreen=(self)',
+  'X-Frame-Options': 'SAMEORIGIN', // navegadores antigos; os novos usam frame-ancestors
+  // HTTPS em todo o dominio (Cloudflare com dominio proprio). Sem includeSubDomains/preload por enquanto.
+  'Strict-Transport-Security': 'max-age=15552000',
+};
+function comSeguranca(resp) {
+  if (resp.status === 101) return resp;
+  const r = new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: new Headers(resp.headers) });
+  for (const [k, v] of Object.entries(SEGURANCA)) r.headers.set(k, v);
+  if (/text\/html/.test(r.headers.get('Content-Type') || '')) r.headers.set('Content-Security-Policy', CSP);
+  return r;
 }
 
 // ---------- rotas ----------
@@ -753,208 +790,228 @@ export default {
     })());
   },
 
+  // toda resposta passa pelos cabecalhos de seguranca (comSeguranca); a rota de verdade fica em rotear()
   async fetch(req, env) {
-    const url = new URL(req.url);
-    const path = url.pathname;
-
-    // www.dominio -> dominio (redirecionamento permanente, preserva caminho e parametros)
-    if (url.hostname.startsWith('www.')) {
-      url.hostname = url.hostname.slice(4);
-      return Response.redirect(url.toString(), 301);
-    }
-
-    if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
-    if (path === '/robots.txt' && req.method === 'GET') return robotsTxt(env, url);
-    if (path === '/sitemap.xml' && req.method === 'GET') return sitemapXml(env, url, { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
-    // paginas de livro e autor saem com titulo, descricao e previa de link proprios (src/meta.js)
-    if (!path.startsWith('/api/')) return comMetadados(req, env, await env.ASSETS.fetch(req), { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
-
-    // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
-    if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
-    if (req.method !== 'GET' && await excedeuEscritas(env, req)) return fail('Muitas ações em pouco tempo. Espere um minuto e tente de novo.', 429);
-
-    // publicacao do Estudio: so com a chave ligada (wrangler.jsonc: ESTUDIO_PUBLICACAO = "on")
-    const publicacao = env.ESTUDIO_PUBLICACAO === 'on';
-
-    try {
-      // Estudio Entrelinhas (privado): autenticacao aqui, regras de dono dentro do modulo
-      if (path.startsWith('/api/studio/')) {
-        const su = await currentUser(env, req);
-        if (!su) return fail('Faça login para continuar.', 401);
-        return studioApi(req, env, url, su, { json, fail, str, body, now, rand, toHex, precisaConfirmar: () => precisaConfirmar(env, su), faltaConfirmar });
-      }
-
-      if (req.method === 'GET') {
-        if (path === '/api/me') {
-          const u = await currentUser(env, req);
-          if (!u) return fail('Não autenticado.', 401);
-          // foto para o topo da pagina: leitor usa a do perfil de leitor; autor, o retrato do perfil de autor
-          const ex = await env.DB.prepare(
-            "SELECT u.foto, json_extract(p.data, '$.retrato') AS retrato, json_extract(p.data, '$.nome') AS pnome FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?"
-          ).bind(u.id).first();
-          const autor = u.role === 'autor';
-          return json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: (autor && ex.pnome) || u.nome, foto: (autor ? ex.retrato : ex.foto) || '', email_status: u.email_status, confirmar_email: precisaConfirmar(env, u) });
-        }
-        if (path === '/api/reviews') return listReviews(env, req, url);
-        // leitura publica das obras publicadas no Estudio
-        if (path === '/api/biblioteca' || path.startsWith('/api/leitura/')) {
-          if (!publicacao) return fail('Não encontrado.', 404);
-          const r = await leituraPublica(req, env, url, { json, fail, now });
-          if (r) return r;
-        }
-        // configuracao publica para o navegador (a chave do captcha nao e segredo)
-        if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null, disqus: /^[a-z0-9-]{1,64}$/.test(env.DISQUS_SHORTNAME || '') ? env.DISQUS_SHORTNAME : null });
-        if (path === '/api/authors') {
-          const rows = await env.DB.prepare(
-            'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'
-          ).all();
-          const list = rows.results.map((r) => {
-            const d = JSON.parse(r.data);
-            return { slug: r.slug, nome: d.nome, frase: d.frase, retrato: d.retrato, cor: d.cor, badges: JSON.parse(r.badges), mod: !!r.mod };
-          });
-          // moderadores sempre no topo; dentro de cada grupo, ordem alfabetica (sem diferenciar acento/caixa)
-          list.sort((a, b) => b.mod - a.mod || (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
-          return json(list);
-        }
-        if (path === '/api/chat') return listChat(env, req, url);
-        if (path === '/api/vitrine') return vitrine(env, { json, now, publicacao });
-        if (path === '/api/site') return json(await conteudoDoSite(env));
-        if (path === '/api/admin/site') {
-          const u = await currentUser(env, req);
-          if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
-          return json({ secoes: esquemaPublico(), dados: await conteudoDoSite(env) });
-        }
-        if (path === '/api/leitores') return listarLeitores(env, { json });
-        const lt = path.match(/^\/api\/leitor\/([a-z0-9-]{1,40})$/);
-        if (lt) return verLeitor(env, req, lt[1], { json, fail, now, currentUser, livros: () => livrosPublicos(env, { now, publicacao }) });
-        const sg = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
-        if (sg) return seguir(env, await currentUser(env, req), sg[1], false, { json, fail, now });
-        if (path === '/api/estantes') {
-          const u = await currentUser(env, req);
-          return u ? estantes(env, u, { json, now }) : fail('Faça login para continuar.', 401);
-        }
-        if (path === '/api/admin/contas') return adminAccounts(env, req);
-        const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
-        if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao, denunciasAbertas });
-        if (path === '/api/admin/denuncias-livros') {
-          const u = await currentUser(env, req);
-          if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
-          return listarDenunciasLivros(env, url, { json });
-        }
-        if (path === '/api/admin/convites') return listarConvites(env, req);
-        if (path === '/api/lixeira') {
-          const u = await currentUser(env, req);
-          if (!u) return fail('Faça login para continuar.', 401);
-          return u.role === 'autor' ? listarLixeira(env, u, { json, now }) : fail('Apenas autores têm lixeira de livros.', 403);
-        }
-        if (path === '/api/ajuda') {
-          const u = await currentUser(env, req);
-          if (!u) return fail('Faça login para continuar.', 401);
-          return u.role === 'autor' ? listarAjuda(env, u, { json }) : fail('A ajuda entre autores é para autores do coletivo.', 403);
-        }
-        const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
-        if (m) {
-          const p = await getProfile(env, m[1], publicacao);
-          return p ? json(p) : fail('Perfil não encontrado.', 404);
-        }
-        return fail('Não encontrado.', 404);
-      }
-
-      if (path === '/api/register' && req.method === 'POST') return register(env, req);
-      if (path === '/api/register-leitor' && req.method === 'POST') return registerLeitor(env, req);
-      if (path === '/api/login' && req.method === 'POST') return login(env, req);
-      if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
-      if (path === '/api/recuperar' && req.method === 'POST') return requestReset(env, req);
-      if (path === '/api/redefinir' && req.method === 'POST') return doReset(env, req);
-      if (path === '/api/email/confirmar' && req.method === 'POST') return confirmarEmail(env, req);
-      const vi = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/visita$/);
-      if (vi && req.method === 'POST') return visitarLivro(env, req, vi[1], vi[2], { json, fail, now, currentUser, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
-
-      const user = await currentUser(env, req);
-      if (!user) return fail('Faça login para continuar.', 401);
-      if (path === '/api/profile' && req.method === 'PUT') return user.role === 'autor' ? saveProfile(env, req, user) : fail('Apenas autores editam perfil.', 403);
-      if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
-      if (path === '/api/leitor' && req.method === 'PUT') return salvarLeitor(env, req, user, { json, fail, str, body, ownsImage });
-      const sgp = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
-      if (sgp && req.method === 'POST') return seguir(env, user, sgp[1], true, { json, fail, now });
-      if (path === '/api/estantes' || path.startsWith('/api/estantes/')) {
-        const he = { json, fail, str, body, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) };
-        if (path === '/api/estantes' && req.method === 'POST') return criarLista(env, req, user, he);
-        const es = path.match(/^\/api\/estantes\/(\d{1,12})(\/livro)?$/);
-        if (es && es[2] && req.method === 'POST') return alternarLivro(env, req, user, Number(es[1]), he);
-        if (es && !es[2] && req.method === 'PATCH') return mudarLista(env, req, user, Number(es[1]), he);
-        if (es && !es[2] && req.method === 'DELETE') return apagarLista(env, user, Number(es[1]), he);
-        return fail('Não encontrado.', 404);
-      }
-      if (path === '/api/email/reenviar' && req.method === 'POST') return reenviarConfirmacao(env, req, user);
-      // escritas publicas (avaliar, denunciar, extras e pagina do livro, leitura beta) exigem e-mail confirmado
-      if (precisaConfirmar(env, user) && ESCRITA_PUBLICA.some((r) => r.test(path))) return faltaConfirmar();
-      if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user, publicacao);
-      const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
-      if (rm) {
-        const rid = Number(rm[1]);
-        if (!rm[2] && req.method === 'DELETE') return deleteReview(env, user, rid);
-        if (rm[2] === 'util' && req.method === 'POST') return toggleUtil(env, user, rid);
-        if (rm[2] === 'denunciar' && req.method === 'POST') return reportReview(env, req, user, rid);
-      }
-      if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
-      if (path === '/api/conta/apagar' && req.method === 'POST') return deleteAccount(env, req, user);
-      if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
-      if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
-      const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
-      if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
-      if (path === '/api/lixeira' || path.startsWith('/api/lixeira/')) {
-        if (user.role !== 'autor') return fail('Apenas autores têm lixeira de livros.', 403);
-        const lx = path.match(/^\/api\/lixeira\/([a-f0-9]{12})(\/restaurar)?$/);
-        if (lx && lx[2] && req.method === 'POST') return restaurar(env, req, user, lx[1], { json, fail, now, str, body });
-        if (lx && !lx[2] && req.method === 'DELETE') {
-          const r = await excluirDefinitivo(env, user, lx[1], { json, fail });
-          if (r.ok) await limparImagens(env, user.id);
-          return r;
-        }
-        return fail('Não encontrado.', 404);
-      }
-      if (path === '/api/ajuda' || path.startsWith('/api/ajuda/')) {
-        if (user.role !== 'autor') return fail('A ajuda entre autores é para autores do coletivo.', 403);
-        const ha = { json, fail, str, body, now };
-        if (path === '/api/ajuda' && req.method === 'POST') return criarPedido(env, req, user, ha);
-        const aj = path.match(/^\/api\/ajuda\/(\d{1,12})\/(fechar|reabrir|oferta)(?:\/(\d{1,12}))?$/);
-        if (aj) {
-          const id = Number(aj[1]);
-          if (aj[2] !== 'oferta' && !aj[3] && req.method === 'POST') return fecharPedido(env, user, id, aj[2] === 'reabrir', ha);
-          if (aj[2] === 'oferta' && !aj[3] && req.method === 'POST') return ofertar(env, req, user, id, ha);
-          if (aj[2] === 'oferta' && !aj[3] && req.method === 'DELETE') return desistir(env, user, id, ha);
-          if (aj[2] === 'oferta' && aj[3] && req.method === 'POST') return decidirOferta(env, req, user, id, Number(aj[3]), ha);
-        }
-        return fail('Não encontrado.', 404);
-      }
-      const fv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/favorito$/);
-      if (fv && req.method === 'POST') return favoritarLivro(env, user, fv[1], fv[2], { json, fail, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
-      const ps = path.match(/^\/api\/livro\/([a-f0-9]{12})\/posts(?:\/(\d{1,12}))?$/);
-      if (ps && !ps[2] && req.method === 'POST') return criarPost(env, req, user, ps[1], { json, fail, str, body, now, ownsImage });
-      if (ps && ps[2] && req.method === 'DELETE') {
-        const r = await apagarPost(env, user, ps[1], Number(ps[2]), { json, fail });
-        if (r.ok) await limparImagens(env, user.id);
-        return r;
-      }
-      const cp = path.match(/^\/api\/livro\/posts\/(\d{1,12})\/curtir$/);
-      if (cp && req.method === 'POST') return curtirPost(env, user, Number(cp[1]), { json, fail });
-      const dd = path.match(/^\/api\/admin\/denuncias-livros\/(\d{1,12})$/);
-      if (dd && req.method === 'POST') return user.is_admin ? decidirDenunciaLivro(env, req, user, Number(dd[1]), { json, fail, str, body, now }) : fail('Apenas moderadores.', 403);
-      const lp = path.match(/^\/api\/livro\/([a-f0-9]{12})$/);
-      if (lp && req.method === 'PUT') {
-        const r = await putLivro(env, req, user, lp[1], { json, fail, str, body, now, isUrl, ownsImage });
-        if (r.ok) await limparImagens(env, user.id);
-        return r;
-      }
-      const st = path.match(/^\/api\/admin\/site\/([a-z]{1,20})$/);
-      if (st && req.method === 'PUT') return user.is_admin ? salvarSecao(env, req, user, st[1], { json, fail, body, now }) : fail('Apenas moderadores.', 403);
-      if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
-      const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
-      if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));
-      return fail('Não encontrado.', 404);
-    } catch (e) {
-      return fail('Erro interno.', 500);
-    }
+    return comSeguranca(await rotear(req, env));
   },
 };
+
+async function rotear(req, env) {
+  const url = new URL(req.url);
+  const path = url.pathname;
+
+  // www.dominio -> dominio (redirecionamento permanente, preserva caminho e parametros)
+  if (url.hostname.startsWith('www.')) {
+    url.hostname = url.hostname.slice(4);
+    return Response.redirect(url.toString(), 301);
+  }
+
+  if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
+  if (path === '/robots.txt' && req.method === 'GET') return robotsTxt(env, url);
+  if (path === '/sitemap.xml' && req.method === 'GET') return sitemapXml(env, url, { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
+  // paginas de livro e autor saem com titulo, descricao e previa de link proprios (src/meta.js)
+  if (!path.startsWith('/api/')) return comMetadados(req, env, await env.ASSETS.fetch(req), { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
+
+  // protecao CSRF: toda escrita exige cabecalho proprio (alem de cookie SameSite=Strict)
+  if (req.method !== 'GET' && req.headers.get('X-Requested-With') !== 'fetch') return fail('Requisição não permitida.', 403);
+  if (req.method !== 'GET' && await excedeuEscritas(env, req)) return fail('Muitas ações em pouco tempo. Espere um minuto e tente de novo.', 429);
+
+  // publicacao do Estudio: so com a chave ligada (wrangler.jsonc: ESTUDIO_PUBLICACAO = "on")
+  const publicacao = env.ESTUDIO_PUBLICACAO === 'on';
+
+  try {
+    // Estudio Entrelinhas (privado): autenticacao aqui, regras de dono dentro do modulo
+    if (path.startsWith('/api/studio/')) {
+      const su = await currentUser(env, req);
+      if (!su) return fail('Faça login para continuar.', 401);
+      return studioApi(req, env, url, su, { json, fail, str, body, now, rand, toHex, precisaConfirmar: () => precisaConfirmar(env, su), faltaConfirmar });
+    }
+
+    if (req.method === 'GET') {
+      if (path === '/api/me') {
+        const u = await currentUser(env, req);
+        if (!u) return fail('Não autenticado.', 401);
+        // foto para o topo da pagina: leitor usa a do perfil de leitor; autor, o retrato do perfil de autor
+        const ex = await env.DB.prepare(
+          "SELECT u.foto, json_extract(p.data, '$.retrato') AS retrato, json_extract(p.data, '$.nome') AS pnome FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?"
+        ).bind(u.id).first();
+        const autor = u.role === 'autor';
+        return json({ slug: u.slug, email: u.email, mod: !!u.is_admin, role: u.role, nome: (autor && ex.pnome) || u.nome, foto: (autor ? ex.retrato : ex.foto) || '', email_status: u.email_status, confirmar_email: precisaConfirmar(env, u) });
+      }
+      if (path === '/api/reviews') return listReviews(env, req, url);
+      // leitura publica das obras publicadas no Estudio
+      if (path === '/api/biblioteca' || path.startsWith('/api/leitura/')) {
+        if (!publicacao) return fail('Não encontrado.', 404);
+        const r = await leituraPublica(req, env, url, { json, fail, now });
+        if (r) return r;
+      }
+      // configuracao publica para o navegador (a chave do captcha nao e segredo)
+      if (path === '/api/config') return json({ turnstile: env.TURNSTILE_SECRET ? env.TURNSTILE_SITEKEY || null : null, disqus: /^[a-z0-9-]{1,64}$/.test(env.DISQUS_SHORTNAME || '') ? env.DISQUS_SHORTNAME : null });
+      if (path === '/api/authors') {
+        const rows = await env.DB.prepare(
+          'SELECT p.slug, p.data, p.badges, COALESCE(u.is_admin, 0) AS mod FROM profiles p LEFT JOIN users u ON u.id = p.user_id WHERE p.published = 1'
+        ).all();
+        const list = rows.results.map((r) => {
+          const d = JSON.parse(r.data);
+          return { slug: r.slug, nome: d.nome, frase: d.frase, retrato: d.retrato, cor: d.cor, badges: JSON.parse(r.badges), mod: !!r.mod };
+        });
+        // moderadores sempre no topo; dentro de cada grupo, ordem alfabetica (sem diferenciar acento/caixa)
+        list.sort((a, b) => b.mod - a.mod || (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }));
+        return json(list);
+      }
+      if (path === '/api/chat') return listChat(env, req, url);
+      if (path === '/api/vitrine') return vitrine(env, { json, now, publicacao });
+      if (path === '/api/site') return json(await conteudoDoSite(env));
+      if (path === '/api/admin/site') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return json({ secoes: esquemaPublico(), dados: await conteudoDoSite(env) });
+      }
+      if (path === '/api/leitores') return listarLeitores(env, { json });
+      const lt = path.match(/^\/api\/leitor\/([a-z0-9-]{1,40})$/);
+      if (lt) return verLeitor(env, req, lt[1], { json, fail, now, currentUser, livros: () => livrosPublicos(env, { now, publicacao }) });
+      const sg = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
+      if (sg) return seguir(env, await currentUser(env, req), sg[1], false, { json, fail, now });
+      if (path === '/api/estantes') {
+        const u = await currentUser(env, req);
+        return u ? estantes(env, u, { json, now }) : fail('Faça login para continuar.', 401);
+      }
+      if (path === '/api/admin/contas') return adminAccounts(env, req);
+      const lv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})$/);
+      if (lv) return getLivro(env, req, lv[1], lv[2], { json, fail, now, currentUser, publicacao, denunciasAbertas });
+      if (path === '/api/admin/denuncias-livros') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return listarDenunciasLivros(env, url, { json });
+      }
+      if (path === '/api/admin/feedback') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return listarFeedback(env, url, { json });
+      }
+      if (path === '/api/admin/denuncias-avaliacoes') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return listarDenunciasAvaliacoes(env, url, { json });
+      }
+      if (path === '/api/admin/convites') return listarConvites(env, req);
+      if (path === '/api/lixeira') {
+        const u = await currentUser(env, req);
+        if (!u) return fail('Faça login para continuar.', 401);
+        return u.role === 'autor' ? listarLixeira(env, u, { json, now }) : fail('Apenas autores têm lixeira de livros.', 403);
+      }
+      if (path === '/api/ajuda') {
+        const u = await currentUser(env, req);
+        if (!u) return fail('Faça login para continuar.', 401);
+        return u.role === 'autor' ? listarAjuda(env, u, { json }) : fail('A ajuda entre autores é para autores do coletivo.', 403);
+      }
+      const m = path.match(/^\/api\/profile\/([a-z0-9-]{1,40})$/);
+      if (m) {
+        const p = await getProfile(env, m[1], publicacao);
+        return p ? json(p) : fail('Perfil não encontrado.', 404);
+      }
+      return fail('Não encontrado.', 404);
+    }
+
+    if (path === '/api/register' && req.method === 'POST') return register(env, req);
+    if (path === '/api/register-leitor' && req.method === 'POST') return registerLeitor(env, req);
+    if (path === '/api/login' && req.method === 'POST') return login(env, req);
+    if (path === '/api/logout' && req.method === 'POST') return logout(env, req);
+    if (path === '/api/recuperar' && req.method === 'POST') return requestReset(env, req);
+    if (path === '/api/redefinir' && req.method === 'POST') return doReset(env, req);
+    if (path === '/api/email/confirmar' && req.method === 'POST') return confirmarEmail(env, req);
+    if (path === '/api/feedback' && req.method === 'POST') return enviarFeedback(env, req, { json, fail, str, body, now, currentUser, tooManyFails, recordFail });
+    const vi = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/visita$/);
+    if (vi && req.method === 'POST') return visitarLivro(env, req, vi[1], vi[2], { json, fail, now, currentUser, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+
+    const user = await currentUser(env, req);
+    if (!user) return fail('Faça login para continuar.', 401);
+    if (path === '/api/profile' && req.method === 'PUT') return user.role === 'autor' ? saveProfile(env, req, user) : fail('Apenas autores editam perfil.', 403);
+    if (path === '/api/image' && req.method === 'POST') return uploadImage(env, req, user);
+    if (path === '/api/leitor' && req.method === 'PUT') return salvarLeitor(env, req, user, { json, fail, str, body, ownsImage });
+    const sgp = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);
+    if (sgp && req.method === 'POST') return seguir(env, user, sgp[1], true, { json, fail, now });
+    if (path === '/api/estantes' || path.startsWith('/api/estantes/')) {
+      const he = { json, fail, str, body, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) };
+      if (path === '/api/estantes' && req.method === 'POST') return criarLista(env, req, user, he);
+      const es = path.match(/^\/api\/estantes\/(\d{1,12})(\/livro)?$/);
+      if (es && es[2] && req.method === 'POST') return alternarLivro(env, req, user, Number(es[1]), he);
+      if (es && !es[2] && req.method === 'PATCH') return mudarLista(env, req, user, Number(es[1]), he);
+      if (es && !es[2] && req.method === 'DELETE') return apagarLista(env, user, Number(es[1]), he);
+      return fail('Não encontrado.', 404);
+    }
+    if (path === '/api/email/reenviar' && req.method === 'POST') return reenviarConfirmacao(env, req, user);
+    // escritas publicas (avaliar, denunciar, extras e pagina do livro, leitura beta) exigem e-mail confirmado
+    if (precisaConfirmar(env, user) && ESCRITA_PUBLICA.some((r) => r.test(path))) return faltaConfirmar();
+    if (path === '/api/reviews' && req.method === 'PUT') return putReview(env, req, user, publicacao);
+    const rm = path.match(/^\/api\/reviews\/(\d{1,12})(?:\/(util|denunciar))?$/);
+    if (rm) {
+      const rid = Number(rm[1]);
+      if (!rm[2] && req.method === 'DELETE') return deleteReview(env, user, rid);
+      if (rm[2] === 'util' && req.method === 'POST') return toggleUtil(env, user, rid);
+      if (rm[2] === 'denunciar' && req.method === 'POST') return reportReview(env, req, user, rid);
+    }
+    if (path === '/api/password' && req.method === 'POST') return changePassword(env, req, user);
+    if (path === '/api/conta/apagar' && req.method === 'POST') return deleteAccount(env, req, user);
+    if (path === '/api/admin/reset-link' && req.method === 'POST') return adminResetLink(env, req, user);
+    if (path === '/api/admin/convites' && req.method === 'POST') return criarConvite(env, req, user);
+    const dl = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/denuncia$/);
+    if (dl && req.method === 'POST') return denunciarLivro(env, req, user, dl[1], dl[2], { json, fail, str, body, now, isUrl, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+    if (path === '/api/lixeira' || path.startsWith('/api/lixeira/')) {
+      if (user.role !== 'autor') return fail('Apenas autores têm lixeira de livros.', 403);
+      const lx = path.match(/^\/api\/lixeira\/([a-f0-9]{12})(\/restaurar)?$/);
+      if (lx && lx[2] && req.method === 'POST') return restaurar(env, req, user, lx[1], { json, fail, now, str, body });
+      if (lx && !lx[2] && req.method === 'DELETE') {
+        const r = await excluirDefinitivo(env, user, lx[1], { json, fail });
+        if (r.ok) await limparImagens(env, user.id);
+        return r;
+      }
+      return fail('Não encontrado.', 404);
+    }
+    if (path === '/api/ajuda' || path.startsWith('/api/ajuda/')) {
+      if (user.role !== 'autor') return fail('A ajuda entre autores é para autores do coletivo.', 403);
+      const ha = { json, fail, str, body, now };
+      if (path === '/api/ajuda' && req.method === 'POST') return criarPedido(env, req, user, ha);
+      const aj = path.match(/^\/api\/ajuda\/(\d{1,12})\/(fechar|reabrir|oferta)(?:\/(\d{1,12}))?$/);
+      if (aj) {
+        const id = Number(aj[1]);
+        if (aj[2] !== 'oferta' && !aj[3] && req.method === 'POST') return fecharPedido(env, user, id, aj[2] === 'reabrir', ha);
+        if (aj[2] === 'oferta' && !aj[3] && req.method === 'POST') return ofertar(env, req, user, id, ha);
+        if (aj[2] === 'oferta' && !aj[3] && req.method === 'DELETE') return desistir(env, user, id, ha);
+        if (aj[2] === 'oferta' && aj[3] && req.method === 'POST') return decidirOferta(env, req, user, id, Number(aj[3]), ha);
+      }
+      return fail('Não encontrado.', 404);
+    }
+    const fv = path.match(/^\/api\/livro\/([a-z0-9-]{1,40})\/([a-f0-9]{12})\/favorito$/);
+    if (fv && req.method === 'POST') return favoritarLivro(env, user, fv[1], fv[2], { json, fail, now, obraExists: (a, o) => obraExists(env, a, o, publicacao) });
+    const ps = path.match(/^\/api\/livro\/([a-f0-9]{12})\/posts(?:\/(\d{1,12}))?$/);
+    if (ps && !ps[2] && req.method === 'POST') return criarPost(env, req, user, ps[1], { json, fail, str, body, now, ownsImage });
+    if (ps && ps[2] && req.method === 'DELETE') {
+      const r = await apagarPost(env, user, ps[1], Number(ps[2]), { json, fail });
+      if (r.ok) await limparImagens(env, user.id);
+      return r;
+    }
+    const cp = path.match(/^\/api\/livro\/posts\/(\d{1,12})\/curtir$/);
+    if (cp && req.method === 'POST') return curtirPost(env, user, Number(cp[1]), { json, fail });
+    const fb = path.match(/^\/api\/admin\/feedback\/(\d{1,12})$/);
+    if (fb && req.method === 'POST') return user.is_admin ? marcarFeedback(env, req, Number(fb[1]), { json, fail, body }) : fail('Apenas moderadores.', 403);
+    const da = path.match(/^\/api\/admin\/denuncias-avaliacoes\/(\d{1,12})$/);
+    if (da && req.method === 'POST') return user.is_admin ? decidirDenunciaAvaliacao(env, req, user, Number(da[1]), { json, fail, body, now }) : fail('Apenas moderadores.', 403);
+    const dd = path.match(/^\/api\/admin\/denuncias-livros\/(\d{1,12})$/);
+    if (dd && req.method === 'POST') return user.is_admin ? decidirDenunciaLivro(env, req, user, Number(dd[1]), { json, fail, str, body, now }) : fail('Apenas moderadores.', 403);
+    const lp = path.match(/^\/api\/livro\/([a-f0-9]{12})$/);
+    if (lp && req.method === 'PUT') {
+      const r = await putLivro(env, req, user, lp[1], { json, fail, str, body, now, isUrl, ownsImage });
+      if (r.ok) await limparImagens(env, user.id);
+      return r;
+    }
+    const st = path.match(/^\/api\/admin\/site\/([a-z]{1,20})$/);
+    if (st && req.method === 'PUT') return user.is_admin ? salvarSecao(env, req, user, st[1], { json, fail, body, now }) : fail('Apenas moderadores.', 403);
+    if (path === '/api/chat' && req.method === 'POST') return postChat(env, req, user);
+    const cm = path.match(/^\/api\/chat\/(\d{1,12})$/);
+    if (cm && req.method === 'DELETE') return deleteChat(env, user, Number(cm[1]));
+    return fail('Não encontrado.', 404);
+  } catch (e) {
+    return fail('Erro interno.', 500);
+  }
+}
