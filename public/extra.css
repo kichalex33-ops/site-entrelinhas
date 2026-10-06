@@ -63,6 +63,9 @@ a.tab{text-decoration:none;display:inline-block}
 .author-photo span{font-family:'Playfair Display',serif;font-size:3rem;color:var(--accent)}
 .author-card h3{font-family:'Playfair Display',serif;font-weight:500;font-size:1.1rem}
 .author-card p{font-size:.8rem;color:var(--muted)}
+.leitor-card .leitor-local{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.leitor-card .leitor-numeros{margin-top:auto;font-size:.72rem;color:var(--text-3)}
+.leitores-nota{margin-top:1.5rem;text-align:center;font-size:.8rem}
 /* editor */
 .editor{max-width:760px;margin:2rem auto 3rem;padding:0 1.5rem}
 .auth-box{max-width:420px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1.5rem}

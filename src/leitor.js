@@ -27,6 +27,24 @@ async function seguidos(env, userId) {
     : { slug: s.slug, tipo: 'leitor', nome: s.nome || 'Leitor', foto: s.foto || '' });
 }
 
+// GET /api/leitores (publico): os leitores cadastrados para a aba Leitores. Perfil privado fica fora
+// da lista (quem escolheu privado nao quer ser achado); a bio vai cortada, o perfil completo e no leitor.html.
+export async function listarLeitores(env, h) {
+  const r = await env.DB.prepare(
+    `SELECT u.slug, u.nome, u.foto, u.bio, u.local,
+       (SELECT COUNT(*) FROM follows f WHERE f.seguido_slug = u.slug) AS seguidores,
+       (SELECT COUNT(*) FROM reviews v WHERE v.user_id = u.id AND v.hidden = 0) AS avaliacoes
+     FROM users u WHERE u.role = 'leitor' AND u.privado = 0 LIMIT 1000`
+  ).all();
+  const lista = r.results.map((u) => ({
+    slug: u.slug, nome: u.nome || 'Leitor', foto: u.foto || '', local: u.local || '',
+    bio: u.bio.length > 160 ? u.bio.slice(0, 157).trimEnd() + '...' : u.bio,
+    seguidores: u.seguidores, avaliacoes: u.avaliacoes,
+  }));
+  lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+  return h.json(lista);
+}
+
 // GET /api/leitor/:slug (publico; perfil privado mostra so o basico a visitantes)
 export async function verLeitor(env, req, slug, h) {
   const u = await env.DB.prepare('SELECT id, slug, nome, role, bio, foto, local, privado, created_at FROM users WHERE slug = ?').bind(slug).first();

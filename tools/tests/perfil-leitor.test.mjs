@@ -97,3 +97,22 @@ test('estantes: as cinco fixas se excluem; listas proprias; listas ocultas so o 
   assert.equal((await app.call('DELETE', `/api/estantes/${lista(e, 'quero').id}`, { tok: l.tok })).s, 404, 'fixa nao se apaga');
   assert.equal((await app.call('DELETE', `/api/estantes/${ferias.id}`, { tok: l.tok })).s, 200);
 });
+
+test('aba Leitores: lista leitores publicos em ordem alfabetica com numeros; privados e autores ficam fora', async () => {
+  const { app, a, l, rio } = await cenario();
+  const m = app.addUser({ role: 'leitor', nome: 'Bia' });
+  const z = app.addUser({ role: 'leitor', nome: 'Zeca' });
+  await app.call('PUT', '/api/leitor', { tok: l.tok, body: { nome: 'Lia', bio: 'x'.repeat(300), local: 'Recife' } });
+  await app.call('PUT', '/api/leitor', { tok: z.tok, body: { privado: true } });
+  await app.call('PUT', '/api/reviews', { tok: l.tok, body: { autor: a.slug, obra: rio, nota: 5, texto: 'Li em uma noite so, recomendo.' } });
+  await app.call('POST', `/api/seguir/${l.slug}`, { tok: m.tok });
+
+  const r = await app.call('GET', '/api/leitores');
+  assert.equal(r.s, 200);
+  assert.deepEqual(r.j.map((x) => x.nome), ['Bia', 'Lia'], 'Zeca (privado) e a autora nao aparecem');
+  const lia = r.j[1];
+  assert.equal(lia.slug, l.slug); assert.equal(lia.local, 'Recife');
+  assert.equal(lia.avaliacoes, 1); assert.equal(lia.seguidores, 1);
+  assert.ok(lia.bio.length <= 160 && lia.bio.endsWith('...'), 'bio cortada na lista');
+  assert.equal(lia.email, undefined, 'nada de e-mail na lista publica');
+});

@@ -7,7 +7,7 @@ import { movimentosDaLixeira, naLixeira, listarLixeira, restaurar, excluirDefini
 import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOferta } from './ajuda.js';
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine, livrosPublicos } from './vitrine.js';
-import { verLeitor, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
+import { verLeitor, listarLeitores, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
 import { comMetadados } from './meta.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
@@ -765,6 +765,7 @@ export default {
           if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
           return json({ secoes: esquemaPublico(), dados: await conteudoDoSite(env) });
         }
+        if (path === '/api/leitores') return listarLeitores(env, { json });
         const lt = path.match(/^\/api\/leitor\/([a-z0-9-]{1,40})$/);
         if (lt) return verLeitor(env, req, lt[1], { json, fail, now, currentUser, livros: () => livrosPublicos(env, { now, publicacao }) });
         const sg = path.match(/^\/api\/seguir\/([a-z0-9-]{1,40})$/);

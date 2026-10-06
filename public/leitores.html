@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Autores | Entrelinhas</title>
+<title>Leitores | Entrelinhas</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#000000">
 <script src="tema.js"></script>
 <script src="menu.js" defer></script>
-<meta name="description" content="Os autores do coletivo Entrelinhas.">
+<meta name="description" content="Os leitores do Entrelinhas.">
 <meta name="robots" content="noindex,nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,23 +32,24 @@
     <a class="tab" href="index.html#lancamentos">Lançamentos</a>
     <a class="tab" href="index.html#projetos">Projetos</a>
     <a class="tab" href="index.html#servicos">Serviços</a>
-    <a class="tab active" href="autores.html">Autores</a>
-    <a class="tab" href="leitores.html">Leitores</a>
+    <a class="tab" href="autores.html">Autores</a>
+    <a class="tab active" href="leitores.html">Leitores</a>
   </nav>
 </header>
 
 <main>
   <section class="page active">
     <div class="hero" style="padding-bottom:.5rem">
-      <span class="eyebrow">Quem escreve</span>
-      <h2>Nossos <em>Autores</em></h2>
-      <p>Clique em um autor para ver o perfil, as obras e os links.</p>
+      <span class="eyebrow">Quem lê</span>
+      <h2>Nossos <em>Leitores</em></h2>
+      <p>Clique em um leitor para ver o perfil, as estantes e as avaliações.</p>
       <div class="cta-leitor" id="ctaLeitor">
-        <p>Gostou de alguém? Com uma conta de leitor você segue autores, favorita livros e monta suas estantes.</p>
+        <p>Quer aparecer aqui? Com uma conta de leitor você ganha um perfil, segue autores, favorita livros e monta suas estantes.</p>
         <p class="cta-row"><a class="btn btn-primary" href="conta.html#criar">Criar conta de leitor</a> <a class="btn btn-ghost" href="conta.html">Já tenho conta</a></p>
       </div>
     </div>
-    <div class="authors-grid" id="authors"><p class="muted-note">Carregando...</p></div>
+    <div class="authors-grid" id="leitores"><p class="muted-note">Carregando...</p></div>
+    <p class="muted-note leitores-nota">Perfis privados não aparecem nesta lista.</p>
   </section>
 </main>
 
@@ -65,23 +66,25 @@
 <script>
 (async function(){
   const { esc, imgUrl, api, initial } = EL;
-  const box = document.getElementById('authors');
-  // quem ja entrou (leitor ou autor) nao precisa do convite para criar conta
+  const box = document.getElementById('leitores');
+  // quem ja entrou nao precisa do convite para criar conta
   fetch('/api/me').then((r) => { if (r.ok) document.getElementById('ctaLeitor').hidden = true; }).catch(() => {});
+  const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   try {
-    const list = await api('/api/authors');
-    if (!list.length) { box.innerHTML = '<p class="muted-note">Nenhum autor publicado ainda.</p>'; return; }
-    box.innerHTML = list.map(a => `
-      <a class="author-card${a.mod ? ' is-mod' : ''}" href="autor.html?a=${encodeURIComponent(a.slug)}" style="--cor-autor:${/^#[0-9a-f]{6}$/i.test(a.cor) ? a.cor : '#d9a94a'}">
+    const list = await api('/api/leitores');
+    if (!list.length) { box.innerHTML = '<p class="muted-note">Nenhum leitor com perfil público ainda.</p>'; return; }
+    box.innerHTML = list.map(l => `
+      <a class="author-card leitor-card" href="leitor.html?u=${encodeURIComponent(l.slug)}">
         <div class="photo-wrap">
-          <div class="author-photo">${a.retrato ? `<img src="${esc(imgUrl(a.retrato))}" alt="Foto de ${esc(a.nome)}" loading="lazy">` : `<span>${initial(a.nome)}</span>`}</div>
-          ${a.mod ? '<span class="mod-seal">&#9733; Moderador e Idealizador</span>' : ''}
+          <div class="author-photo">${l.foto ? `<img src="${esc(imgUrl(l.foto))}" alt="Foto de ${esc(l.nome)}" loading="lazy">` : `<span>${initial(l.nome)}</span>`}</div>
         </div>
-        <h3>${esc(a.nome)}</h3>
-        ${a.frase ? `<p>${esc(a.frase)}</p>` : ''}
+        <h3>${esc(l.nome)}</h3>
+        ${l.local ? `<p class="leitor-local">${esc(l.local)}</p>` : ''}
+        ${l.bio ? `<p>${esc(l.bio)}</p>` : ''}
+        <p class="leitor-numeros">${plural(l.avaliacoes, 'avaliação', 'avaliações')} · ${plural(l.seguidores, 'seguidor', 'seguidores')}</p>
       </a>`).join('');
   } catch (e) {
-    box.innerHTML = '<p class="muted-note">Não foi possível carregar os autores.</p>';
+    box.innerHTML = '<p class="muted-note">Não foi possível carregar os leitores.</p>';
   }
 })();
 </script>
