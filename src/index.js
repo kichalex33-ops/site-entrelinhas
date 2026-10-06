@@ -11,6 +11,7 @@ import { verLeitor, listarLeitores, salvarLeitor, seguir, estantes, criarLista, 
 import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
+import { primeirosPassos } from './onboarding.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
 
@@ -891,6 +892,10 @@ async function rotear(req, env) {
         const u = await currentUser(env, req);
         if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
         return listarDenunciasLivros(env, url, { json });
+      }
+      if (path === '/api/onboarding') {
+        const u = await currentUser(env, req);
+        return u ? primeirosPassos(env, u, { json }) : fail('Faça login para continuar.', 401);
       }
       if (path === '/api/admin/mensagens') {
         const u = await currentUser(env, req);

@@ -479,13 +479,35 @@
     app.prepend(box);
   }
 
+  // primeiros passos: marcados pelo servidor com os dados reais; somem quando completos.
+  // Minimizar e dispensar ficam neste navegador (localStorage); nada bloqueia o uso do site.
+  async function primeirosPassos(me){
+    const chave = 'el:passos:' + me.slug;
+    let pref = null; try { pref = localStorage.getItem(chave); } catch { /* sem armazenamento */ }
+    if (pref === 'dispensado') return;
+    let o; try { o = await api('/api/onboarding'); } catch { return; }
+    if (o.completo) return;
+    const feitos = o.passos.filter((p) => p.feito).length;
+    const box = document.createElement('details');
+    box.className = 'primeiros-passos';
+    box.open = pref !== 'minimizado';
+    box.innerHTML = `<summary><b>Primeiros passos</b> <span class="hint">${feitos} de ${o.passos.length}</span></summary>
+      <ol>${o.passos.map((p) => `<li class="${p.feito ? 'feito' : ''}"><span class="pp-marca" aria-hidden="true">${p.feito ? '✓' : ''}</span>
+        ${p.feito ? `<span>${esc(p.rotulo)}</span><span class="sr-only"> (feito)</span>` : `<a href="${esc(p.link)}">${esc(p.rotulo)}</a>`}</li>`).join('')}</ol>
+      <p><button type="button" class="auth-link" data-dispensar>Não mostrar mais</button></p>`;
+    box.addEventListener('toggle', () => { try { localStorage.setItem(chave, box.open ? 'aberto' : 'minimizado'); } catch { /* ok */ } });
+    box.querySelector('[data-dispensar]').addEventListener('click', () => { try { localStorage.setItem(chave, 'dispensado'); } catch { /* ok */ } box.remove(); });
+    const aviso = app.querySelector('.aviso-email');
+    if (aviso) aviso.after(box); else app.prepend(box);
+  }
+
   async function load(){
     try {
       const me = await api('/api/me');
       slug = me.slug; isMod = !!me.mod;
-      if (me.role === 'leitor') { readerView(me); return avisoEmail(me); }
+      if (me.role === 'leitor') { readerView(me); avisoEmail(me); return primeirosPassos(me); }
       const p = await api('/api/profile/' + slug);
-      P = p.data; editorView(); avisoEmail(me); openFromHash();
+      P = p.data; editorView(); avisoEmail(me); primeirosPassos(me); openFromHash();
     } catch (e) {
       // link de convite (conta.html#convite=CODIGO): abre o cadastro de autor com o codigo preenchido.
       // O codigo fica no fragmento (#), que o navegador nao envia ao servidor.
