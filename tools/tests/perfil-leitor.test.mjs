@@ -12,7 +12,7 @@ async function cenario() {
 }
 const lista = (j, chave) => j.listas.find((x) => x.chave === chave);
 
-test('perfil de leitor: nome, bio e foto; avaliacoes e favoritos aparecem com o livro', async () => {
+test('perfil de leitor: nome, bio e foto; favoritos aparecem com o livro; a avaliacao fica so no livro do autor', async () => {
   const { app, a, l, rio } = await cenario();
   await app.call('PUT', '/api/reviews', { tok: l.tok, body: { autor: a.slug, obra: rio, nota: 5, texto: 'Li em uma noite so, recomendo.' } });
   await app.call('POST', `/api/livro/${a.slug}/${rio}/favorito`, { tok: l.tok });
@@ -27,7 +27,8 @@ test('perfil de leitor: nome, bio e foto; avaliacoes e favoritos aparecem com o 
   const p = await app.call('GET', `/api/leitor/${l.slug}`);
   assert.equal(p.s, 200);
   assert.equal(p.j.nome, 'Lia Leitora'); assert.equal(p.j.bio, 'Leio fantasia e suspense.'); assert.equal(p.j.dono, false);
-  assert.equal(p.j.avaliacoes[0].livro.titulo, 'O Rio'); assert.equal(p.j.avaliacoes[0].nota, 5);
+  assert.equal(p.j.avaliacoes, undefined, 'avaliacoes nao aparecem no perfil do leitor');
+  assert.ok(!p.j.atividade.some((x) => x.tipo === 'avaliou'));
   assert.deepEqual(p.j.favoritos.map((x) => x.titulo), ['O Rio']);
   const rv = await app.call('GET', `/api/reviews?autor=${a.slug}&obra=${rio}`);
   assert.equal(rv.j.reviews[0].leitor, l.slug, 'review leva ao perfil do leitor');
@@ -43,12 +44,19 @@ test('seguir autor: liga e desliga, conta seguidores, aparece no perfil; nao seg
   assert.deepEqual((await app.call('GET', `/api/leitor/${l.slug}`)).j.seguindo.map((s) => [s.nome, s.tipo]), [['Ana Autora', 'autor']]);
   assert.deepEqual((await app.call('POST', `/api/seguir/${a.slug}`, { tok: l.tok })).j.seguindo, false);
   assert.equal((await app.call('POST', '/api/seguir/ninguem', { tok: l.tok })).s, 404);
-  // leitor segue leitor; contadores no perfil
+  // leitor nao e seguido: seguir fica so no perfil do autor
   const m = app.addUser({ role: 'leitor', nome: 'Mel' });
-  assert.equal((await app.call('POST', `/api/seguir/${l.slug}`, { tok: m.tok })).j.seguidores, 1);
+  const r = await app.call('POST', `/api/seguir/${l.slug}`, { tok: m.tok });
+  assert.equal(r.s, 400); assert.match(r.j.erro, /autores/);
+  assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM follows WHERE seguido_slug = ?').get(l.slug).n, 0);
   const p = (await app.call('GET', `/api/leitor/${l.slug}`, { tok: m.tok })).j;
-  assert.equal(p.seguidores, 1); assert.equal(p.eu_sigo, true);
-  assert.equal((await app.call('GET', `/api/leitor/${m.slug}`)).j.seguindo_total, 1);
+  assert.equal(p.seguidores, undefined); assert.equal(p.eu_sigo, undefined);
+  await app.call('POST', `/api/seguir/${a.slug}`, { tok: m.tok });
+  assert.equal((await app.call('GET', `/api/leitor/${m.slug}`)).j.seguindo_total, 1, 'conta so autores seguidos');
+  // seguidas antigas de leitores (de antes da regra) nao aparecem em "Seguindo"
+  app.db.prepare('INSERT INTO follows (user_id, seguido_slug, created_at) VALUES (?, ?, 1)').run(m.id, l.slug);
+  const pm = (await app.call('GET', `/api/leitor/${m.slug}`)).j;
+  assert.deepEqual(pm.seguindo.map((x) => x.tipo), ['autor']); assert.equal(pm.seguindo_total, 1);
 });
 
 test('perfil privado: visitante ve so nome e foto; o dono ve tudo; a engrenagem muda so a privacidade', async () => {
@@ -61,8 +69,7 @@ test('perfil privado: visitante ve so nome e foto; o dono ve tudo; a engrenagem 
   assert.equal(v.avaliacoes, undefined); assert.equal(v.bio, undefined);
   const d = (await app.call('GET', `/api/leitor/${l.slug}`, { tok: l.tok })).j;
   assert.equal(d.bloqueado, undefined); assert.equal(d.bio, 'Bio guardada', 'mudar so a privacidade nao apaga a bio');
-  assert.equal(d.local, 'Recife'); assert.equal(d.avaliacoes.length, 1);
-  assert.equal(d.atividade[0].tipo, 'avaliou');
+  assert.equal(d.local, 'Recife'); assert.equal(d.avaliacoes, undefined, 'nem o dono ve avaliacoes no perfil de leitor');
 });
 
 test('estantes: as cinco fixas se excluem; listas proprias; listas ocultas so o dono ve', async () => {
@@ -98,21 +105,20 @@ test('estantes: as cinco fixas se excluem; listas proprias; listas ocultas so o 
   assert.equal((await app.call('DELETE', `/api/estantes/${ferias.id}`, { tok: l.tok })).s, 200);
 });
 
-test('aba Leitores: lista leitores publicos em ordem alfabetica com numeros; privados e autores ficam fora', async () => {
+test('aba Leitores: lista leitores publicos em ordem alfabetica, sem seguidores nem avaliacoes; privados e autores ficam fora', async () => {
   const { app, a, l, rio } = await cenario();
   const m = app.addUser({ role: 'leitor', nome: 'Bia' });
   const z = app.addUser({ role: 'leitor', nome: 'Zeca' });
   await app.call('PUT', '/api/leitor', { tok: l.tok, body: { nome: 'Lia', bio: 'x'.repeat(300), local: 'Recife' } });
   await app.call('PUT', '/api/leitor', { tok: z.tok, body: { privado: true } });
   await app.call('PUT', '/api/reviews', { tok: l.tok, body: { autor: a.slug, obra: rio, nota: 5, texto: 'Li em uma noite so, recomendo.' } });
-  await app.call('POST', `/api/seguir/${l.slug}`, { tok: m.tok });
 
   const r = await app.call('GET', '/api/leitores');
   assert.equal(r.s, 200);
   assert.deepEqual(r.j.map((x) => x.nome), ['Bia', 'Lia'], 'Zeca (privado) e a autora nao aparecem');
   const lia = r.j[1];
   assert.equal(lia.slug, l.slug); assert.equal(lia.local, 'Recife');
-  assert.equal(lia.avaliacoes, 1); assert.equal(lia.seguidores, 1);
+  assert.equal(lia.avaliacoes, undefined); assert.equal(lia.seguidores, undefined, 'seguir e avaliacoes ficam no perfil do autor');
   assert.ok(lia.bio.length <= 160 && lia.bio.endsWith('...'), 'bio cortada na lista');
   assert.equal(lia.email, undefined, 'nada de e-mail na lista publica');
 });

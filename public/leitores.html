@@ -42,7 +42,7 @@
     <div class="hero" style="padding-bottom:.5rem">
       <span class="eyebrow">Quem lê</span>
       <h2>Nossos <em>Leitores</em></h2>
-      <p>Clique em um leitor para ver o perfil, as estantes e as avaliações.</p>
+      <p>Clique em um leitor para ver o perfil e as estantes.</p>
       <div class="cta-leitor" id="ctaLeitor">
         <p>Quer aparecer aqui? Com uma conta de leitor você ganha um perfil, segue autores, favorita livros e monta suas estantes.</p>
         <p class="cta-row"><a class="btn btn-primary" href="conta.html#criar">Criar conta de leitor</a> <a class="btn btn-ghost" href="conta.html">Já tenho conta</a></p>
@@ -70,7 +70,6 @@
   const box = document.getElementById('leitores');
   // quem ja entrou nao precisa do convite para criar conta
   fetch('/api/me').then((r) => { if (r.ok) document.getElementById('ctaLeitor').hidden = true; }).catch(() => {});
-  const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
   try {
     const list = await api('/api/leitores');
     if (!list.length) { box.innerHTML = '<p class="muted-note">Nenhum leitor com perfil público ainda.</p>'; return; }
@@ -82,7 +81,6 @@
         <h3>${esc(l.nome)}</h3>
         ${l.local ? `<p class="leitor-local">${esc(l.local)}</p>` : ''}
         ${l.bio ? `<p>${esc(l.bio)}</p>` : ''}
-        <p class="leitor-numeros">${plural(l.avaliacoes, 'avaliação', 'avaliações')} · ${plural(l.seguidores, 'seguidor', 'seguidores')}</p>
       </a>`).join('');
   } catch (e) {
     box.innerHTML = '<p class="muted-note">Não foi possível carregar os leitores.</p>';

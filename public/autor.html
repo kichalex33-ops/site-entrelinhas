@@ -94,6 +94,10 @@
   // obras publicadas pelo Estudio vem primeiro (leitura no proprio site), depois os livros do perfil
   const obras = [...(p.publicadas || []).map((o) => ({ ...o, status: 'Publicado' })), ...d.obras];
 
+  // nota media de todos os livros do autor (soma ponderada pelas avaliacoes de cada livro)
+  const notaGeral = obras.reduce((g, o) => (o.reviews && o.reviews.total ? { total: g.total + o.reviews.total, soma: g.soma + o.reviews.media * o.reviews.total } : g), { total: 0, soma: 0 });
+  notaGeral.media = notaGeral.total ? notaGeral.soma / notaGeral.total : 0;
+
   root.innerHTML = `
   <section class="page active" id="perfil">
     <div class="profile">
@@ -102,16 +106,20 @@
         ${isOwner ? '<div class="owner-bar"><a class="btn btn-primary" href="conta.html">Editar perfil e bio</a><a class="btn btn-ghost" href="conta.html#nova-obra">Adicionar livro</a><a class="btn btn-ghost" href="estudio.html">Estúdio de escrita</a></div>' : ''}
         <span class="eyebrow">Perfil do autor${d.local ? ' · ' + esc(d.local) : ''}</span>
         <h2>${esc(d.nome)}</h2>
+        <div class="autor-destaque">
+          ${isOwner ? '' : '<button type="button" class="btn btn-primary" id="seguirBtn" hidden>+ Seguir</button>'}
+          <span id="seguidores" class="autor-num"></span>
+          ${notaGeral.total ? `<a class="autor-num autor-nota" href="#obras" title="Média das avaliações de todos os livros"><span class="stars" aria-hidden="true">${'★'.repeat(Math.round(notaGeral.media))}${'☆'.repeat(5 - Math.round(notaGeral.media))}</span> <b>${notaGeral.media.toFixed(1).replace('.', ',')}</b> · ${notaGeral.total} ${notaGeral.total === 1 ? 'avaliação' : 'avaliações'}</a>` : '<span class="autor-num hint">Sem avaliações ainda</span>'}
+        </div>
         ${d.frase ? `<p class="lead">${esc(d.frase)}</p>` : ''}
         ${paras(d.bio)}
         ${d.citacao ? `<p class="quote-line">${esc(d.citacao)}</p>` : ''}
         ${p.badges.length ? `<div class="badges">${p.badges.map(b => `<span class="badge-pill">${esc(b)}</span>`).join('')}</div>` : ''}
-        <p class="seguir-linha"><span id="seguidores" class="hint"></span>${isOwner ? '' : `<button type="button" class="btn btn-primary" id="seguirBtn" hidden>+ Seguir</button>`}</p>
         ${d.links.length ? `<p class="links">${d.links.map((l, i) => `<a class="btn ${i ? 'btn-ghost' : 'btn-primary'}" href="${esc(l.url)}"${linkAttrs(l.url)}>${esc(l.rotulo)}</a>`).join('')}</p>` : ''}
         ${viewerMod ? '<p class="links"><a class="btn btn-primary mod-chat-btn" href="chat.html">&#9733; Entrar no chat da moderação</a><a class="btn btn-ghost" href="https://mail.proton.me/" target="_blank" rel="noopener noreferrer">Abrir a caixa de e-mails</a></p>' : ''}
       </div>
     </div>
-    ${obras.length || isOwner ? `<div class="section-head"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div>${obras.length ? `<div class="works">${obras.map(obra).join('')}</div>` : '<p class="muted-note">Você ainda não cadastrou nenhum livro. <a href="conta.html#nova-obra">Adicionar o primeiro livro</a>.</p>'}` : ''}
+    ${obras.length || isOwner ? `<div class="section-head" id="obras"><div><span class="eyebrow">Obras</span><h2>Livros e projetos</h2></div><div class="line"></div></div>${obras.length ? `<div class="works">${obras.map(obra).join('')}</div>` : '<p class="muted-note">Você ainda não cadastrou nenhum livro. <a href="conta.html#nova-obra">Adicionar o primeiro livro</a>.</p>'}` : ''}
     ${d.secoes.map(s => `${s.titulo ? `<div class="section-head"><div><h2>${esc(s.titulo)}</h2></div><div class="line"></div></div>` : ''}<div class="prose">${paras(s.texto)}</div>`).join('')}
     <p style="text-align:center;margin:3rem 0 0"><a class="btn btn-ghost" href="autores.html">Ver todos os autores</a></p>
   </section>`;
@@ -120,7 +128,7 @@
   // seguir o autor (leitores e outros autores); quem nao entrou e levado ao login
   const segBtn = document.getElementById('seguirBtn'), segN = document.getElementById('seguidores');
   const mostrarSeg = (r) => {
-    segN.textContent = `${r.seguidores} ${r.seguidores === 1 ? 'seguidor' : 'seguidores'}`;
+    segN.innerHTML = `<b>${r.seguidores}</b> ${r.seguidores === 1 ? 'seguidor' : 'seguidores'}`;
     if (segBtn) { segBtn.hidden = false; segBtn.textContent = r.seguindo ? 'Seguindo' : '+ Seguir'; segBtn.className = 'btn ' + (r.seguindo ? 'btn-ghost' : 'btn-primary'); }
   };
   try { mostrarSeg(await api(`/api/seguir/${encodeURIComponent(slug)}`)); } catch (e) { /* contagem nao e essencial */ }

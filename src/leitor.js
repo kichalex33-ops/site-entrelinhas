@@ -1,4 +1,5 @@
-// Perfil de leitor (leitor.html?u=slug): foto, bio, local, contadores, estantes, avaliacoes, atividade e quem segue.
+// Perfil de leitor (leitor.html?u=slug): foto, bio, local, contadores, estantes, atividade e autores que segue.
+// Seguir e avaliacoes ficam no perfil do autor: leitores nao sao seguidos e as avaliacoes nao aparecem aqui.
 // Estantes: cinco fixas (Lendo, Quero ler, Lidos, Pausado, Abandonado; um livro fica em so uma) + listas proprias.
 // Perfil privado: visitantes so veem nome, foto e o aviso de privado. Vale para qualquer conta (autor tambem le).
 export const FIXAS = [['lendo', 'Lendo'], ['quero', 'Quero ler'], ['lidos', 'Lidos'], ['pausado', 'Pausado'], ['abandonado', 'Abandonado']];
@@ -20,7 +21,7 @@ async function seguidos(env, userId) {
   const r = await env.DB.prepare(
     `SELECT f.seguido_slug AS slug, u.role, u.nome, u.foto, u.privado, json_extract(p.data, '$.nome') AS pnome, json_extract(p.data, '$.retrato') AS retrato
      FROM follows f JOIN users u ON u.slug = f.seguido_slug LEFT JOIN profiles p ON p.slug = u.slug AND p.published = 1
-     WHERE f.user_id = ? ORDER BY f.created_at DESC`
+     WHERE f.user_id = ? AND u.role = 'autor' ORDER BY f.created_at DESC`
   ).bind(userId).all();
   return r.results.map((s) => s.role === 'autor'
     ? { slug: s.slug, tipo: 'autor', nome: s.pnome || s.slug, foto: s.retrato || '' }
@@ -31,15 +32,12 @@ async function seguidos(env, userId) {
 // da lista (quem escolheu privado nao quer ser achado); a bio vai cortada, o perfil completo e no leitor.html.
 export async function listarLeitores(env, h) {
   const r = await env.DB.prepare(
-    `SELECT u.slug, u.nome, u.foto, u.bio, u.local,
-       (SELECT COUNT(*) FROM follows f WHERE f.seguido_slug = u.slug) AS seguidores,
-       (SELECT COUNT(*) FROM reviews v WHERE v.user_id = u.id AND v.hidden = 0) AS avaliacoes
+    `SELECT u.slug, u.nome, u.foto, u.bio, u.local
      FROM users u WHERE u.role = 'leitor' AND u.privado = 0 LIMIT 1000`
   ).all();
   const lista = r.results.map((u) => ({
     slug: u.slug, nome: u.nome || 'Leitor', foto: u.foto || '', local: u.local || '',
     bio: u.bio.length > 160 ? u.bio.slice(0, 157).trimEnd() + '...' : u.bio,
-    seguidores: u.seguidores, avaliacoes: u.avaliacoes,
   }));
   lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
   return h.json(lista);
@@ -52,40 +50,36 @@ export async function verLeitor(env, req, slug, h) {
   const viewer = await h.currentUser(env, req);
   const dono = !!viewer && viewer.id === u.id;
   const n = await env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM follows WHERE seguido_slug = ?1) AS seguidores,
-       (SELECT COUNT(*) FROM follows WHERE user_id = ?2) AS seguindo,
-       (SELECT COUNT(*) FROM follows WHERE seguido_slug = ?1 AND user_id = ?3) AS eu_sigo`
-  ).bind(u.slug, u.id, viewer ? viewer.id : 0).first();
+    "SELECT COUNT(*) AS seguindo FROM follows f JOIN users s ON s.slug = f.seguido_slug WHERE f.user_id = ? AND s.role = 'autor'"
+  ).bind(u.id).first();
   const prof = u.role === 'autor' ? await env.DB.prepare('SELECT data, badges FROM profiles WHERE slug = ?').bind(u.slug).first() : null;
   let nomeAutor = '', selos = [];
   try { nomeAutor = prof ? JSON.parse(prof.data).nome || '' : ''; selos = prof ? JSON.parse(prof.badges) : []; } catch { /* perfil invalido */ }
   const base = {
     slug: u.slug, nome: u.role === 'autor' ? nomeAutor || u.slug : u.nome || 'Leitor', role: u.role, foto: u.foto, desde: u.created_at,
-    privado: !!u.privado, dono, logado: !!viewer, eu_sigo: !!n.eu_sigo, seguidores: n.seguidores, seguindo_total: n.seguindo,
+    privado: !!u.privado, dono, logado: !!viewer, seguindo_total: n.seguindo,
   };
   if (u.privado && !dono) return h.json({ ...base, bloqueado: true });
 
   if (dono) await garantirFixas(env, u.id, h.now());
   const mapa = new Map((await h.livros()).map((l) => [l.id, l]));
-  const av = (await env.DB.prepare('SELECT obra_id, nota, texto, spoiler, created_at FROM reviews WHERE user_id = ? AND hidden = 0 ORDER BY created_at DESC LIMIT 50').bind(u.id).all()).results
-    .filter((r) => mapa.has(r.obra_id)).map((r) => ({ livro: cartao(mapa.get(r.obra_id)), nota: r.nota, texto: r.texto, spoiler: !!r.spoiler, em: r.created_at }));
   const favRows = (await env.DB.prepare('SELECT obra_id, created_at FROM book_favorites WHERE user_id = ? ORDER BY created_at DESC').bind(u.id).all()).results;
   const listas = (await env.DB.prepare(`SELECT id, chave, nome, publica FROM reader_lists WHERE user_id = ? ${dono ? '' : 'AND publica = 1'} ORDER BY ${ORDEM}`).bind(u.id).all()).results;
   const itens = (await env.DB.prepare('SELECT i.list_id, i.obra_id, i.added_at FROM reader_list_items i JOIN reader_lists l ON l.id = i.list_id WHERE l.user_id = ? ORDER BY i.added_at DESC').bind(u.id).all()).results;
   const seg = await seguidos(env, u.id);
 
-  // atividade recente, montada so com o que ja existe (nada inventado): avaliou, favoritou, estante, seguiu
+  // atividade recente, montada so com o que ja existe (nada inventado): favoritou e estante.
+  // Avaliacoes aparecem so no perfil do autor (em cada livro), nao no perfil de quem avaliou.
   const visiveis = new Map(listas.map((l) => [l.id, l]));
   const atividade = [
-    ...av.map((r) => ({ tipo: 'avaliou', em: r.em, livro: r.livro, nota: r.nota, texto: r.spoiler ? '' : r.texto })),
     ...favRows.filter((f) => mapa.has(f.obra_id)).map((f) => ({ tipo: 'favoritou', em: f.created_at, livro: cartao(mapa.get(f.obra_id)) })),
     ...itens.filter((i) => visiveis.has(i.list_id) && mapa.has(i.obra_id)).map((i) => ({ tipo: 'estante', em: i.added_at, livro: cartao(mapa.get(i.obra_id)), lista: visiveis.get(i.list_id).nome, chave: visiveis.get(i.list_id).chave })),
   ].sort((a, b) => b.em - a.em).slice(0, 40);
 
   return h.json({
     ...base, bio: u.bio, local: u.local, selos,
-    numeros: { favoritos: favRows.filter((f) => mapa.has(f.obra_id)).length, avaliacoes: av.length, lidos: itens.filter((i) => (listas.find((l) => l.id === i.list_id) || {}).chave === 'lidos').length },
-    avaliacoes: av, favoritos: cartoes(mapa, favRows.map((f) => f.obra_id)), seguindo: seg, atividade,
+    numeros: { favoritos: favRows.filter((f) => mapa.has(f.obra_id)).length, lidos: itens.filter((i) => (listas.find((l) => l.id === i.list_id) || {}).chave === 'lidos').length },
+    favoritos: cartoes(mapa, favRows.map((f) => f.obra_id)), seguindo: seg, atividade,
     listas: listas.map((l) => ({ ...l, publica: !!l.publica, livros: cartoes(mapa, itens.filter((i) => i.list_id === l.id).map((i) => i.obra_id)) })),
   });
 }
@@ -113,8 +107,10 @@ export async function salvarLeitor(env, req, user, h) {
 
 // GET/POST /api/seguir/:slug (autores e leitores)
 export async function seguir(env, user, slug, alternar, h) {
+  // so autores sao seguidos (perfil de leitor nao tem "Seguir"); seguir, seguidores e avaliacoes ficam no perfil do autor
   const alvo = await env.DB.prepare('SELECT id, role FROM users WHERE slug = ?').bind(slug).first();
-  const visivel = alvo && (alvo.role !== 'autor' || (await env.DB.prepare('SELECT 1 FROM profiles WHERE slug = ? AND published = 1').bind(slug).first()));
+  if (alvo && alvo.role !== 'autor') return h.fail('Só é possível seguir autores.', 400);
+  const visivel = alvo && (await env.DB.prepare('SELECT 1 FROM profiles WHERE slug = ? AND published = 1').bind(slug).first());
   if (!visivel) return h.fail('Perfil não encontrado.', 404);
   if (alternar) {
     if (!user) return h.fail('Faça login para seguir.', 401);

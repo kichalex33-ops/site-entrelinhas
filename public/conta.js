@@ -150,7 +150,7 @@
           <div class="photo-row">
             <div class="photo-prev" id="prev-retrato">${P.retrato ? `<img src="${esc(imgUrl(P.retrato))}" alt="">` : '<span>Sem foto</span>'}</div>
             <div><span class="lbl">Foto de perfil</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" data-up="retrato">
+              <input type="file" accept="image/jpeg,image/png,image/webp" data-up="retrato" aria-label="Enviar foto do perfil">
               ${P.retrato ? '<button type="button" class="rm" data-clear="retrato">Remover foto</button>' : ''}
               <p class="hint">Formatos aceitos: JPG, PNG ou WebP. A imagem é reduzida automaticamente (até 600 KB). Outros formatos, como HEIC ou GIF, não são aceitos.</p></div>
           </div>
@@ -481,12 +481,11 @@
 
   // primeiros passos: marcados pelo servidor com os dados reais; somem quando completos.
   // Minimizar e dispensar ficam neste navegador (localStorage); nada bloqueia o uso do site.
-  async function primeirosPassos(me){
-    const chave = 'el:passos:' + me.slug;
-    let pref = null; try { pref = localStorage.getItem(chave); } catch { /* sem armazenamento */ }
-    if (pref === 'dispensado') return;
-    let o; try { o = await api('/api/onboarding'); } catch { return; }
-    if (o.completo) return;
+  // recebe os passos ja carregados (load busca junto com o resto): a lista entra junto com a pagina, sem empurrar nada depois
+  const prefPassos = (me) => { try { return localStorage.getItem('el:passos:' + me.slug); } catch { return null; } };
+  function primeirosPassos(me, o){
+    const chave = 'el:passos:' + me.slug, pref = prefPassos(me);
+    if (pref === 'dispensado' || !o || o.completo) return;
     const feitos = o.passos.filter((p) => p.feito).length;
     const box = document.createElement('details');
     box.className = 'primeiros-passos';
@@ -505,9 +504,10 @@
     try {
       const me = await api('/api/me');
       slug = me.slug; isMod = !!me.mod;
-      if (me.role === 'leitor') { readerView(me); avisoEmail(me); return primeirosPassos(me); }
-      const p = await api('/api/profile/' + slug);
-      P = p.data; editorView(); avisoEmail(me); primeirosPassos(me); openFromHash();
+      const passos = prefPassos(me) === 'dispensado' ? null : api('/api/onboarding').catch(() => null);
+      if (me.role === 'leitor') { const o = await passos; readerView(me); avisoEmail(me); return primeirosPassos(me, o); }
+      const [p, o] = await Promise.all([api('/api/profile/' + slug), passos]);
+      P = p.data; editorView(); avisoEmail(me); primeirosPassos(me, o); openFromHash();
     } catch (e) {
       // link de convite (conta.html#convite=CODIGO): abre o cadastro de autor com o codigo preenchido.
       // O codigo fica no fragmento (#), que o navegador nao envia ao servidor.

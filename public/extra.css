@@ -529,10 +529,6 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .lt-engrenagem:hover{border-color:var(--accent)}
 .lt-bio{color:var(--text-2);line-height:1.6}
 .lt-meta{display:flex;flex-wrap:wrap;gap:1rem;font-size:.82rem;color:var(--muted)}
-.lt-contadores{display:flex;gap:1.6rem}
-.lt-contadores div{display:grid}
-.lt-contadores b{font-family:'Playfair Display',serif;color:var(--accent);font-size:1.3rem;font-weight:500}
-.lt-contadores span{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .lt-acoes{display:flex;flex-wrap:wrap;gap:.5rem}
 .lt-numeros{margin:2rem 0 1.4rem}
 .lt-chips{margin-bottom:1.2rem}
@@ -593,7 +589,6 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .est-nova{display:flex;gap:.5rem;margin-top:.5rem}
 
 /* autor.html: seguir */
-.seguir-linha{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
 
 /* ============================================================
    MODO CLARO / ESCURO (tema.js poe data-tema no <html>)
@@ -684,3 +679,19 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .primeiros-passos li.feito span:not(.pp-marca){text-decoration:line-through}
 .primeiros-passos .pp-marca{flex:none;width:1.3rem;height:1.3rem;border-radius:50%;border:1px solid var(--line-strong);display:grid;place-items:center;font-size:.75rem;color:var(--accent);text-decoration:none}
 .primeiros-passos li.feito .pp-marca{border-color:var(--accent);background:var(--accent-dim)}
+/* celular estreito: o titulo da secao e o "veja mais" cabem sem vazar (a linha decorativa sai) */
+@media (max-width:520px){
+  .section-head .line{display:none}
+  .section-head .veja-mais{margin-left:auto}
+}
+/* botoes de cada obra (Minha conta) quebram linha em vez de sair da tela */
+.obra-acoes{flex-wrap:wrap}
+/* rodape: texto pequeno com contraste suficiente (antes #4f4f57 sobre preto, 2.6:1) */
+.site-footer p{color:var(--muted)}
+/* perfil do autor: seguir, seguidores e nota media em destaque logo abaixo do nome */
+.autor-destaque{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1.2rem;margin:.6rem 0 1.1rem}
+.autor-destaque .autor-num{font-size:.92rem;color:var(--text-2)}
+.autor-destaque .autor-num b{color:var(--text);font-weight:600}
+.autor-destaque .autor-nota{text-decoration:none}
+.autor-destaque .autor-nota .stars{color:var(--accent);letter-spacing:.05em;font-size:1.15rem;vertical-align:-.1em}
+.autor-destaque .autor-nota:hover b,.autor-destaque .autor-nota:focus-visible b{color:var(--accent)}
