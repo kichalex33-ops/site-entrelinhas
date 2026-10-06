@@ -8,7 +8,7 @@ import { listarAjuda, criarPedido, fecharPedido, ofertar, desistir, decidirOfert
 import { getLivro, putLivro, imagensDasPaginas, visitarLivro, favoritarLivro, criarPost, apagarPost, curtirPost } from './livro.js';
 import { vitrine, livrosPublicos } from './vitrine.js';
 import { verLeitor, listarLeitores, salvarLeitor, seguir, estantes, criarLista, mudarLista, apagarLista, alternarLivro } from './leitor.js';
-import { comMetadados } from './meta.js';
+import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro } from './denuncias.js';
 
@@ -764,6 +764,8 @@ export default {
     }
 
     if (path.startsWith('/img/') && req.method === 'GET') return serveImage(env, path.slice(5));
+    if (path === '/robots.txt' && req.method === 'GET') return robotsTxt(env, url);
+    if (path === '/sitemap.xml' && req.method === 'GET') return sitemapXml(env, url, { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
     // paginas de livro e autor saem com titulo, descricao e previa de link proprios (src/meta.js)
     if (!path.startsWith('/api/')) return comMetadados(req, env, await env.ASSETS.fetch(req), { now, publicacao: env.ESTUDIO_PUBLICACAO === 'on' });
 
