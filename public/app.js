@@ -4,10 +4,9 @@
   const ENT = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
   const lines = (t) => esc(t).replace(/ /g, '<br>');
-  const dateKey = (s) => s.split('/').reverse().join('');
   let DATA, LIVROS = [], CATALOGO = { generos: [], tipos: [] };
 
-  // quem assina noticia/projeto: nome, com link para o perfil quando houver
+  // quem assina o projeto: nome, com link para o perfil quando houver
   const byline = (nome, slug) => slug ? `<a href="autor.html?a=${encodeURIComponent(slug)}">${esc(nome || slug)}</a>` : `<b>${esc(nome || 'Coletivo Entrelinhas')}</b>`;
   const FAIXA_TXT = { L: 'Livre para todos os públicos' };
   const faixa = (f) => /^(L|10|12|14|16|18)$/.test(f || '') ? `<span class="faixa faixa-${f}" title="${esc(FAIXA_TXT[f] || 'Não recomendado para menores de ' + f + ' anos')}">${f}</span>` : '';
@@ -95,8 +94,7 @@
     $('#recentes').innerHTML = recentes.slice(0, 12).map(relCard).join('') || '<p class="muted-note">Os livros publicados aparecem aqui.</p>';
     $('#releases').innerHTML = recentes.slice(0, 24).map(relCard).join('');
 
-    $('#news').innerHTML = DATA.noticias.slice().sort((a, b) => dateKey(b.data).localeCompare(dateKey(a.data))).map(n =>
-      `<article class="post reveal"><span class="date">${esc(n.data)}</span><h4>${esc(n.titulo)}</h4><p>${esc(n.texto)}</p><p class="byline">por ${byline(n.autor, n.autor_slug)}</p></article>`).join('');
+    // #news (pagina inicial): os 3 posts mais recentes da Comunidade, montados por comunidade.js
 
     $('#selos').innerHTML = DATA.selos.map(s =>
       `<div class="selo reveal"><h4>${esc(s.nome)}</h4><p>${esc(s.texto)}</p></div>`).join('');
@@ -139,7 +137,12 @@
     tabs.forEach(t => t.addEventListener('click', () => goTo(t.dataset.target)));
     document.querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); goTo(el.dataset.goto); }));
     const h = location.hash.slice(1);
-    if (h && document.getElementById(h)) goTo(h, false); else watch();
+    if (h && document.getElementById(h)) {
+      // o navegador rola ate o elemento do # e o titulo da aba fica atras do topo: a aba aberta por link comeca no topo
+      goTo(h, false);
+      const topo = () => window.scrollTo(0, 0);
+      requestAnimationFrame(topo); window.addEventListener('load', topo, { once: true });
+    } else watch();
     // links e o botao Voltar trocam so o #: acompanha a aba pedida
     window.addEventListener('hashchange', () => { const x = location.hash.slice(1); if (x && document.getElementById(x) && document.getElementById(x).classList.contains('page')) goTo(x, false); });
 

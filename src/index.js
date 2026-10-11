@@ -12,6 +12,7 @@ import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
 import { primeirosPassos } from './onboarding.js';
+import { listarPosts, criarPost as criarPostComunidade, editarPost, apagarPost as apagarPostComunidade, ocultarPost, podePostar } from './comunidade.js';
 import { lerClassificacao } from '../public/catalogo.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico, projetosDoEstudio } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
@@ -27,7 +28,7 @@ const STATUS = ['Publicado', 'Em desenvolvimento', 'Em escrita', 'Revisão', 'Em
 const SERVICOS = ['beta', 'critica', 'divulgacao', 'capa']; // chaves de "Serviços que ofereço"
 const SHORT_SESSION_HOURS = 12;
 // rotas de escrita publica bloqueadas para conta com e-mail pendente (a publicacao do Estudio confere em src/studio.js)
-const ESCRITA_PUBLICA = [/^\/api\/reviews(\/\d+\/denunciar)?$/, /^\/api\/livro\/[a-z0-9-]+\/[a-f0-9]{12}\/denuncia$/, /^\/api\/livro\/[a-f0-9]{12}(\/posts)?$/, /^\/api\/ajuda(\/\d+\/oferta)?$/];
+const ESCRITA_PUBLICA = [/^\/api\/reviews(\/\d+\/denunciar)?$/, /^\/api\/livro\/[a-z0-9-]+\/[a-f0-9]{12}\/denuncia$/, /^\/api\/livro\/[a-f0-9]{12}(\/posts)?$/, /^\/api\/ajuda(\/\d+\/oferta)?$/, /^\/api\/comunidade(\/\d+)?$/];
 const IMG_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 };
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -926,6 +927,7 @@ async function rotear(req, env) {
         if (!u) return fail('Faça login para continuar.', 401);
         return u.role === 'autor' ? listarLixeira(env, u, { json, now }) : fail('Apenas autores têm lixeira de livros.', 403);
       }
+      if (path === '/api/comunidade') return listarPosts(env, url, await currentUser(env, req), { json });
       if (path === '/api/ajuda') {
         const u = await currentUser(env, req);
         if (!u) return fail('Faça login para continuar.', 401);
@@ -992,6 +994,16 @@ async function rotear(req, env) {
         if (r.ok) await limparImagens(env, user.id);
         return r;
       }
+      return fail('Não encontrado.', 404);
+    }
+    if (path === '/api/comunidade' || path.startsWith('/api/comunidade/')) {
+      const hc = { json, fail, str, body, now, isUrl };
+      const cm = path.match(/^\/api\/comunidade\/(\d{1,12})(\/ocultar)?$/);
+      if (cm && cm[2] && req.method === 'POST') return user.is_admin ? ocultarPost(env, req, user, Number(cm[1]), hc) : fail('Apenas moderadores.', 403);
+      if (cm && !cm[2] && req.method === 'DELETE') return apagarPostComunidade(env, user, Number(cm[1]), hc);
+      if (!podePostar(user)) return fail('Na Comunidade, postam os autores do coletivo e os moderadores.', 403);
+      if (path === '/api/comunidade' && req.method === 'POST') return criarPostComunidade(env, req, user, hc);
+      if (cm && !cm[2] && req.method === 'PUT') return editarPost(env, req, user, Number(cm[1]), hc);
       return fail('Não encontrado.', 404);
     }
     if (path === '/api/ajuda' || path.startsWith('/api/ajuda/')) {

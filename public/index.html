@@ -33,6 +33,7 @@
     <button class="tab" data-target="biblioteca">Biblioteca</button>
     <button class="tab" data-target="lancamentos">Lançamentos</button>
     <button class="tab" data-target="projetos">Projetos</button>
+    <button class="tab" data-target="comunidade">Comunidade</button>
     <button class="tab" data-target="servicos">Serviços</button>
     <a class="tab" href="autores.html">Autores</a>
     <a class="tab" href="leitores.html">Leitores</a>
@@ -88,8 +89,9 @@
     <p class="section-lead pop-nota">A popularidade soma visitas (uma por pessoa por dia), favoritos e avaliações do período.</p>
 
     <div class="section-head">
-      <div><span class="eyebrow">Notícias</span><h2>Do coletivo</h2></div>
+      <div><span class="eyebrow">Comunidade</span><h2>Do coletivo</h2></div>
       <div class="line"></div>
+      <a class="veja-mais" href="#comunidade" data-goto="comunidade">Ver tudo &rarr;</a>
     </div>
     <div class="news" id="news"></div>
 
@@ -152,6 +154,21 @@
     <div class="projects" style="margin-top:3rem" id="projects"></div>
   </section>
 
+  <section class="page" id="comunidade">
+    <div class="hero" style="padding-bottom:.5rem">
+      <span class="eyebrow">Feito por quem escreve</span>
+      <h2>Comunidade</h2>
+      <p>Notícias, resenhas, recomendações de leitura e dicas de escrita dos autores do coletivo.</p>
+    </div>
+    <div class="com-barra">
+      <div class="chips" id="comTipos" role="group" aria-label="Tipo de post"></div>
+      <button type="button" class="btn btn-primary" id="comEscrever" hidden>Escrever post</button>
+    </div>
+    <p class="muted-note com-aviso" id="comAviso" hidden>Quem posta aqui são os autores do coletivo.</p>
+    <div class="com-lista" id="comLista"></div>
+    <div class="com-mais"><button type="button" class="btn btn-ghost" id="comMais" hidden>Ver mais</button></div>
+  </section>
+
   <section class="page" id="servicos">
     <div class="hero" style="padding-bottom:.5rem">
       <span class="eyebrow">Mão na massa</span>
@@ -178,6 +195,8 @@
   <p>© 2026 Coletivo Entrelinhas</p>
 </footer>
 
+<script src="common.js"></script>
 <script src="app.js"></script>
+<script src="comunidade.js"></script>
 </body>
 </html>

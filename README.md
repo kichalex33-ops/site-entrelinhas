@@ -8,7 +8,9 @@ Um Cloudflare Worker (`src/`) com banco D1 serve a API, e os arquivos de `public
 
 | Área | Páginas | Servidor |
 |---|---|---|
-| Vitrine: página inicial, Biblioteca (com busca), Lançamentos, Projetos, Serviços | `index.html`, `app.js` | `src/vitrine.js` (livros), `src/site.js` (notícias, projetos, selos, serviços e contato, editáveis pelos moderadores) |
+| Vitrine: página inicial, Biblioteca (busca + filtros de gênero e tipo), Lançamentos, Projetos, Serviços | `index.html`, `app.js` | `src/vitrine.js` (livros), `src/site.js` (projetos, selos, serviços e contato, editáveis pelos moderadores; Projetos também recebe as obras do Estúdio marcadas pelo autor) |
+| Gêneros e tipos de obra: lista fixa, a mesma no servidor e no navegador | — | `public/catalogo.js` (importado por `src/`) |
+| Comunidade: notícias, resenhas, recomendações de leitura e dicas de escrita (postam autores e moderadores; moderador oculta) | `index.html#comunidade`, `comunidade.js` | `src/comunidade.js` |
 | Contas: login, cadastro de leitor (Turnstile) e de autor (por convite), aceite dos Termos, confirmação de e-mail, recuperar senha, apagar conta | `conta.html`, `conta.js`, `confirmar-email.html`, `recuperar.html`, `redefinir.html` | `src/index.js` |
 | Primeiros passos de autor e leitor (em Minha conta) | `conta.js` | `src/onboarding.js` |
 | Perfil público do autor (seguir, seguidores, nota média) e lista de autores | `autor.html`, `autores.html` | `src/index.js` (`profiles`) |

@@ -6,8 +6,8 @@ test('conteudo da pagina inicial: vem do banco, ja com o que estava no data.json
   const app = makeApp();
   const r = await app.call('GET', '/api/site');
   assert.equal(r.s, 200);
-  assert.ok(r.j.noticias.length >= 1 && r.j.servicos.length >= 1 && r.j.selos.length >= 1);
-  assert.equal(r.j.noticias[0].autor_slug, 'alex-jr-kich');
+  assert.ok(r.j.servicos.length >= 1 && r.j.selos.length >= 1);
+  assert.equal(r.j.noticias, undefined, 'noticias viraram posts da Comunidade');
   assert.equal(typeof r.j.contato.url, 'string');
 });
 
@@ -16,24 +16,23 @@ test('conteudo da pagina inicial: so moderador edita, e o servidor valida cada c
   const mod = app.addUser({ mod: true });
   const autor = app.addUser();
   const leitor = app.addUser({ role: 'leitor' });
-  const nova = [{ data: '04/10/2026', titulo: 'Novidade', texto: 'Texto.', autor: 'Alex', autor_slug: 'alex-jr-kich', extra: 'ignorado' }];
+  const nova = [{ nome: 'Novo selo', texto: 'Ajudou muito.', extra: 'ignorado' }];
 
   assert.equal((await app.call('GET', '/api/admin/site', { tok: autor.tok })).s, 403);
-  assert.equal((await app.call('PUT', '/api/admin/site/noticias', { tok: autor.tok, body: { dados: nova } })).s, 403);
-  assert.equal((await app.call('PUT', '/api/admin/site/noticias', { tok: leitor.tok, body: { dados: nova } })).s, 403);
-  assert.equal((await app.call('PUT', '/api/admin/site/noticias', { body: { dados: nova } })).s, 401);
+  assert.equal((await app.call('PUT', '/api/admin/site/selos', { tok: autor.tok, body: { dados: nova } })).s, 403);
+  assert.equal((await app.call('PUT', '/api/admin/site/selos', { tok: leitor.tok, body: { dados: nova } })).s, 403);
+  assert.equal((await app.call('PUT', '/api/admin/site/selos', { body: { dados: nova } })).s, 401);
 
   const painel = await app.call('GET', '/api/admin/site', { tok: mod.tok });
   assert.equal(painel.s, 200);
-  assert.ok(painel.j.secoes.noticias.campos.length > 0);
+  assert.ok(painel.j.secoes.selos.campos.length > 0 && !painel.j.secoes.noticias);
 
-  const ok = await app.call('PUT', '/api/admin/site/noticias', { tok: mod.tok, body: { dados: nova } });
+  const ok = await app.call('PUT', '/api/admin/site/selos', { tok: mod.tok, body: { dados: nova } });
   assert.equal(ok.s, 200, JSON.stringify(ok.j));
-  assert.deepEqual((await app.call('GET', '/api/site')).j.noticias, [{ data: '04/10/2026', titulo: 'Novidade', texto: 'Texto.', autor: 'Alex', autor_slug: 'alex-jr-kich' }]);
+  assert.deepEqual((await app.call('GET', '/api/site')).j.selos, [{ nome: 'Novo selo', texto: 'Ajudou muito.' }]);
 
   const ruins = [
-    ['noticias', [{ ...nova[0], data: '2026-10-04' }], /dd\/mm\/aaaa/],
-    ['noticias', [{ ...nova[0], titulo: '' }], /Preencha/],
+    ['selos', [{ ...nova[0], nome: '' }], /Preencha/],
     ['servicos', [{ titulo: 'X', link: 'javascript:alert(1)' }], /Link/],
     ['contato', { url: 'javascript:alert(1)' }, /Contato/],
     ['projetos', Array.from({ length: 31 }, () => ({ titulo: 'P' })), /No máximo/],
@@ -43,6 +42,7 @@ test('conteudo da pagina inicial: so moderador edita, e o servidor valida cada c
     assert.equal(r.s, 400, secao); assert.match(r.j.erro, erro);
   }
   assert.equal((await app.call('PUT', '/api/admin/site/livros', { tok: mod.tok, body: { dados: [] } })).s, 404);
+  assert.equal((await app.call('PUT', '/api/admin/site/noticias', { tok: mod.tok, body: { dados: [] } })).s, 404, 'noticias saiu do painel');
 
   const p = await app.call('PUT', '/api/admin/site/projetos', { tok: mod.tok, body: { dados: [{ titulo: 'P', pct: 250, etapa: 'inventada', c1: 'red' }] } });
   assert.equal(p.s, 200);

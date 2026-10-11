@@ -302,7 +302,7 @@
     recarregar();
   }
 
-  // ---------- conteudo da pagina inicial (noticias, projetos, selos, servicos, contato) ----------
+  // ---------- conteudo da pagina inicial (projetos, selos, servicos, contato; noticias sao posts da Comunidade) ----------
   // Os formularios saem do esquema que o servidor manda (src/site.js): campo novo no servidor aparece aqui sozinho.
   let montandoSite = false;
   const novo = (tag, props = {}, ...filhos) => { const e = Object.assign(document.createElement(tag), props); e.append(...filhos); return e; };
@@ -313,7 +313,7 @@
     montandoSite = true;
     const sec = novo('details', { id: 'mod-site', className: 'blk' },
       novo('summary', {}, 'Moderação · conteúdo da página inicial'),
-      novo('p', { className: 'hint' }, 'Notícias, projetos em andamento, selos, serviços e contato da página inicial. Cada seção é salva separadamente e muda no site na hora.'));
+      novo('p', { className: 'hint' }, 'Projetos em andamento, selos, serviços e contato da página inicial (notícias agora são posts na aba Comunidade). Cada seção é salva separadamente e muda no site na hora.'));
     (document.getElementById('mod-mensagens') || document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
     montandoSite = false;
     const corpo = novo('div', {}, novo('p', { className: 'hint' }, 'Carregando...'));

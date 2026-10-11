@@ -1,4 +1,5 @@
-// Conteudo editavel da pagina inicial (noticias, projetos, selos, servicos e contato), guardado no D1.
+// Conteudo editavel da pagina inicial (projetos, selos, servicos e contato), guardado no D1.
+// As noticias viraram posts da Comunidade (src/comunidade.js, migracao 0027).
 // Antes vinha de public/data.json e so mudava com deploy; agora os moderadores editam pela conta (moderacao.js).
 // O esquema abaixo e a UNICA fonte das regras: o servidor valida com ele e o painel monta os formularios a partir dele.
 
@@ -6,21 +7,10 @@ import { ETAPAS } from '../public/catalogo.js';
 
 const COR = /^#[0-9a-f]{6}$/i;
 const SLUG = /^[a-z0-9-]{1,40}$/;
-const DATA = /^\d{2}\/\d{2}\/\d{4}$/;
 // link de servico/contato: pagina do proprio site (ajuda.html, autor.html?a=x) ou endereco https / e-mail
 const LINK = /^([a-z0-9-]+\.html(\?[a-z0-9=&_-]*)?(#[a-z0-9-]*)?|https:\/\/[^\s"'<>]{3,290}|mailto:[^\s"'<>@]+@[^\s"'<>]+)$/i;
 
 export const SECOES = {
-  noticias: {
-    rotulo: 'Notícias', item: 'notícia', max: 30,
-    campos: [
-      { k: 'data', rotulo: 'Data (dd/mm/aaaa)', tipo: 'texto', max: 10, obrig: true, padrao: DATA, erro: 'Data no formato dd/mm/aaaa.' },
-      { k: 'titulo', rotulo: 'Título', tipo: 'texto', max: 120, obrig: true },
-      { k: 'texto', rotulo: 'Texto', tipo: 'area', max: 1500, obrig: true },
-      { k: 'autor', rotulo: 'Assinado por', tipo: 'texto', max: 80 },
-      { k: 'autor_slug', rotulo: 'Endereço do perfil de quem assina (opcional)', tipo: 'texto', max: 40, padrao: SLUG, erro: 'Endereço do perfil: só letras minúsculas, números e hífen (ex.: alex-jr-kich).' },
-    ],
-  },
   projetos: {
     rotulo: 'Projetos em andamento', item: 'projeto', max: 30,
     campos: [
@@ -61,7 +51,7 @@ export const SECOES = {
   },
 };
 
-const VAZIO = { noticias: [], projetos: [], selos: [], servicos: [], contato: { url: '' } };
+const VAZIO = { projetos: [], selos: [], servicos: [], contato: { url: '' } };
 const ler = (s) => { try { return JSON.parse(s); } catch { return null; } };
 
 // Obras do Estudio que o autor marcou para aparecer em Projetos (Informacoes da obra > "Mostrar em Projetos").
