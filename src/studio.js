@@ -3,6 +3,8 @@
 // (2) SALVAR nao e PUBLICAR: nada daqui aparece em perfil, biblioteca ou busca publica.
 // Reaproveita helpers e autenticacao do index.js (recebidos em `h`).
 
+import { lerClassificacao, classificar } from '../public/catalogo.js';
+
 const DOC_TYPES = ['capitulo', 'cena', 'personagem', 'lugar', 'objeto', 'evento', 'pesquisa', 'nota'];
 const FOLDER_TYPES = ['pasta', 'manuscrito', 'personagens', 'mundo', 'pesquisa', 'ideias', 'descartadas'];
 const KINDS = ['texto', 'hq', 'hibrida'];
@@ -234,7 +236,8 @@ async function patchWork(env, req, work, h) {
   if (b.meta && typeof b.meta === 'object') {
     const next = { ...meta };
     if (b.meta.sinopse !== undefined) next.sinopse = h.str(b.meta.sinopse, 3000);
-    if (b.meta.genero !== undefined) next.genero = h.str(b.meta.genero, 80);
+    if (Array.isArray(b.meta.generos)) Object.assign(next, lerClassificacao(b.meta));
+    else if (b.meta.genero !== undefined) next.genero = h.str(b.meta.genero, 80);
     if (b.meta.meta_palavras !== undefined) next.meta_palavras = Math.max(0, Math.min(5000000, parseInt(b.meta.meta_palavras, 10) || 0));
     if (JSON.stringify(next).length > LIM.meta) return h.fail('Informações da obra grandes demais.', 413);
     meta = next;
@@ -577,7 +580,8 @@ async function getPublicacao(env, work, user, h) {
     autor: user.slug,
     // o que ja esta publicado (ou, na primeira vez, o que vem das informacoes da obra)
     meta: {
-      titulo: pub.titulo || work.title, genero: pub.genero ?? meta.genero ?? '', sinopse: pub.sinopse ?? meta.sinopse ?? '',
+      titulo: pub.titulo || work.title, genero: pub.genero ?? meta.genero ?? '',
+      ...classificar(pub.titulo ? pub : meta), serie: (pub.titulo ? pub : meta).serie || '', sinopse: pub.sinopse ?? meta.sinopse ?? '',
       creditos: pub.creditos || '', capa: pub.capa || meta.capa || '', faixa: pub.faixa || '',
     },
     capitulos: caps.results.map((c) => ({ n: c.ordem, doc_id: c.doc_id, titulo: c.titulo, palavras: c.palavras })),
@@ -599,11 +603,14 @@ async function publicar(env, req, work, user, h) {
   // metadados publicos
   const m = b.meta && typeof b.meta === 'object' ? b.meta : {};
   const meta = {
-    titulo: h.str(m.titulo, LIM.title), genero: h.str(m.genero, LIM_PUB.genero),
+    titulo: h.str(m.titulo, LIM.title),
+    ...(Array.isArray(m.generos) ? lerClassificacao(m) : { genero: h.str(m.genero, LIM_PUB.genero) }),
     sinopse: h.str(m.sinopse, LIM_PUB.sinopse), creditos: h.str(m.creditos, LIM_PUB.creditos), capa: '',
     faixa: FAIXAS.includes(m.faixa) ? m.faixa : '',
   };
   if (!meta.titulo) return h.fail('Dê um título à obra publicada.');
+  if (Array.isArray(m.generos) && !meta.generos.length) return h.fail('Escolha o gênero da obra.');
+  if (Array.isArray(m.generos) && !meta.tipo) return h.fail('Escolha o tipo de obra.');
   if (!meta.sinopse) return h.fail('Escreva uma sinopse: é ela que apresenta a obra ao leitor.');
   if (!meta.faixa) return h.fail('Escolha a classificação indicativa: para qual faixa etária a obra é recomendada.');
   if (m.capa) {

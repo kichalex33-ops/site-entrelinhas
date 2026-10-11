@@ -2,8 +2,11 @@
 //   - livros divulgados nos perfis publicados (situacao "Publicado")
 //   - obras publicadas pelo Estudio (copia publica visivel)
 import { VISIVEL } from './leitura.js';
+import { classificar } from '../public/catalogo.js';
 
 const safe = (s) => { try { const o = JSON.parse(s); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
+// generos e tipo de obra da lista fixa (`tipo` aqui ja diz a origem do livro: divulgado ou estudio)
+const rotulos = (o) => { const c = classificar(o); return { generos: c.generos, tipo_obra: c.tipo }; };
 const capaUrl = (id) => (!id ? '' : id.charAt(0) === '/' ? id : `/img/${id}?v=2`);
 
 export async function vitrine(env, h) {
@@ -23,7 +26,7 @@ export async function livrosPublicos(env, h) {
       if (o.status !== 'Publicado' || !o.id) continue;
       livros.push({
         id: o.id, tipo: 'divulgado', titulo: o.titulo, autor: { slug: p.slug, nome: d.nome || p.slug },
-        genero: o.genero || '', faixa: o.faixa || '', capa: capaUrl(o.capa), sinopse: o.sinopse || '',
+        genero: o.genero || '', ...rotulos(o), faixa: o.faixa || '', capa: capaUrl(o.capa), sinopse: o.sinopse || '',
         lancamento: o.publicado_em || '', no_site_em: o.no_site_em || 0,
       });
     }
@@ -39,7 +42,7 @@ export async function livrosPublicos(env, h) {
       const m = safe(w.pub_meta);
       livros.push({
         id: w.id, tipo: 'estudio', titulo: m.titulo || w.title, autor: { slug: w.autor, nome: nomes.get(w.autor) },
-        genero: m.genero || '', faixa: m.faixa || '', capa: capaUrl(m.capa), sinopse: m.sinopse || '',
+        genero: m.genero || '', ...rotulos(m), faixa: m.faixa || '', capa: capaUrl(m.capa), sinopse: m.sinopse || '',
         lancamento: '', no_site_em: w.published_at || 0,
         ler: `ler.html?a=${encodeURIComponent(w.autor)}&o=${encodeURIComponent(w.pub_slug)}`,
       });

@@ -12,6 +12,7 @@ import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
 import { primeirosPassos } from './onboarding.js';
+import { lerClassificacao } from '../public/catalogo.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
 
@@ -151,7 +152,8 @@ async function sanitizeProfile(env, d, userId) {
     const obra = {
       id,
       titulo,
-      genero: str(o.genero, 60),
+      // generos e tipo da lista fixa (public/catalogo.js); sem `generos`, mantem o texto livre antigo
+      ...(Array.isArray(o.generos) ? lerClassificacao(o) : { genero: str(o.genero, 60) }),
       status: STATUS.includes(o.status) ? o.status : 'Publicado',
       sinopse: str(o.sinopse, 1500),
       faixa: FAIXAS.includes(o.faixa) ? o.faixa : '',

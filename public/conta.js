@@ -353,12 +353,13 @@
     ], botao('Cancelar', 'btn-ghost', () => dlg.close()));
   }
 
-  function obraDialogo(idx) {
+  async function obraDialogo(idx) {
+    const cat = await import('/catalogo.js');
     const o = idx == null ? { titulo: '', genero: '', status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [] } : JSON.parse(JSON.stringify(P.obras[idx]));
     o.lojas = o.lojas || [];
     const f = el(`<form class="el-form">
       <label class="fld"><span>Título</span><input name="titulo" maxlength="120" required value="${esc(o.titulo)}"></label>
-      <label class="fld"><span>Gênero</span><input name="genero" maxlength="60" value="${esc(o.genero)}" placeholder="ex.: Fantasia · Livro I"></label>
+      ${cat.camposHtml(o, esc)}
       <label class="fld"><span>Situação</span><select name="status">${STATUS.map((st) => `<option${o.status === st ? ' selected' : ''}>${st}</option>`).join('')}</select></label>
       <div class="fld"><span>Classificação indicativa (faixa etária)</span><div class="faixa-op" role="radiogroup">${EL.FAIXAS.map(([v, rot]) => `<label title="${esc(rot)}"><input type="radio" name="faixa" value="${v}"${o.faixa === v ? ' checked' : ''}>${EL.faixa(v)} ${v === 'L' ? 'Livre' : v + ' anos'}</label>`).join('')}</div></div>
       <div class="fld"><span>Lançamento</span><div class="data-pub"><input name="ano" type="number" min="1900" max="2100" placeholder="Ano" aria-label="Ano de lançamento" value="${esc((o.publicado_em || '').slice(0, 4))}"><select name="mes" aria-label="Mês de lançamento"><option value="">Mês (opcional)</option>${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}"${(o.publicado_em || '').slice(5) === v ? ' selected' : ''}>${m}</option>`; }).join('')}</select></div><small class="hint">Ano em que o livro saiu (o mês é opcional).</small></div>
@@ -405,10 +406,12 @@
     });
     const salvar = botao(idx == null ? 'Adicionar ao perfil' : 'Salvar', 'btn-primary', async () => {
       if (!f.titulo.value.trim()) { estado.innerHTML = note('Dê um título à obra.'); f.titulo.focus(); return; }
+      if (!f.genero1.value) { estado.innerHTML = note('Escolha o gênero do livro: é por ele que o leitor filtra a Biblioteca.'); f.genero1.focus(); return; }
+      if (!f.tipo.value) { estado.innerHTML = note('Escolha o tipo de obra (romance, conto, HQ...).'); f.tipo.focus(); return; }
       if (!f.faixa.value) { estado.innerHTML = note('Escolha a classificação indicativa: para qual faixa etária o livro é recomendado.'); return; }
       const ano = f.ano.value.trim();
       if (ano && !/^(19|20)\d{2}$/.test(ano)) { estado.innerHTML = note('Ano de lançamento inválido.'); f.ano.focus(); return; }
-      Object.assign(o, { titulo: f.titulo.value, genero: f.genero.value, status: f.status.value, sinopse: f.sinopse.value, link: f.link.value,
+      Object.assign(o, cat.lerCampos(f), { titulo: f.titulo.value, status: f.status.value, sinopse: f.sinopse.value, link: f.link.value,
         faixa: f.faixa.value, publicado_em: ano ? (f.mes.value ? `${ano}-${f.mes.value}` : ano) : '' });
       o.lojas = o.lojas.filter((l) => l.rotulo.trim() || l.url.trim());
       const dados = JSON.parse(JSON.stringify(P));

@@ -42,6 +42,12 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   await dlg.locator('textarea').fill('Um rio que lembra de tudo.');
   await dlg.locator('.st-pub-aceite input').check();
   await ok.click();
+  await dlg.locator('.st-exp-estado:has-text("gênero")').waitFor(); // sem genero nao publica
+  await dlg.locator('select[name=genero1]').selectOption('Fantasia');
+  await ok.click();
+  await dlg.locator('.st-exp-estado:has-text("tipo de obra")').waitFor(); // nem sem tipo
+  await dlg.locator('select[name=tipo]').selectOption('Romance');
+  await ok.click();
   await dlg.locator('.st-exp-estado:has-text("faixa etária")').waitFor(); // sem faixa nao publica
   await dlg.locator('input[name=st-pub-faixa][value="12"]').check();
   await dlg.locator('.st-pub-aceite input').check();

@@ -2,6 +2,7 @@
 // SALVAR nao e PUBLICAR: o servidor tira uma copia do que foi escolhido; editar depois nao muda o que esta no ar.
 import { h, dialogo, confirmar, dataHora, milhar, TIPOS_DOC, STATUS_OBRA } from './ui.js';
 import { api } from './api.js';
+import { camposHtml, lerCampos } from '../catalogo.js';
 import { docsDoManuscrito, docsDoProjeto } from './exportar-ui.js';
 
 let leitura = null;
@@ -58,7 +59,9 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
 
   // ---- informacoes publicas
   const titulo = h('input', { class: 'st-campo', type: 'text', maxlength: '200', value: P.meta.titulo || obra.titulo });
-  const genero = h('input', { class: 'st-campo', type: 'text', maxlength: '80', value: P.meta.genero || '' });
+  // genero(s), tipo de obra e serie: lista fixa (public/catalogo.js), a mesma dos filtros da Biblioteca
+  const classif = h('div'); classif.innerHTML = camposHtml(P.meta, window.EL.esc, 'st-classif');
+  for (const c of classif.querySelectorAll('select, input')) c.classList.add('st-campo');
   const sinopse = h('textarea', { class: 'st-campo', rows: '4', maxlength: '3000' }, P.meta.sinopse || '');
   const creditos = h('input', { class: 'st-campo', type: 'text', maxlength: '500', value: P.meta.creditos || '', placeholder: 'opcional: revisão, capa, ilustrações...' });
   // classificacao indicativa: obrigatoria para publicar
@@ -146,10 +149,12 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
     const docs = escolhidos();
     if (!docs.length) { estado.textContent = 'Escolha pelo menos um capítulo.'; return; }
     if (!sinopse.value.trim()) { estado.textContent = 'Escreva uma sinopse: é ela que apresenta a obra ao leitor.'; sinopse.focus(); return; }
+    if (!classif.querySelector('[name=genero1]').value) { estado.textContent = 'Escolha o gênero: é por ele que o leitor filtra a Biblioteca.'; classif.querySelector('[name=genero1]').focus(); return; }
+    if (!classif.querySelector('[name=tipo]').value) { estado.textContent = 'Escolha o tipo de obra (romance, conto, HQ...).'; classif.querySelector('[name=tipo]').focus(); return; }
     if (!faixaEscolhida()) { estado.textContent = 'Escolha a classificação indicativa: para qual faixa etária a obra é recomendada.'; faixaCaixas[0].focus(); return; }
     const dados = {
       acao: !P.no_ar && agendar.checked ? 'agendar' : 'publicar', aceite: P.declaracao && P.declaracao.versao,
-      meta: { titulo: titulo.value, genero: genero.value, sinopse: sinopse.value, creditos: creditos.value, capa, faixa: faixaEscolhida() },
+      meta: { titulo: titulo.value, ...lerCampos(classif), sinopse: sinopse.value, creditos: creditos.value, capa, faixa: faixaEscolhida() },
       docs: docs.map((d) => d.id),
     };
     if (dados.acao === 'agendar') {
@@ -210,7 +215,7 @@ export async function abrirPublicacao({ obraId, obra, itens, antes, aoMudar }) {
       P.ligada ? null : h('p', { class: 'st-pub-sit' }, 'A publicação ainda não está liberada no Entrelinhas. Você pode preparar tudo e ver a prévia.'),
       situacao,
       h('p', { class: 'hint' }, `Status no Estúdio: ${STATUS_OBRA[P.status] || P.status}.`),
-      f('Título', titulo), f('Gênero', genero), f('Sinopse', sinopse, 'Obrigatória. Aparece na biblioteca e na página da obra.'),
+      f('Título', titulo), classif, f('Sinopse', sinopse, 'Obrigatória. Aparece na biblioteca e na página da obra.'),
       h('div', { class: 'fld' }, h('span', null, 'Classificação indicativa (faixa etária)'), faixaCampo, h('small', { class: 'hint' }, 'Obrigatória. Escolha a partir de que idade a obra é recomendada, pensando em violência, sexo, drogas e linguagem.')),
       f('Créditos', creditos),
       h('div', { class: 'fld' }, h('span', null, 'Capa'), capaImg, capaArquivo, capaTirar),

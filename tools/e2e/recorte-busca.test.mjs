@@ -83,3 +83,40 @@ test('busca da Biblioteca: titulo, autor e genero, sem acento e com erro de digi
   assert.ok(!(await p.isVisible('#buscaVazia')));
   assert.deepEqual(a.erros, []);
 });
+
+test('filtros da Biblioteca: painel retratil com a lista fixa de generos e tipos', async () => {
+  const a = await E2E.novoAutor({ nome: 'Dora Filtro' });
+  const obra = (id, titulo, extra) => ({ id, titulo, status: 'Publicado', sinopse: '', capa: '', link: '', lojas: [], faixa: 'L', ...extra });
+  E2E.app.db.prepare('UPDATE profiles SET data = ?, published = 1 WHERE slug = ?').run(perfil('Dora Filtro', [
+    obra('f1', 'Dragões', { generos: ['Fantasia'], tipo: 'Romance', genero: 'Fantasia' }),
+    obra('f2', 'Contos do Medo', { generos: ['Terror', 'Fantasia'], tipo: 'Conto', genero: 'Terror · Fantasia' }),
+    obra('f3', 'Texto Teste', { genero: 'sdfsdfsdf' }),
+  ]), a.slug);
+  const p = a.pagina;
+  await p.goto(`${E2E.url}/index.html#biblioteca`);
+  await p.waitForSelector('#libraryGrid .book-card');
+  const meus = ['Contos do Medo', 'Dragões', 'Texto Teste']; // o teste anterior deste arquivo tambem publica livros
+  const visiveis = async () => (await p.$$eval('#libraryGrid .book-card', (ks) => ks.filter((k) => k.style.display !== 'none').map((k) => k.querySelector('h4').firstChild.textContent.trim()))).filter((t) => meus.includes(t)).sort();
+
+  assert.ok(!(await p.isVisible('#filtrosPainel')), 'painel comeca fechado');
+  await p.click('#filtrosBtn');
+  assert.ok(await p.isVisible('#filtrosPainel'));
+  assert.equal(await p.getAttribute('#filtrosBtn', 'aria-expanded'), 'true');
+  const generos = await p.$$eval('#chipsGenero .chip', (cs) => cs.map((c) => c.firstChild.textContent));
+  assert.ok(generos.includes('Ficção científica') && !generos.includes('sdfsdfsdf'), 'so a lista fixa, inclusive sem livros');
+  assert.ok(await p.locator('#chipsGenero .chip.vazio:has-text("Biografia e memórias")').count());
+
+  await p.click('#chipsGenero .chip[data-genero="Fantasia"]');
+  assert.deepEqual(await visiveis(), ['Contos do Medo', 'Dragões']);
+  await p.click('#chipsTipo .chip[data-tipo="Conto"]');
+  assert.deepEqual(await visiveis(), ['Contos do Medo']);
+  assert.equal(await p.textContent('#filtrosN'), '2');
+  await p.click('#chipsTipo .chip[data-tipo="Conto"]'); // clicar de novo tira o filtro
+  assert.deepEqual(await visiveis(), ['Contos do Medo', 'Dragões']);
+  await p.click('#filtrosLimpar');
+  assert.deepEqual(await visiveis(), meus);
+  assert.ok(!(await p.isVisible('#filtrosN')));
+  await p.click('#filtrosBtn');
+  assert.ok(!(await p.isVisible('#filtrosPainel')), 'fecha de novo');
+  assert.deepEqual(a.erros, []);
+});

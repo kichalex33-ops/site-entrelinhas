@@ -32,6 +32,8 @@ async function publicarPeloEstudio(p, { sinopse, faixa = '12', aceitar = true } 
   const dlg = p.locator('dialog.st-pub');
   await dlg.waitFor();
   if (sinopse) await dlg.locator('textarea').fill(sinopse);
+  await dlg.locator('select[name=genero1]').selectOption('Fantasia');
+  await dlg.locator('select[name=tipo]').selectOption('Romance');
   if (faixa) await dlg.locator(`input[name=st-pub-faixa][value="${faixa}"]`).check();
   if (aceitar) await dlg.locator('.st-pub-aceite input').check();
   await dlg.locator('.st-dialogo-rodape .btn-primary').click();

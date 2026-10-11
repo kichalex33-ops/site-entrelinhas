@@ -5,7 +5,7 @@
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ENT[c]);
   const lines = (t) => esc(t).replace(/ /g, '<br>');
   const dateKey = (s) => s.split('/').reverse().join('');
-  let DATA, LIVROS = [];
+  let DATA, LIVROS = [], CATALOGO = { generos: [], tipos: [] };
 
   // quem assina noticia/projeto: nome, com link para o perfil quando houver
   const byline = (nome, slug) => slug ? `<a href="autor.html?a=${encodeURIComponent(slug)}">${esc(nome || slug)}</a>` : `<b>${esc(nome || 'Coletivo Entrelinhas')}</b>`;
@@ -13,11 +13,10 @@
   const faixa = (f) => /^(L|10|12|14|16|18)$/.test(f || '') ? `<span class="faixa faixa-${f}" title="${esc(FAIXA_TXT[f] || 'Não recomendado para menores de ' + f + ' anos')}">${f}</span>` : '';
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
   const mesAno = (s) => { const m = /^(\d{4})(?:-(\d{2}))?$/.exec(s || ''); return !m ? '' : m[2] ? new Date(+m[1], +m[2] - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : m[1]; };
-  const primeiroGenero = (g) => (String(g || '').split(/\s*[·,/]\s*/)[0] || 'Outros').trim();
 
   // livros vindos do banco (/api/vitrine) -> modelo unico da vitrine
   const doBanco = (l) => ({
-    titulo: l.titulo, autorNome: l.autor.nome, genero: l.genero, gen1: primeiroGenero(l.genero), capa: l.capa,
+    titulo: l.titulo, autorNome: l.autor.nome, genero: l.genero, generos: l.generos || [], tipoObra: l.tipo_obra || '', capa: l.capa,
     c1: '#1c2f4a', c2: '#070b14', href: `obra.html?a=${encodeURIComponent(l.autor.slug)}&o=${encodeURIComponent(l.id)}`,
     faixa: l.faixa, data: l.no_site_em || 0, lancamento: l.lancamento, ler: l.ler || '', aval: l.avaliacoes, pop: l.popular,
   });
@@ -38,13 +37,14 @@
     $('#populares').innerHTML = lista.map(relCard).join('') || `<p class="muted-note">Ainda não há leituras ${QUANDO[periodo]}.</p>`;
   }
 
-  // Biblioteca: ordem escolhida + filtro de genero (o filtro vale de novo depois de reordenar)
+  // Biblioteca: ordem escolhida + filtros de genero e tipo de obra (valem de novo depois de reordenar)
+  const filtro = { genero: '', tipo: '' };
   function desenharGrade(){
     const az = (a, b) => a.titulo.localeCompare(b.titulo, 'pt');
     const p = ordem.startsWith('pop-') ? ordem.slice(4) : '';
     const livros = LIVROS.slice().sort(p ? (a, b) => pop(b, p) - pop(a, p) || az(a, b) : ordem === 'recentes' ? (a, b) => b.data - a.data || az(a, b) : az);
     $('#libraryGrid').innerHTML = livros.map(b =>
-      `<article class="book-card reveal in" data-genre="${esc(b.gen1)}" data-i="${b.i}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p><span class="tag">${esc(b.genero || b.gen1)}</span>${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
+      `<article class="book-card reveal in" data-i="${b.i}" ${bookAttrs(b)}>${cover(b)}<div class="meta"><h4>${esc(b.titulo)} ${faixa(b.faixa)}</h4><p class="author">${esc(b.autorNome)}</p>${b.genero ? `<span class="tag">${esc(b.genero)}</span>` : ''}${b.ler ? '<span class="tag tag-ler">Ler no site</span>' : ''}</div></article>`).join('')
       || '<p class="muted-note">Nenhum livro publicado ainda.</p>';
     filtrar();
   }
@@ -58,14 +58,29 @@
     achados = buscar(texto); filtrar();
   }
   function filtrar(){
-    const c = document.querySelector('#chips .chip.active'), f = c ? c.dataset.filter : 'all';
     let n = 0;
     document.querySelectorAll('#libraryGrid .book-card').forEach((k) => {
-      const ver = (f === 'all' || k.dataset.genre === f) && (!achados || achados.has(Number(k.dataset.i)));
+      const b = LIVROS[Number(k.dataset.i)];
+      const ver = passa(b) && (!achados || achados.has(b.i));
       k.style.display = ver ? '' : 'none'; if (ver) n++;
     });
     const aviso = $('#buscaVazia');
     if (aviso) aviso.hidden = n > 0 || !LIVROS.length;
+  }
+
+  const passa = (b) => (!filtro.genero || b.generos.includes(filtro.genero)) && (!filtro.tipo || b.tipoObra === filtro.tipo);
+
+  // botoes do painel: a lista fixa inteira, com quantos livros ha em cada (zero fica apagado, mas clicavel)
+  function desenharFiltros(){
+    const grupo = (sel, chave, itens, de) => {
+      const conta = (v) => LIVROS.filter((b) => de(b, v)).length;
+      $(sel).innerHTML = [['', 'Todos', LIVROS.length]].concat(itens.map((v) => [v, v, conta(v)])).map(([v, rot, n]) =>
+        `<button type="button" class="chip${filtro[chave] === v ? ' active' : ''}${n ? '' : ' vazio'}" data-${chave}="${esc(v)}" aria-pressed="${filtro[chave] === v}">${esc(rot)}<small>${n}</small></button>`).join('');
+    };
+    grupo('#chipsGenero', 'genero', CATALOGO.generos, (b, v) => b.generos.includes(v));
+    grupo('#chipsTipo', 'tipo', CATALOGO.tipos, (b, v) => b.tipoObra === v);
+    const n = (filtro.genero ? 1 : 0) + (filtro.tipo ? 1 : 0);
+    $('#filtrosN').hidden = !n; $('#filtrosN').textContent = n;
   }
 
   function render(){
@@ -86,9 +101,7 @@
     $('#selos').innerHTML = DATA.selos.map(s =>
       `<div class="selo reveal"><h4>${esc(s.nome)}</h4><p>${esc(s.texto)}</p></div>`).join('');
 
-    const generos = ['Todos'].concat([...new Set(livros.map(b => b.gen1))].sort((a, b) => a.localeCompare(b, 'pt')));
-    $('#chips').innerHTML = generos.map((g, i) =>
-      `<button class="chip${i ? '' : ' active'}" data-filter="${i ? esc(g) : 'all'}">${esc(g)}</button>`).join('');
+    desenharFiltros();
 
     desenharGrade();
     desenharPopulares();
@@ -150,12 +163,16 @@
       if (el.dataset.href) location.href = el.dataset.href;
     });
 
-    const chips = document.querySelectorAll('#chips .chip');
-    chips.forEach(c => c.addEventListener('click', () => {
-      chips.forEach(x => x.classList.remove('active'));
-      c.classList.add('active');
-      filtrar();
-    }));
+    // Filtros: o botao abre e fecha o painel; clicar de novo no filtro escolhido volta para "Todos"
+    const btnF = $('#filtrosBtn'), painel = $('#filtrosPainel');
+    btnF.addEventListener('click', () => { painel.hidden = !painel.hidden; btnF.setAttribute('aria-expanded', String(!painel.hidden)); });
+    painel.addEventListener('click', (e) => {
+      const c = e.target.closest('.chip'), limpar = e.target.closest('#filtrosLimpar');
+      if (!c && !limpar) return;
+      if (limpar) { filtro.genero = filtro.tipo = ''; }
+      else { const chave = 'genero' in c.dataset ? 'genero' : 'tipo', v = c.dataset[chave]; filtro[chave] = filtro[chave] === v ? '' : v; }
+      desenharFiltros(); filtrar();
+    });
 
     // Populares: semana / mes / ano; "Veja mais" abre a Biblioteca ja ordenada pelo periodo escolhido
     const periodos = document.querySelectorAll('[data-periodo]');
@@ -175,8 +192,8 @@
 
   // tudo vem do banco: livros (/api/vitrine) e o conteudo editavel pelos moderadores (/api/site)
   const pegar = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(u); return r.json(); });
-  Promise.all([pegar('/api/site'), pegar('/api/vitrine')]).then(([d, v]) => {
-    DATA = d;
+  Promise.all([pegar('/api/site'), pegar('/api/vitrine'), import('/catalogo.js')]).then(([d, v, c]) => {
+    DATA = d; CATALOGO = { generos: c.GENEROS, tipos: c.TIPOS };
     LIVROS = v.livros.map(doBanco).map((b, i) => Object.assign(b, { i }));
     render(); bind();
   }).catch(() => {

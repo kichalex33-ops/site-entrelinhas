@@ -118,9 +118,16 @@
       </select>
     </div>
     <div class="bib-busca"><input type="search" id="buscaLivro" placeholder="Buscar por título, autor ou gênero" aria-label="Buscar livro por título, autor ou gênero" autocomplete="off" enterkeyhint="search"></div>
-    <div class="chips reveal" id="chips"></div>
+    <div class="bib-filtros">
+      <button type="button" class="bib-filtros-btn" id="filtrosBtn" aria-expanded="false" aria-controls="filtrosPainel">Filtros <span class="bib-filtros-n" id="filtrosN" hidden></span><span class="bib-seta" aria-hidden="true">&#9662;</span></button>
+      <div class="bib-filtros-painel" id="filtrosPainel" hidden>
+        <div class="bib-grupo"><h3 id="rotGenero">Gênero</h3><div class="chips" id="chipsGenero" role="group" aria-labelledby="rotGenero"></div></div>
+        <div class="bib-grupo"><h3 id="rotTipo">Tipo de obra</h3><div class="chips" id="chipsTipo" role="group" aria-labelledby="rotTipo"></div></div>
+        <button type="button" class="bib-limpar" id="filtrosLimpar">Limpar filtros</button>
+      </div>
+    </div>
     <div class="grid" id="libraryGrid"></div>
-    <p class="muted-note" id="buscaVazia" hidden>Nenhum livro encontrado. Tente outra palavra ou escolha “Todos” nos gêneros.</p>
+    <p class="muted-note" id="buscaVazia" hidden>Nenhum livro encontrado. Tente outra palavra ou limpe os filtros.</p>
   </section>
 
   <section class="page" id="lancamentos">

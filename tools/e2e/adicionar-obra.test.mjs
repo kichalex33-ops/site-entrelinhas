@@ -20,7 +20,10 @@ test('adicionar obra: escolher caminho, divulgar livro de fora pela janela, edit
 
   const dlg = p.locator('dialog.el-dialogo:has(h2:text("Divulgar livro"))');
   await dlg.locator('input[name=titulo]').fill('Livro de Fora');
-  await dlg.locator('input[name=genero]').fill('Romance');
+  await dlg.locator('select[name=genero1]').selectOption('Romântico');
+  await dlg.locator('select[name=genero2]').selectOption('Drama');
+  await dlg.locator('select[name=tipo]').selectOption('Romance');
+  await dlg.locator('input[name=serie]').fill('Livro I');
   await dlg.locator('textarea[name=sinopse]').fill('Uma história vendida em outro lugar.');
   await dlg.locator('input[name=faixa][value="14"]').check();
   await dlg.locator('input[name=ano]').fill('2024');
@@ -34,12 +37,16 @@ test('adicionar obra: escolher caminho, divulgar livro de fora pela janela, edit
   let salvo = JSON.parse(E2E.app.db.prepare('SELECT data FROM profiles WHERE slug = ?').get(a.slug).data);
   assert.equal(salvo.obras.length, 1);
   assert.equal(salvo.obras[0].lojas[0].rotulo, 'Amazon');
+  assert.deepEqual(salvo.obras[0].generos, ['Romântico', 'Drama']); assert.equal(salvo.obras[0].tipo, 'Romance');
+  assert.equal(salvo.obras[0].genero, 'Romântico · Drama · Livro I');
   assert.equal(salvo.obras[0].faixa, '14'); assert.equal(salvo.obras[0].publicado_em, '2024-03'); assert.ok(salvo.obras[0].no_site_em);
 
   // editar pela mesma janela
   await p.click('.obra-item button[data-editobra="0"]');
   const ed = p.locator('dialog.el-dialogo:has(h2:text("Editar livro"))');
   assert.equal(await ed.locator('input[name=titulo]').inputValue(), 'Livro de Fora');
+  assert.equal(await ed.locator('select[name=genero1]').inputValue(), 'Romântico');
+  assert.equal(await ed.locator('select[name=tipo]').inputValue(), 'Romance');
   await ed.locator('input[name=titulo]').fill('Livro de Fora (2ª ed.)');
   await ed.locator('button:has-text("Salvar")').click();
   await p.waitForSelector('.obra-item:has-text("2ª ed.")');
