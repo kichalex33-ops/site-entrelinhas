@@ -302,6 +302,58 @@
     recarregar();
   }
 
+  // ---------- editais e eventos para autores (Comunidade) ----------
+  // Uma tarefa diaria (src/avisos.js) junta titulo, fonte e link de feeds publicos. Nada aparece no site ate o moderador aprovar.
+  let montandoAviso = false;
+  async function montarAvisos() {
+    const ref = document.getElementById('mod-mensagens') || document.getElementById('mod-feedback');
+    if (montandoAviso || document.getElementById('mod-avisos') || !ref) return;
+    montandoAviso = true;
+    const sec = document.createElement('details');
+    sec.id = 'mod-avisos'; sec.className = 'blk';
+    sec.innerHTML = `<summary>Moderação · editais e eventos <span class="mod-badge" hidden></span></summary>
+      <p class="hint">Itens coletados todo dia de feeds públicos (boletim Latitudes, do Jornal RelevO, e buscas do Google Notícias). Só o título e o link ficam guardados: ao aprovar, o item aparece na Comunidade, em "Editais e eventos".</p>
+      <div class="mod-den-acoes"><select id="mod-av-status" aria-label="Mostrar"><option value="pendente">Pendentes</option><option value="aprovado">Aprovados</option><option value="rejeitado">Rejeitados</option></select>
+        <button type="button" class="btn btn-ghost" id="mod-av-coletar">Buscar agora</button></div>
+      <div id="mod-av-lista"><p class="hint">Carregando...</p></div>`;
+    ref.after(sec);
+    montandoAviso = false;
+    const lista = sec.querySelector('#mod-av-lista'), badge = sec.querySelector('.mod-badge'), filtro = sec.querySelector('#mod-av-status'), coletar = sec.querySelector('#mod-av-coletar');
+    const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
+    const recarregar = async () => {
+      let r;
+      try { r = await api('/api/admin/avisos?status=' + filtro.value); } catch (e) { lista.innerHTML = `<p class="note err">${esc(e.message)}</p>`; return; }
+      if (filtro.value === 'pendente') { badge.hidden = !r.avisos.length; badge.textContent = r.avisos.length; }
+      if (!r.avisos.length) { lista.innerHTML = '<p class="hint">Nenhum item.</p>'; return; }
+      const botao = (status, rotulo, cls = 'btn-ghost') => `<button type="button" class="btn ${cls}" data-status="${status}">${rotulo}</button>`;
+      lista.innerHTML = r.avisos.map((a) => `<div class="mod-den" data-id="${a.id}">
+        <p><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer"><b>${esc(a.titulo)}</b></a></p>
+        <p class="hint">${esc(a.fonte)} · ${dia(a.em)}</p>
+        <div class="mod-den-acoes">${a.status !== 'aprovado' ? botao('aprovado', 'Aprovar', 'btn-primary') : ''}${a.status !== 'rejeitado' ? botao('rejeitado', 'Rejeitar') : ''}${a.status !== 'pendente' ? botao('pendente', 'Voltar para pendente') : ''}</div>
+      </div>`).join('');
+    };
+    filtro.addEventListener('change', recarregar);
+    coletar.addEventListener('click', async () => {
+      coletar.disabled = true;
+      try {
+        const r = await api('/api/admin/avisos/coletar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        coletar.textContent = r.novos ? `${r.novos} novo(s)` : 'Nada novo';
+        if (r.erros && r.erros.length) coletar.title = r.erros.join(', ');
+        await recarregar();
+      } catch (e) { coletar.textContent = e.message; }
+      setTimeout(() => { coletar.disabled = false; coletar.textContent = 'Buscar agora'; }, 4000);
+    });
+    lista.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-status]'); if (!b) return;
+      b.disabled = true;
+      try {
+        await api('/api/admin/avisos/' + b.closest('.mod-den').dataset.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.status }) });
+        recarregar();
+      } catch (err) { b.disabled = false; b.insertAdjacentHTML('afterend', `<p class="note err">${esc(err.message)}</p>`); }
+    });
+    recarregar();
+  }
+
   // ---------- conteudo da pagina inicial (projetos, selos, servicos, contato; noticias sao posts da Comunidade) ----------
   // Os formularios saem do esquema que o servidor manda (src/site.js): campo novo no servidor aparece aqui sozinho.
   let montandoSite = false;
@@ -314,7 +366,7 @@
     const sec = novo('details', { id: 'mod-site', className: 'blk' },
       novo('summary', {}, 'Moderação · conteúdo da página inicial'),
       novo('p', { className: 'hint' }, 'Projetos em andamento, selos, serviços e contato da página inicial (notícias agora são posts na aba Comunidade). Cada seção é salva separadamente e muda no site na hora.'));
-    (document.getElementById('mod-mensagens') || document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
+    (document.getElementById('mod-avisos') || document.getElementById('mod-mensagens') || document.getElementById('mod-feedback') || document.getElementById('mod-den-av') || den).after(sec);
     montandoSite = false;
     const corpo = novo('div', {}, novo('p', { className: 'hint' }, 'Carregando...'));
     sec.append(corpo);
@@ -377,7 +429,7 @@
     return caixa;
   }
 
-  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarDenunciasAvaliacoes(); montarFeedback(); montarMensagens(); montarSite(); }).observe(app, { childList: true });
+  new MutationObserver(() => { montar(); montarConvites(); montarDenuncias(); montarDenunciasAvaliacoes(); montarFeedback(); montarMensagens(); montarAvisos(); montarSite(); }).observe(app, { childList: true });
   // o painel de senha monta de forma assincrona; quando ele entra em #app, o observador monta o de convites
   montar();
 })();

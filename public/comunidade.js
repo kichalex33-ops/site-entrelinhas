@@ -6,7 +6,8 @@
   const { esc, paras, api } = window.EL;
   const RESUMO = 420; // caracteres antes do "Ler tudo"
   let TIPOS = { noticia: 'Notícia', resenha: 'Resenha', recomendacao: 'Recomendação de leitura', dica: 'Dica de escrita' };
-  let EU = null, tipo = '', mais = null, posts = [];
+  const AVISOS = 'avisos'; // filtro especial: editais e eventos coletados (aprovados por moderador), nao sao posts de autores
+  let EU = null, tipo = '', mais = null, posts = [], avisos = [], maisAvisos = null;
 
   const dia = (t) => new Date(t * 1000).toLocaleDateString('pt-BR');
   const assinatura = (a) => a.slug ? `<a href="autor.html?a=${encodeURIComponent(a.slug)}">${esc(a.nome)}</a>` : `<b>${esc(a.nome)}</b>`;
@@ -32,7 +33,20 @@
     </article>`;
   }
 
+  // um item de edital/evento: so titulo, fonte e data; o texto esta na fonte
+  const cartaoAviso = (a) => `<article class="post com-aviso-item"><span class="date">${esc(dia(a.em))} · ${esc(a.fonte)}</span>
+      <h4><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">${esc(a.titulo)}</a></h4></article>`;
+
+  async function carregarAvisos(acrescentar) {
+    try {
+      const r = await api('/api/avisos' + (acrescentar && maisAvisos ? '?antes=' + maisAvisos : ''));
+      avisos = acrescentar ? avisos.concat(r.avisos) : r.avisos; maisAvisos = r.mais;
+    } catch (e) { avisos = []; maisAvisos = null; }
+    desenhar();
+  }
+
   async function carregar(acrescentar) {
+    if (tipo === AVISOS) return carregarAvisos(acrescentar);
     const q = new URLSearchParams();
     if (tipo) q.set('tipo', tipo);
     if (acrescentar && mais) q.set('antes', mais);
@@ -45,11 +59,14 @@
   }
 
   function desenhar() {
-    $('#comTipos').innerHTML = [['', 'Todos']].concat(Object.entries(TIPOS)).map(([v, rot]) =>
+    $('#comTipos').innerHTML = [['', 'Todos']].concat(Object.entries(TIPOS), [[AVISOS, 'Editais e eventos']]).map(([v, rot]) =>
       `<button type="button" class="chip${tipo === v ? ' active' : ''}" data-tipo="${esc(v)}" aria-pressed="${tipo === v}">${esc(rot)}</button>`).join('');
-    $('#comLista').innerHTML = posts.map((p) => cartao(p)).join('')
+    const emAvisos = tipo === AVISOS;
+    $('#comNotaAvisos').hidden = !emAvisos;
+    $('#comLista').innerHTML = emAvisos ? avisos.map(cartaoAviso).join('') || '<p class="muted-note">Nenhum edital ou evento por enquanto. Os moderadores aprovam os itens antes de aparecerem.</p>'
+      : posts.map((p) => cartao(p)).join('')
       || `<p class="muted-note">${tipo ? 'Ainda não há posts deste tipo.' : 'Ainda não há posts.'} ${EU && EU.pode_postar ? 'Que tal escrever o primeiro?' : ''}</p>`;
-    $('#comMais').hidden = !mais;
+    $('#comMais').hidden = emAvisos ? !maisAvisos : !mais;
     $('#comEscrever').hidden = !(EU && EU.pode_postar);
     $('#comAviso').hidden = !!(EU && EU.pode_postar);
   }
@@ -87,7 +104,7 @@
   }
 
   function ligar() {
-    $('#comTipos').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; tipo = c.dataset.tipo; mais = null; carregar(); });
+    $('#comTipos').addEventListener('click', (e) => { const c = e.target.closest('.chip'); if (!c) return; tipo = c.dataset.tipo; mais = null; maisAvisos = null; carregar(); });
     $('#comMais').addEventListener('click', () => carregar(true));
     $('#comEscrever').addEventListener('click', () => janela(null));
     $('#comLista').addEventListener('click', async (e) => {

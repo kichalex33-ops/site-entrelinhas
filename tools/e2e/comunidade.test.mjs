@@ -67,3 +67,40 @@ test('Comunidade: leitor le, mas nao ve o botao de escrever', async () => {
   assert.equal(await p.locator('.tab[data-target="comunidade"]').count(), 1);
   await ctx.close();
 });
+
+test('Editais e eventos: moderador aprova no painel e o item aparece na Comunidade; pendente e rejeitado nao', async () => {
+  const mod = await E2E.novoAutor({ nome: 'Moderadora Editais' });
+  E2E.app.db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(mod.id);
+  E2E.app.db.prepare('UPDATE profiles SET data = ? WHERE slug = ?').run(JSON.stringify({ nome: 'Moderadora Editais', frase: '', local: '', bio: '', citacao: '', cor: '#d9a94a', fundo: 'preto', retrato: '', links: [], obras: [], secoes: [] }), mod.slug);
+  const agora = Math.floor(Date.now() / 1000);
+  const ins = (n, titulo) => E2E.app.db.prepare("INSERT INTO avisos (fonte, feed, titulo, link, publicado_em, coletado_em) VALUES ('Prefeitura de Teste', 'editais', ?, ?, ?, ?)").run(titulo, `https://exemplo.com/${n}`, agora - n, agora);
+  ins(1, 'Edital Vozes da Bahia abre inscrições para autores'); ins(2, 'Concurso literário de contos com inscrição gratuita'); ins(3, 'Feira do Livro aceita autores independentes');
+
+  const p = mod.pagina;
+  await p.goto(`${E2E.url}/conta.html`);
+  const sec = p.locator('#mod-avisos');
+  await sec.locator('summary').click();
+  await sec.locator('.mod-den').first().waitFor();
+  assert.equal(await sec.locator('.mod-den').count(), 3);
+  assert.equal(await sec.locator('.mod-badge').textContent(), '3');
+  await sec.locator('.mod-den:has-text("Edital Vozes da Bahia") button:has-text("Aprovar")').click();
+  await sec.locator('.mod-den:has-text("Concurso literário de contos") button:has-text("Rejeitar")').click();
+  await sec.locator('.mod-badge').waitFor({ state: 'visible' });
+  await p.waitForFunction(() => document.querySelectorAll('#mod-av-lista .mod-den').length === 1);
+
+  const ctx = await E2E.navegador.newContext();
+  const v = await ctx.newPage();
+  await v.goto(`${E2E.url}/index.html#comunidade`);
+  await v.locator('#comTipos .chip[data-tipo="avisos"]').click();
+  const item = v.locator('#comLista .com-aviso-item');
+  await item.first().waitFor();
+  assert.equal(await item.count(), 1);
+  assert.match(await item.textContent(), /Vozes da Bahia/); assert.match(await item.textContent(), /Prefeitura de Teste/);
+  assert.equal(await item.locator('a').getAttribute('href'), 'https://exemplo.com/1');
+  assert.equal(await item.locator('a').getAttribute('rel'), 'noopener noreferrer');
+  assert.ok(await v.isVisible('#comNotaAvisos'));
+  await v.click('#comTipos .chip[data-tipo=""]');
+  assert.ok(!(await v.isVisible('#comNotaAvisos')));
+  await ctx.close();
+  assert.deepEqual(mod.erros, []);
+});

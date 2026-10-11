@@ -12,6 +12,7 @@ import { comMetadados, robotsTxt, sitemapXml } from './meta.js';
 import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
 import { primeirosPassos } from './onboarding.js';
+import { listarAvisos, listarAvisosMod, decidirAviso, coletarAgora, coletarAvisos, limparAvisos } from './avisos.js';
 import { listarPosts, criarPost as criarPostComunidade, editarPost, apagarPost as apagarPostComunidade, ocultarPost, podePostar } from './comunidade.js';
 import { lerClassificacao } from '../public/catalogo.js';
 import { conteudoDoSite, salvarSecao, esquemaPublico, projetosDoEstudio } from './site.js';
@@ -796,6 +797,8 @@ export default {
     ctx.waitUntil((async () => {
       for (const userId of await limparLixeiraVencida(env, now())) await limparImagens(env, userId);
       await limparMensagensAntigas(env, now());
+      await coletarAvisos(env, now()).catch(() => {}); // editais e eventos: ficam pendentes ate um moderador aprovar
+      await limparAvisos(env, now());
     })());
   },
 
@@ -927,6 +930,12 @@ async function rotear(req, env) {
         if (!u) return fail('Faça login para continuar.', 401);
         return u.role === 'autor' ? listarLixeira(env, u, { json, now }) : fail('Apenas autores têm lixeira de livros.', 403);
       }
+      if (path === '/api/avisos') return listarAvisos(env, url, { json });
+      if (path === '/api/admin/avisos') {
+        const u = await currentUser(env, req);
+        if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);
+        return listarAvisosMod(env, url, { json });
+      }
       if (path === '/api/comunidade') return listarPosts(env, url, await currentUser(env, req), { json });
       if (path === '/api/ajuda') {
         const u = await currentUser(env, req);
@@ -1031,6 +1040,11 @@ async function rotear(req, env) {
     }
     const cp = path.match(/^\/api\/livro\/posts\/(\d{1,12})\/curtir$/);
     if (cp && req.method === 'POST') return curtirPost(env, user, Number(cp[1]), { json, fail });
+    const av = path.match(/^\/api\/admin\/avisos\/(coletar|\d{1,12})$/);
+    if (av && req.method === 'POST') {
+      if (!user.is_admin) return fail('Apenas moderadores.', 403);
+      return av[1] === 'coletar' ? coletarAgora(env, { json, fail, now }) : decidirAviso(env, req, user, Number(av[1]), { json, fail, body, now });
+    }
     const mg = path.match(/^\/api\/admin\/mensagens\/(\d{1,12})$/);
     if (mg && req.method === 'POST') return user.is_admin ? marcarMensagem(env, req, user, Number(mg[1]), { json, fail, body, now }) : fail('Apenas moderadores.', 403);
     const fb = path.match(/^\/api\/admin\/feedback\/(\d{1,12})$/);
