@@ -13,7 +13,7 @@ import { enviarFeedback, listarFeedback, marcarFeedback } from './feedback.js';
 import { receberEmail, limparMensagensAntigas, listarMensagens, marcarMensagem } from './contato.js';
 import { primeirosPassos } from './onboarding.js';
 import { lerClassificacao } from '../public/catalogo.js';
-import { conteudoDoSite, salvarSecao, esquemaPublico } from './site.js';
+import { conteudoDoSite, salvarSecao, esquemaPublico, projetosDoEstudio } from './site.js';
 import { denunciarLivro, denunciasAbertas, listarDenunciasLivros, decidirDenunciaLivro, listarDenunciasAvaliacoes, decidirDenunciaAvaliacao } from './denuncias.js';
 
 const SESSION_DAYS = 30;
@@ -874,7 +874,11 @@ async function rotear(req, env) {
       }
       if (path === '/api/chat') return listChat(env, req, url);
       if (path === '/api/vitrine') return vitrine(env, { json, now, publicacao });
-      if (path === '/api/site') return json(await conteudoDoSite(env));
+      if (path === '/api/site') {
+        const c = await conteudoDoSite(env);
+        c.projetos = c.projetos.concat(await projetosDoEstudio(env));
+        return json(c);
+      }
       if (path === '/api/admin/site') {
         const u = await currentUser(env, req);
         if (!u || !u.is_admin) return fail('Apenas moderadores.', 403);

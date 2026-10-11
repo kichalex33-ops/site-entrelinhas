@@ -705,3 +705,6 @@ dialog.el-dialogo.largo{width:min(860px,96vw)}
 .bib-grupo .chip small{opacity:.7;margin-left:.3rem;letter-spacing:0}
 .bib-grupo .chip.vazio{opacity:.45}
 .bib-limpar{background:none;border:0;color:var(--accent);font:inherit;font-size:.8rem;cursor:pointer;padding:0;text-decoration:underline}
+/* nome do autor com perfil nos cartoes de projeto (como o .byline das noticias) */
+.project .by a{color:var(--accent);text-decoration:none}
+.project .by a:hover{text-decoration:underline}

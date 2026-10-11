@@ -3,6 +3,7 @@ import { createEditor } from '../vendor/estudio-editor.js';
 import { api } from './api.js';
 import { criarSalvador, lerBackup, limparBackup } from './autosave.js';
 import { h, dialogo, confirmar, perguntar, relativo, dataHora, milhar, TIPOS_OBRA, STATUS_OBRA, TIPOS_DOC } from './ui.js';
+import { camposHtml, lerCampos, ETAPAS } from '../catalogo.js';
 import { abrirBusca, abrirPaleta } from './palette.js';
 import { importarManuscrito } from './importar-ui.js';
 import { abrirExportacao } from './exportar-ui.js';
@@ -608,15 +609,27 @@ function renderContexto() {
 async function dialogoObra() {
   const m = S.obra.meta || {};
   const titulo = h('input', { class: 'st-campo', type: 'text', maxlength: '200', value: S.obra.titulo });
-  const genero = h('input', { class: 'st-campo', type: 'text', maxlength: '80', value: m.genero || '' });
+  const classif = h('div'); classif.innerHTML = camposHtml(m, window.EL.esc);
+  for (const c of classif.querySelectorAll('select, input')) c.classList.add('st-campo');
+  // aba Projetos do site: so com a caixa marcada (e so enquanto a obra nao estiver publicada nem arquivada)
+  const pr = m.projeto || {};
+  const mostrar = h('input', { type: 'checkbox', checked: pr.mostrar || null });
+  const etapa = h('select', { class: 'st-campo' }, ETAPAS.map((e) => h('option', { value: e, selected: e === (pr.etapa || 'Em escrita') }, e)));
+  const previsao = h('input', { class: 'st-campo', type: 'text', maxlength: '30', value: pr.previsao || '', placeholder: 'ex.: mar/2027' });
+  const trecho = h('textarea', { class: 'st-campo', rows: '2', maxlength: '400', placeholder: 'opcional: uma frase que dê vontade de ler' }, pr.trecho || '');
+  const projeto = h('fieldset', { class: 'st-projeto' }, h('legend', null, 'Aba Projetos do site'),
+    h('label', { class: 'st-check' }, mostrar, ' Mostrar esta obra em Projetos'),
+    h('small', { class: 'hint' }, 'Aparecem o título, o gênero, a sinopse, a etapa e o progresso (pela meta de palavras). O texto não aparece. Some sozinha quando a obra é publicada ou arquivada.'),
+    h('label', { class: 'fld' }, h('span', null, 'Etapa'), etapa), h('label', { class: 'fld' }, h('span', null, 'Previsão (opcional)'), previsao), h('label', { class: 'fld' }, h('span', null, 'Trecho (opcional)'), trecho));
   const sinopse = h('textarea', { class: 'st-campo', rows: '4', maxlength: '3000' }, m.sinopse || '');
   const meta = h('input', { class: 'st-campo', type: 'number', min: '0', max: '5000000', step: '1000', value: m.meta_palavras || '' });
   const publicada = ['agendado', 'publicado', 'atualizado'].includes(S.obra.status);
   const status = h('select', { class: 'st-campo', disabled: publicada || null }, ['rascunho', 'em_revisao', 'arquivado'].map((s) => h('option', { value: s, selected: s === S.obra.status }, STATUS_OBRA[s])), publicada ? h('option', { value: S.obra.status, selected: true }, STATUS_OBRA[S.obra.status]) : null);
   const f = (rot, el) => h('label', { class: 'fld' }, h('span', null, rot), el);
-  const v = await dialogo({ titulo: 'Informações da obra', corpo: [f('Título', titulo), f('Gênero', genero), f('Sinopse', sinopse), f('Meta de palavras (opcional)', meta), f('Status', status)], botoes: [{ rotulo: 'Cancelar', valor: null }, { rotulo: 'Salvar', valor: 'ok', classe: 'btn-primary' }], largo: true });
+  const v = await dialogo({ titulo: 'Informações da obra', corpo: [f('Título', titulo), classif, f('Sinopse', sinopse), f('Meta de palavras (opcional)', meta), f('Status', status), projeto], botoes: [{ rotulo: 'Cancelar', valor: null }, { rotulo: 'Salvar', valor: 'ok', classe: 'btn-primary' }], largo: true });
   if (v !== 'ok') return;
-  const dados = { titulo: titulo.value, meta: { genero: genero.value, sinopse: sinopse.value, meta_palavras: meta.value || 0 } };
+  const dados = { titulo: titulo.value, meta: { ...lerCampos(classif), sinopse: sinopse.value, meta_palavras: meta.value || 0,
+    projeto: { mostrar: mostrar.checked, etapa: etapa.value, previsao: previsao.value, trecho: trecho.value } } };
   if (!publicada) dados.status = status.value;
   try { await api.editarObra(S.obraId, dados); const r = await api.obra(S.obraId); S.obra = r.obra; E.barTitulo.textContent = r.obra.titulo; document.title = `${r.obra.titulo} | Estúdio`; renderExplorador(); renderContexto(); }
   catch (e) { dialogo({ titulo: 'Não foi possível salvar', corpo: h('p', null, e.message) }); }

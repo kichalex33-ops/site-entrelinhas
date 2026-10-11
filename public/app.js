@@ -106,8 +106,11 @@
     desenharGrade();
     desenharPopulares();
 
+    // projeto do Estudio sem meta de palavras nao tem porcentagem (pct = null)
+    const temPct = (p) => p.pct !== null && p.pct !== undefined && p.pct !== '';
     $('#projects').innerHTML = DATA.projetos.map(p =>
-      `<article class="project reveal"><div class="project-visual" style="--c1:${esc(p.c1 || '#1c2f4a')};--c2:${esc(p.c2 || '#070b14')}"><span class="project-status">${esc(p.etapa)} · ${esc(p.pct)}%</span></div><div class="project-body"><h3>${esc(p.titulo)}</h3><p class="by">${byline(p.autor, p.autor_slug)}${p.genero ? ' · ' + esc(p.genero) : ''}</p><p>${esc(p.sinopse)}</p>${p.trecho ? `<blockquote class="excerpt">${esc(p.trecho)}</blockquote>` : ''}<div class="progress"><span style="width:${Number(p.pct) || 0}%"></span></div><div class="progress-label"><span>${esc(p.pct)}% concluído</span><span>${p.previsao ? 'Previsão: ' + esc(p.previsao) : ''}</span></div></div></article>`).join('');
+      `<article class="project reveal"><div class="project-visual" style="--c1:${esc(p.c1 || '#1c2f4a')};--c2:${esc(p.c2 || '#070b14')}"><span class="project-status">${esc(p.etapa)}${temPct(p) ? ` · ${esc(p.pct)}%` : ''}</span></div><div class="project-body"><h3>${esc(p.titulo)}</h3><p class="by">${byline(p.autor, p.autor_slug)}${p.genero ? ' · ' + esc(p.genero) : ''}</p><p>${esc(p.sinopse)}</p>${p.trecho ? `<blockquote class="excerpt">${esc(p.trecho)}</blockquote>` : ''}${temPct(p) ? `<div class="progress"><span style="width:${Number(p.pct) || 0}%"></span></div>` : ''}<div class="progress-label"><span>${temPct(p) ? esc(p.pct) + '% concluído' : ''}</span><span>${p.previsao ? 'Previsão: ' + esc(p.previsao) : ''}</span></div></div></article>`).join('')
+      || '<p class="muted-note">Os projetos em andamento dos autores aparecem aqui. No Estúdio, abra Informações da obra e marque "Mostrar em Projetos".</p>';
 
     $('#services').innerHTML = DATA.servicos.map(s =>
       `<div class="service reveal"><div class="icon">${esc(s.icone)}</div><span class="status${s.status === 'Aberto' ? ' on' : ''}">${esc(s.status)}</span><h3>${esc(s.titulo)}</h3><p>${esc(s.texto)}</p>${s.link ? `<a class="btn btn-ghost service-link" href="${esc(s.link)}">${esc(s.acao || 'Saiba mais')} &rarr;</a>` : ''}</div>`).join('');

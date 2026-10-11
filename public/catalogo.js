@@ -9,6 +9,8 @@ export const GENEROS = [
 ];
 export const TIPOS = ['Romance', 'Novela', 'Conto', 'Antologia', 'Crônica', 'Poesia', 'HQ', 'Roteiro', 'Não-ficção'];
 export const MAX_GENEROS = 2;
+// etapas de um projeto em andamento (aba Projetos): as mesmas no painel da moderacao e no Estudio
+export const ETAPAS = ['Planejamento', 'Rascunho', 'Em escrita', 'Revisão', 'Diagramação', 'Quase pronto'];
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 

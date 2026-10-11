@@ -2,6 +2,8 @@
 // Antes vinha de public/data.json e so mudava com deploy; agora os moderadores editam pela conta (moderacao.js).
 // O esquema abaixo e a UNICA fonte das regras: o servidor valida com ele e o painel monta os formularios a partir dele.
 
+import { ETAPAS } from '../public/catalogo.js';
+
 const COR = /^#[0-9a-f]{6}$/i;
 const SLUG = /^[a-z0-9-]{1,40}$/;
 const DATA = /^\d{2}\/\d{2}\/\d{4}$/;
@@ -26,7 +28,7 @@ export const SECOES = {
       { k: 'autor', rotulo: 'Autor', tipo: 'texto', max: 80 },
       { k: 'autor_slug', rotulo: 'Endereço do perfil do autor (opcional)', tipo: 'texto', max: 40, padrao: SLUG, erro: 'Endereço do perfil: só letras minúsculas, números e hífen.' },
       { k: 'genero', rotulo: 'Gênero', tipo: 'texto', max: 60 },
-      { k: 'etapa', rotulo: 'Etapa', tipo: 'escolha', opcoes: ['Planejamento', 'Rascunho', 'Em escrita', 'Revisão', 'Diagramação', 'Quase pronto'] },
+      { k: 'etapa', rotulo: 'Etapa', tipo: 'escolha', opcoes: ETAPAS },
       { k: 'pct', rotulo: 'Concluído (%)', tipo: 'numero', min: 0, max: 100 },
       { k: 'previsao', rotulo: 'Previsão (ex.: mar/2027)', tipo: 'texto', max: 30 },
       { k: 'sinopse', rotulo: 'Sinopse curta', tipo: 'area', max: 600 },
@@ -61,6 +63,29 @@ export const SECOES = {
 
 const VAZIO = { noticias: [], projetos: [], selos: [], servicos: [], contato: { url: '' } };
 const ler = (s) => { try { return JSON.parse(s); } catch { return null; } };
+
+// Obras do Estudio que o autor marcou para aparecer em Projetos (Informacoes da obra > "Mostrar em Projetos").
+// So rascunho ou em revisao (publicada ja esta na Biblioteca; arquivada saiu de cena) e so de autor com perfil publicado.
+// O progresso vem das palavras dos capitulos e cenas sobre a meta de palavras; sem meta, nao ha porcentagem.
+// Nunca entra no que os moderadores editam: so na resposta publica de /api/site.
+export async function projetosDoEstudio(env) {
+  const r = await env.DB.prepare(
+    `SELECT w.title, w.meta, u.slug, p.data AS perfil,
+       (SELECT COALESCE(SUM(d.words), 0) FROM studio_docs d WHERE d.work_id = w.id AND d.kind = 'doc' AND d.doc_type IN ('capitulo', 'cena') AND d.deleted_at IS NULL) AS palavras
+     FROM studio_works w JOIN users u ON u.id = w.user_id JOIN profiles p ON p.user_id = u.id AND p.published = 1
+     WHERE w.deleted_at IS NULL AND w.status IN ('rascunho', 'em_revisao') AND json_extract(w.meta, '$.projeto.mostrar') = 1
+     ORDER BY w.updated_at DESC LIMIT 30`
+  ).all();
+  return r.results.map((w) => {
+    const m = ler(w.meta) || {}, pr = m.projeto || {}, perfil = ler(w.perfil) || {};
+    const meta = Number(m.meta_palavras) || 0;
+    return {
+      titulo: w.title, autor: perfil.nome || w.slug, autor_slug: w.slug, genero: m.genero || '',
+      etapa: ETAPAS.includes(pr.etapa) ? pr.etapa : 'Em escrita', pct: meta ? Math.min(100, Math.round((w.palavras / meta) * 100)) : null,
+      previsao: pr.previsao || '', sinopse: String(m.sinopse || '').slice(0, 600), trecho: pr.trecho || '', estudio: true,
+    };
+  });
+}
 
 export async function conteudoDoSite(env) {
   const r = await env.DB.prepare('SELECT secao, dados FROM site_conteudo').all();

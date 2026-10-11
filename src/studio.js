@@ -3,7 +3,7 @@
 // (2) SALVAR nao e PUBLICAR: nada daqui aparece em perfil, biblioteca ou busca publica.
 // Reaproveita helpers e autenticacao do index.js (recebidos em `h`).
 
-import { lerClassificacao, classificar } from '../public/catalogo.js';
+import { lerClassificacao, classificar, ETAPAS } from '../public/catalogo.js';
 
 const DOC_TYPES = ['capitulo', 'cena', 'personagem', 'lugar', 'objeto', 'evento', 'pesquisa', 'nota'];
 const FOLDER_TYPES = ['pasta', 'manuscrito', 'personagens', 'mundo', 'pesquisa', 'ideias', 'descartadas'];
@@ -238,6 +238,11 @@ async function patchWork(env, req, work, h) {
     if (b.meta.sinopse !== undefined) next.sinopse = h.str(b.meta.sinopse, 3000);
     if (Array.isArray(b.meta.generos)) Object.assign(next, lerClassificacao(b.meta));
     else if (b.meta.genero !== undefined) next.genero = h.str(b.meta.genero, 80);
+    // aba Projetos do site: so aparece se o autor marcar
+    if (b.meta.projeto && typeof b.meta.projeto === 'object') {
+      const p = b.meta.projeto;
+      next.projeto = { mostrar: p.mostrar === true, etapa: ETAPAS.includes(p.etapa) ? p.etapa : 'Em escrita', previsao: h.str(p.previsao, 30), trecho: h.str(p.trecho, 400) };
+    }
     if (b.meta.meta_palavras !== undefined) next.meta_palavras = Math.max(0, Math.min(5000000, parseInt(b.meta.meta_palavras, 10) || 0));
     if (JSON.stringify(next).length > LIM.meta) return h.fail('Informações da obra grandes demais.', 413);
     meta = next;

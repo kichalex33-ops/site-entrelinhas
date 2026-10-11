@@ -98,3 +98,43 @@ test('publicar: escrever, publicar pelo botao, ler em ler.html, aparecer no perf
   await ctx.close();
   assert.deepEqual(a.erros, []);
 });
+
+test('Projetos: o autor marca "Mostrar em Projetos" em Informacoes da obra e a obra aparece na aba Projetos', async () => {
+  const a = await E2E.novoAutor({ nome: 'Autora Projeto' });
+  const p = a.pagina;
+  await p.goto(`${E2E.url}/estudio.html`);
+  await p.click('#st-nova');
+  await p.click('.st-opcao:has-text("Escrever no Entrelinhas")');
+  await p.fill('dialog input', 'A Ponte Longa');
+  await p.click('dialog button:has-text("Criar obra")');
+  await p.waitForSelector('.st-explorador .st-nome');
+
+  await p.click('.st-bar-btn:has-text("Obra")');
+  const dlg = p.locator('dialog:has(h2:text("Informações da obra"))');
+  await dlg.waitFor();
+  await dlg.locator('select[name=genero1]').selectOption('Drama');
+  await dlg.locator('select[name=tipo]').selectOption('Novela');
+  await dlg.locator('textarea').first().fill('Duas cidades e uma ponte que nunca termina.');
+  await dlg.locator('.st-projeto input[type=checkbox]').check();
+  await dlg.locator('.st-projeto select').selectOption('Revisão');
+  await dlg.locator('.st-projeto input[type=text]').fill('jun/2027');
+  await dlg.locator('button:has-text("Salvar")').click();
+  await dlg.waitFor({ state: 'detached' });
+  const urlObra = p.url();
+
+  await p.goto(`${E2E.url}/index.html#projetos`);
+  const card = p.locator('#projects .project:has-text("A Ponte Longa")');
+  await card.waitFor();
+  const txt = await card.textContent();
+  assert.match(txt, /Autora Projeto/); assert.match(txt, /Drama/); assert.match(txt, /Revisão/i); assert.match(txt, /jun\/2027/);
+  assert.doesNotMatch(txt, /%/, 'sem meta de palavras, sem porcentagem');
+
+  // reabrir: os campos voltam preenchidos
+  await p.goto(urlObra);
+  await p.waitForSelector('.st-explorador .st-nome');
+  await p.click('.st-bar-btn:has-text("Obra")');
+  await dlg.waitFor();
+  assert.equal(await dlg.locator('select[name=genero1]').inputValue(), 'Drama');
+  assert.ok(await dlg.locator('.st-projeto input[type=checkbox]').isChecked());
+  assert.deepEqual(a.erros, []);
+});

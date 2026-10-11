@@ -232,3 +232,8 @@ button.st-lk:hover, button.st-lk:focus-visible { background: var(--accent-dim); 
 /* declaracao de autoria na publicacao: compromissos em lista */
 .st-pub-dec-lista{margin:.4rem 0 .8rem 1.2rem;display:grid;gap:.3rem;font-size:.92rem}
 .st-pub-dec .hint a{color:var(--accent)}
+
+/* Informacoes da obra: aba Projetos do site */
+.st-projeto{border:1px solid var(--line, #333);border-radius:10px;padding:.7rem .9rem;margin:.4rem 0 0;display:grid;gap:.5rem}
+.st-projeto legend{padding:0 .3rem;font-size:.85rem}
+.st-check{display:flex;gap:.5rem;align-items:center;cursor:pointer}
