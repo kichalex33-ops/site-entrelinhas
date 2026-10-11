@@ -77,3 +77,28 @@ test('migracao 0027: noticia de autor com conta vira post da Comunidade; fictici
   assert.equal(new Date(posts[0].created_at * 1000).toISOString().slice(0, 10), '2026-10-01');
   assert.equal(db.prepare("SELECT dados FROM site_conteudo WHERE secao = 'noticias'").get().dados, '[]');
 });
+
+test('migracao 0029: define os generos dos dois livros do Alex sem mexer nos outros', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const db = new DatabaseSync(':memory:');
+  const dir = new URL('../../migrations/', import.meta.url);
+  const todas = readdirSync(dir).filter((x) => x.endsWith('.sql')).sort();
+  for (const m of todas.filter((x) => x < '0029')) db.exec(readFileSync(new URL(m, dir), 'utf8'));
+  const obras = [
+    { id: 'aaaaaaaaaaaa', titulo: 'Outro', genero: 'Fantasia' },
+    { id: '7b26548055a9', titulo: 'Os Deuses Não Têm Filhos', genero: 'Crônicas Cosmológicas · Livro I', status: 'Publicado' },
+  ];
+  db.prepare("INSERT INTO users (id, email, pass_hash, pass_salt, slug, created_at, role) VALUES (7, 'a@x', 'x', 'x', 'alex-jr-kich', 1, 'autor')").run();
+  db.prepare("INSERT INTO profiles (slug, user_id, data, badges, published, updated_at) VALUES ('alex-jr-kich', 7, ?, '[]', 1, 1)").run(JSON.stringify({ nome: 'Alex', obras }));
+  db.prepare("INSERT INTO studio_works (id, user_id, title, status, meta, pub_meta, created_at, updated_at) VALUES ('98a7c453ee03', 7, 'ONZE SEGUNDOS', 'publicado', ?, ?, 1, 1)").run('{"genero":"ficção","sinopse":"s"}', '{"titulo":"ONZE SEGUNDOS","genero":"ficção"}');
+  for (const m of todas.filter((x) => x >= '0029')) db.exec(readFileSync(new URL(m, dir), 'utf8'));
+
+  const d = JSON.parse(db.prepare("SELECT data FROM profiles WHERE slug = 'alex-jr-kich'").get().data);
+  assert.deepEqual(d.obras[0], obras[0], 'o outro livro nao muda');
+  assert.deepEqual(classificar(d.obras[1]).generos, ['Ficção científica']);
+  assert.equal(d.obras[1].genero, 'Ficção científica · Crônicas Cosmológicas · Livro I');
+  const w = db.prepare("SELECT meta, pub_meta FROM studio_works WHERE id = '98a7c453ee03'").get();
+  assert.deepEqual(classificar(JSON.parse(w.pub_meta)).generos, ['Suspense']);
+  assert.equal(JSON.parse(w.meta).sinopse, 's', 'o resto do meta fica');
+});
