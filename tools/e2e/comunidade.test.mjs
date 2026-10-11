@@ -100,7 +100,7 @@ test('Editais e eventos: moderador aprova no painel e o item aparece na Comunida
   assert.equal(await item.locator('a').getAttribute('rel'), 'noopener noreferrer');
   assert.ok(await v.isVisible('#comNotaAvisos'));
   await v.click('#comTipos .chip[data-tipo=""]');
-  assert.ok(!(await v.isVisible('#comNotaAvisos')));
+  await v.locator('#comNotaAvisos').waitFor({ state: 'hidden' }); // some quando a lista de posts termina de carregar
   await ctx.close();
   assert.deepEqual(mod.erros, []);
 });
